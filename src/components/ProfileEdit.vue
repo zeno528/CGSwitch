@@ -38,6 +38,26 @@ const catalogPath = computed(() =>
   detail.value?.model_values.model_catalog_json?.replace(/^"|"$/g, "") ?? "",
 );
 
+const liveConfigFragment = computed(() => {
+  if (!detail.value) return "";
+  const values: Record<string, string> = {
+    base_url: baseUrl.value.trim(),
+    experimental_bearer_token: apiKey.value.trim(),
+  };
+  return detail.value.config_fragment
+    .split("\n")
+    .map((line) => {
+      const trimmed = line.trimStart();
+      const match = /^(base_url|experimental_bearer_token)\s*=/.exec(trimmed);
+      if (!match) return line;
+      const field = match[1];
+      const indent = line.slice(0, line.length - trimmed.length);
+      const escaped = (values[field] ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      return `${indent}${field} = "${escaped}"`;
+    })
+    .join("\n");
+});
+
 onMounted(async () => {
   try {
     detail.value = await api.getProfile(props.profile.id);
@@ -86,6 +106,24 @@ async function save() {
     saving.value = false;
   }
 }
+
+async function openActiveFile() {
+  const relative =
+    activeTab.value === "config"
+      ? "config.toml"
+      : activeTab.value === "auth"
+        ? "auth.json"
+        : catalogPath.value;
+  if (!relative) {
+    message.warning("没有可打开的文件");
+    return;
+  }
+  try {
+    await api.openCodexFile(relative);
+  } catch (error) {
+    message.error(String(error));
+  }
+}
 </script>
 
 <template>
@@ -95,7 +133,7 @@ async function save() {
     @back="pickingIcon = false"
     @save="saveIcon"
   />
-  <section v-else class="mx-auto w-full max-w-none">
+  <section v-else class="mx-auto flex h-full w-full max-w-none flex-col">
     <button
       type="button"
       class="-ml-2 flex items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-black/5 dark:hover:bg-white/8"
@@ -148,43 +186,41 @@ async function save() {
       </div>
     </div>
 
-    <div class="apple-group mt-4 p-5 sm:p-6">
-      <div class="flex gap-1">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          type="button"
-          class="flex h-8 items-center gap-1.5 rounded-[10px] px-3 text-[13px] transition-colors"
-          :class="activeTab === tab.id ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'muted hover:bg-black/5 dark:hover:bg-white/8'"
-          :aria-pressed="activeTab === tab.id"
-          @click="activeTab = tab.id"
-        >
-          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-            <path d="M6 3h9l4 4v14H6z" stroke-linejoin="round" />
-            <path d="M15 3v4h4" />
-          </svg>
-          {{ tab.label }}
-        </button>
+    <div class="apple-group mt-4 flex min-h-[180px] flex-1 flex-col p-5 sm:p-6">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex gap-1">
+          <button
+            v-for="tab in tabs"
+            :key="tab.id"
+            type="button"
+            class="flex h-8 items-center gap-1.5 rounded-[10px] px-3 text-[13px] transition-colors"
+            :class="activeTab === tab.id ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'muted hover:bg-black/5 dark:hover:bg-white/8'"
+            :aria-pressed="activeTab === tab.id"
+            @click="activeTab = tab.id"
+          >
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M6 3h9l4 4v14H6z" stroke-linejoin="round" />
+              <path d="M15 3v4h4" />
+            </svg>
+            {{ tab.label }}
+          </button>
+        </div>
+        <n-button size="small" secondary title="用默认编辑器打开当前选中的文件" @click="openActiveFile">打开</n-button>
       </div>
 
-      <div class="mt-4">
-        <pre v-if="activeTab === 'config'" class="mono overflow-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ detail?.config_fragment }}</pre>
+      <div class="mt-4 min-h-0 flex-1 overflow-auto pr-1">
+        <pre v-if="activeTab === 'config'" class="mono overflow-x-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ liveConfigFragment }}</pre>
         <div v-else-if="activeTab === 'auth'" class="text-sm">
-          <div class="flex justify-between gap-4 py-2">
-            <span class="muted">供应商</span>
-            <span class="mono">{{ detail?.provider ?? "官方" }}</span>
-          </div>
-          <div class="flex justify-between gap-4 border-t border-[var(--panel-border)] py-2">
-            <span class="muted">密钥</span>
-            <span class="mono">••••••••</span>
-          </div>
+          <pre v-if="detail?.auth_content" class="mono overflow-x-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ detail.auth_content }}</pre>
+          <p v-else class="muted mt-2 text-xs">认证文件（~/.codex/auth.json）不存在或无法读取。</p>
         </div>
         <div v-else class="text-sm">
           <div class="flex justify-between gap-4 py-2">
             <span class="muted">模型目录</span>
             <span class="mono">{{ catalogPath }}</span>
           </div>
-          <p class="muted mt-2 text-xs">模型目录文件内容未随档案保存，切换到该档案时由 Codex 按此路径读取。</p>
+          <pre v-if="detail?.catalog_content" class="mono mt-2 overflow-x-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ detail.catalog_content }}</pre>
+          <p v-else class="muted mt-2 text-xs">模型目录文件不存在或无法读取，文件内容未显示。</p>
         </div>
       </div>
     </div>

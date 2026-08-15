@@ -173,6 +173,39 @@ pub fn update_provider_body(
     Ok(document.to_string())
 }
 
+/// 在已解析的 live 配置文档中就地更新 provider 表的 base_url / 密钥字段。
+pub fn update_provider_in_document(
+    document: &mut DocumentMut,
+    provider_id: &str,
+    base_url: Option<&str>,
+    api_key: Option<&str>,
+) -> AppResult<()> {
+    let providers = document
+        .as_table_mut()
+        .entry("model_providers")
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| app_err!("model_providers 不是 TOML table"))?;
+    let provider = providers
+        .entry(provider_id)
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| app_err!("model_providers.{provider_id} 不是 TOML table"))?;
+
+    let set = |table: &mut Table, key: &str, value: Option<&str>| {
+        if let Some(value) = value {
+            if value.trim().is_empty() {
+                table.remove(key);
+            } else {
+                table.insert(key, Item::Value(Value::from(value.trim().to_string())));
+            }
+        }
+    };
+    set(provider, "base_url", base_url);
+    set(provider, "experimental_bearer_token", api_key);
+    Ok(())
+}
+
 fn set_table_value(document: &mut DocumentMut, key: &str, value: &str) {
     if value.trim().is_empty() {
         document.remove(key);

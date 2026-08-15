@@ -33,6 +33,8 @@ pub struct ProfileDetail {
     pub api_key: Option<String>,
     pub model_values: std::collections::BTreeMap<String, String>,
     pub config_fragment: String,
+    pub auth_content: Option<String>,
+    pub catalog_content: Option<String>,
     pub updated_at: String,
 }
 

@@ -109,6 +109,12 @@ function webProfileDetail(id: string): ProfileDetail {
     api_key: detail?.api_key ?? null,
     model_values: detail?.model_values ?? {},
     config_fragment: detail?.config_fragment ?? "",
+    auth_content: detail?.api_key
+      ? '{\n  "OPENAI_API_KEY": "sk-demo-real-value"\n}'
+      : null,
+    catalog_content: detail?.model_values.model_catalog_json
+      ? '{\n  "models": [\n    { "id": "glm-5.3", "name": "GLM 5.3" }\n  ]\n}'
+      : null,
     updated_at: profile.updated_at,
   };
 }
@@ -196,6 +202,8 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       return { authenticated: false, default_account_id: null, accounts: [] } as T;
     case "open_url":
       return undefined as T;
+    case "open_codex_file":
+      return undefined as T;
     case "save_settings":
       webSettings = { ...(args?.settings as Settings) };
       return { ...webSettings } as T;
@@ -230,6 +238,7 @@ export const api = {
   getSettings: () => call<Settings>("get_settings"),
   saveSettings: (settings: Settings) => call<Settings>("save_settings", { settings }),
   openPath: (path: string) => call<void>("open_path", { path }),
+  openCodexFile: (relative: string) => call<void>("open_codex_file", { relative }),
   onRestartProgress: async (handler: RestartProgressHandler) => {
     if (!isTauri) return () => undefined;
     const { listen } = await import("@tauri-apps/api/event");

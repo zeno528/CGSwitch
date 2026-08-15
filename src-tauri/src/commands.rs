@@ -206,3 +206,8 @@ fn sync_autostart(app: &AppHandle, settings: &Settings) -> AppResult<()> {
 pub fn open_path(path: String, state: State<'_, AppContext>) -> AppResult<()> {
     state.open_path(&path)
 }
+
+#[tauri::command]
+pub fn open_codex_file(relative: String, state: State<'_, AppContext>) -> AppResult<()> {
+    state.open_codex_file(&relative)
+}

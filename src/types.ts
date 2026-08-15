@@ -18,6 +18,8 @@ export interface ProfileDetail {
   api_key: string | null;
   model_values: Record<string, string>;
   config_fragment: string;
+  auth_content: string | null;
+  catalog_content: string | null;
   updated_at: string;
 }
 

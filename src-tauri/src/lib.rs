@@ -47,6 +47,7 @@ pub fn run() {
             commands::get_settings,
             commands::save_settings,
             commands::open_path,
+            commands::open_codex_file,
         ])
         .setup(|app| {
             use tauri_plugin_autostart::ManagerExt;

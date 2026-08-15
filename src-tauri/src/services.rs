@@ -28,11 +28,7 @@ fn parse_provider_detail(body: &str) -> AppResult<ProviderDetail> {
     };
     let mut fragment = String::new();
     for (key, item) in table.iter() {
-        if key == "experimental_bearer_token" {
-            fragment.push_str("experimental_bearer_token = \"••••••••\"\n");
-        } else {
-            fragment.push_str(&format!("{key} = {item}\n"));
-        }
+        fragment.push_str(&format!("{key} = {item}\n"));
     }
     Ok(ProviderDetail {
         base_url: value("base_url"),
@@ -157,6 +153,13 @@ impl AppContext {
             api_key: provider.as_ref().and_then(|detail| detail.api_key.clone()),
             model_values: payload.model_values.clone(),
             config_fragment: profile_config_fragment(payload),
+            auth_content: read_optional_text(&self.paths.codex_home.join("auth.json")),
+            catalog_content: payload
+                .model_values
+                .get("model_catalog_json")
+                .map(|raw| raw.trim().trim_matches('"'))
+                .map(|path| self.paths.codex_home.join(path))
+                .and_then(|file| read_optional_text(&file)),
             updated_at: stored.updated_at.clone(),
         })
     }
@@ -183,15 +186,90 @@ impl AppContext {
                 .provider_body
                 .as_deref()
                 .ok_or_else(|| app_err!("该档案缺少供应商配置数据"))?;
-            payload.provider_body =
-                Some(codex_config::update_provider_body(body, base_url, api_key)?);
+            if base_url.is_some() || api_key.is_some() {
+                payload.provider_body =
+                    Some(codex_config::update_provider_body(body, base_url, api_key)?);
+            }
         } else if base_url.is_some() || api_key.is_some() {
             return Err(app_err!("该档案没有供应商配置，无法修改调用地址或密钥"));
+        }
+        let mut write_back = false;
+        if (base_url.is_some() || api_key.is_some()) && payload.provider_id.is_some() {
+            let profiles = self.database.profiles()?;
+            let live = std::fs::read_to_string(&self.paths.codex_config()).ok();
+            if let Some(document) = live
+                .as_deref()
+                .and_then(|text| codex_config::parse_document(text).ok())
+            {
+                write_back = self
+                    .matching_active_profile(&profiles, &document, None)?
+                    .as_deref()
+                    == Some(id);
+            }
         }
         let updated = self
             .database
             .update_profile(id, &name, &payload, &now_ms().to_string())?;
+        if write_back {
+            self.write_live_provider_update(
+                id,
+                payload.provider_id.as_deref().expect("已检查 provider_id"),
+                base_url,
+                api_key,
+            )?;
+        }
         Ok(profile_summary(&updated))
+    }
+
+    fn write_live_provider_update(
+        &self,
+        profile_id: &str,
+        provider_id: &str,
+        base_url: Option<&str>,
+        api_key: Option<&str>,
+    ) -> AppResult<()> {
+        let config_path = self.paths.codex_config();
+        let original = std::fs::read_to_string(&config_path)
+            .map_err(|error| app_err!("无法读取 {}: {error}", config_path.display()))?;
+        let mut document = codex_config::parse_document(&original)?;
+        codex_config::update_provider_in_document(&mut document, provider_id, base_url, api_key)?;
+        backup_file(&config_path, &self.paths.config_backup, "config")?;
+        atomic_write(&config_path, document.to_string().as_bytes())?;
+        self.database.record_event(
+            Some(profile_id),
+            "update",
+            "success",
+            Some("provider settings written back to live config"),
+            &now_ms().to_string(),
+        )?;
+        Ok(())
+    }
+
+    pub fn open_codex_file(&self, relative: &str) -> AppResult<()> {
+        let reference = relative.trim().trim_matches('"');
+        if reference.is_empty() {
+            return Err(app_err!("未指定要打开的文件"));
+        }
+        let raw = Path::new(reference);
+        let path = if raw.is_absolute() {
+            raw.to_path_buf()
+        } else {
+            self.paths.codex_home.join(raw)
+        };
+        let canonical = path
+            .canonicalize()
+            .map_err(|_| app_err!("文件不存在：{}", path.display()))?;
+        if !raw.is_absolute() {
+            let root = self
+                .paths
+                .codex_home
+                .canonicalize()
+                .map_err(|_| app_err!("无法定位 Codex 目录"))?;
+            if !canonical.starts_with(&root) {
+                return Err(app_err!("只能打开 Codex 目录内的文件"));
+            }
+        }
+        open_in_editor(&canonical)
     }
 
     pub fn apply_profile(&self, id: &str) -> AppResult<()> {
@@ -229,23 +307,10 @@ impl AppContext {
         document: &toml_edit::DocumentMut,
     ) -> AppResult<()> {
         let profiles = self.database.profiles()?;
-        let active_id = self.active_profile_id(&profiles)?.or_else(|| {
-            let candidates: Vec<String> = profiles
-                .iter()
-                .filter(|profile| profile.id != target_id)
-                .filter(|profile| {
-                    codex_config::subset_match(document, &profile.payload).unwrap_or(false)
-                })
-                .map(|profile| profile.id.clone())
-                .collect();
-            (candidates.len() == 1).then(|| candidates[0].clone())
-        });
-        let Some(active_id) = active_id else {
+        let Some(active_id) = self.matching_active_profile(&profiles, document, Some(target_id))?
+        else {
             return Ok(());
         };
-        if active_id == target_id {
-            return Ok(());
-        }
         let Some(profile) = profiles.iter().find(|profile| profile.id == active_id) else {
             return Ok(());
         };
@@ -268,6 +333,30 @@ impl AppContext {
             );
         }
         Ok(())
+    }
+
+    /// 识别当前 live 配置对应的激活档案：严格匹配优先；
+    /// 配置累计新键导致严格匹配失效时，用"档案是 live 子集"的宽松匹配，且仅当唯一候选。
+    fn matching_active_profile(
+        &self,
+        profiles: &[StoredProfile],
+        document: &toml_edit::DocumentMut,
+        exclude: Option<&str>,
+    ) -> AppResult<Option<String>> {
+        if let Some(id) = self.active_profile_id(profiles)? {
+            if exclude.is_none_or(|excluded| excluded != id) {
+                return Ok(Some(id));
+            }
+        }
+        let candidates: Vec<String> = profiles
+            .iter()
+            .filter(|profile| exclude.is_none_or(|excluded| excluded != profile.id))
+            .filter(|profile| {
+                codex_config::subset_match(document, &profile.payload).unwrap_or(false)
+            })
+            .map(|profile| profile.id.clone())
+            .collect();
+        Ok((candidates.len() == 1).then(|| candidates[0].clone()))
     }
 
     pub fn restart_codex(&self, app: &AppHandle) -> AppResult<()> {
@@ -486,6 +575,41 @@ fn open_in_file_explorer(path: &Path) -> AppResult<()> {
     }
 }
 
+fn open_in_editor(path: &Path) -> AppResult<()> {
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer.exe")
+            .arg(path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| app_err!("无法打开文件：{error}"))
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| app_err!("无法打开文件：{error}"))
+    }
+
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| app_err!("无法打开文件：{error}"))
+    }
+}
+
+fn read_optional_text(path: &Path) -> Option<String> {
+    std::fs::read_to_string(path)
+        .ok()
+        .filter(|text| text.len() <= 512 * 1024)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -626,6 +750,96 @@ new_field = "accumulated"
             context.get_state().unwrap().active_profile_id.as_deref(),
             Some(profile_a.id.as_str())
         );
+    }
+
+    #[test]
+    fn get_profile_returns_raw_file_contents() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(
+            paths.codex_config(),
+            r#"
+model = "glm-5.3"
+model_provider = "ZAI"
+model_catalog_json = "zai.json"
+
+[model_providers.ZAI]
+name = "ZAI"
+base_url = "https://api.example"
+experimental_bearer_token = "secret-token"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            paths.codex_home.join("zai.json"),
+            r#"{"models":[{"id":"glm-5.3","api_key":"sk-secret"}]}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            paths.codex_home.join("auth.json"),
+            r#"{"auth_mode":"chatgpt","tokens":{"access_token":"raw-token"}}"#,
+        )
+        .unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+        let profile = context.capture_profile("ZAI").unwrap();
+        let detail = context.get_profile(&profile.id).unwrap();
+
+        assert!(detail.config_fragment.contains("experimental_bearer_token"));
+        assert!(detail.config_fragment.contains("secret-token"));
+        assert!(!detail.config_fragment.contains("••••••••"));
+        assert_eq!(detail.api_key.as_deref(), Some("secret-token"));
+        assert_eq!(
+            detail.catalog_content.as_deref(),
+            Some(r#"{"models":[{"id":"glm-5.3","api_key":"sk-secret"}]}"#)
+        );
+        assert_eq!(
+            detail.auth_content.as_deref(),
+            Some(r#"{"auth_mode":"chatgpt","tokens":{"access_token":"raw-token"}}"#)
+        );
+    }
+
+    #[test]
+    fn update_profile_writes_back_to_active_live_config() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(
+            paths.codex_config(),
+            r#"
+model = "glm-5.3"
+model_provider = "ZAI"
+
+[model_providers.ZAI]
+name = "ZAI"
+base_url = "https://old.example"
+experimental_bearer_token = "old-key"
+"#,
+        )
+        .unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+        let profile = context.capture_profile("ZAI").unwrap();
+        context
+            .update_profile(
+                &profile.id,
+                "ZAI",
+                Some("https://new.example"),
+                Some("new-key"),
+            )
+            .unwrap();
+
+        let text = std::fs::read_to_string(context.paths.codex_config()).unwrap();
+        assert!(text.contains(r#"base_url = "https://new.example""#));
+        assert!(text.contains(r#"experimental_bearer_token = "new-key""#));
+        assert!(!text.contains("old-key"));
+
+        let detail = context.get_profile(&profile.id).unwrap();
+        assert_eq!(detail.base_url.as_deref(), Some("https://new.example"));
+        assert_eq!(detail.api_key.as_deref(), Some("new-key"));
     }
 
     #[test]
