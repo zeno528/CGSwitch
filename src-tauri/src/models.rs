@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProfilePayload {
     #[serde(default)]
     pub model_values: BTreeMap<String, String>,
@@ -18,6 +18,7 @@ pub struct ProfileSummary {
     pub model: Option<String>,
     pub provider: Option<String>,
     pub reasoning_effort: Option<String>,
+    pub icon: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

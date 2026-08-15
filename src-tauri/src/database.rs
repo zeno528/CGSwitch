@@ -36,8 +36,10 @@ CREATE INDEX idx_switch_events_created_at ON switch_events(created_at DESC);
 CREATE INDEX idx_switch_events_profile_id ON switch_events(profile_id);
 "#;
 
+const SCHEMA_V2: &str = "ALTER TABLE profiles ADD COLUMN icon TEXT;";
+
 fn migrations() -> Migrations<'static> {
-    Migrations::new(vec![M::up(SCHEMA_V1)])
+    Migrations::new(vec![M::up(SCHEMA_V1), M::up(SCHEMA_V2)])
 }
 
 #[derive(Debug)]
@@ -131,7 +133,7 @@ impl Database {
     pub fn profiles(&self) -> AppResult<Vec<StoredProfile>> {
         let connection = self.lock()?;
         let mut statement = connection
-            .prepare("SELECT id, name, payload_json, created_at, updated_at FROM profiles ORDER BY updated_at DESC")
+            .prepare("SELECT id, name, payload_json, icon, created_at, updated_at FROM profiles ORDER BY updated_at DESC")
             .map_err(|error| app_err!("无法读取配置档案: {error}"))?;
         let rows = statement
             .query_map([], profile_from_row)
@@ -175,7 +177,21 @@ impl Database {
                 params![id, name, payload_json, timestamp],
             )
             .map_err(|error| app_err!("无法保存配置档案: {error}"))?;
-        Ok(summary(&id, name, payload, timestamp, timestamp))
+        Ok(summary(&id, name, payload, None, timestamp, timestamp))
+    }
+
+    pub fn set_profile_icon(&self, id: &str, icon: Option<&str>, timestamp: &str) -> AppResult<()> {
+        let connection = self.lock()?;
+        let changed = connection
+            .execute(
+                "UPDATE profiles SET icon=?2, updated_at=?3 WHERE id=?1",
+                params![id, icon, timestamp],
+            )
+            .map_err(|error| app_err!("无法更新配置档案图标: {error}"))?;
+        if changed == 0 {
+            return Err(app_err!("配置档案不存在"));
+        }
+        Ok(())
     }
 
     pub fn rename_profile(&self, id: &str, name: &str, timestamp: &str) -> AppResult<()> {
@@ -234,6 +250,7 @@ pub struct StoredProfile {
     pub id: String,
     pub name: String,
     pub payload: ProfilePayload,
+    pub icon: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -247,8 +264,9 @@ fn profile_from_row(row: &Row<'_>) -> rusqlite::Result<StoredProfile> {
         id,
         name,
         payload,
-        created_at: row.get(3)?,
-        updated_at: row.get(4)?,
+        icon: row.get(3)?,
+        created_at: row.get(4)?,
+        updated_at: row.get(5)?,
     })
 }
 
@@ -256,6 +274,7 @@ fn summary(
     id: &str,
     name: &str,
     payload: &ProfilePayload,
+    icon: Option<&str>,
     created_at: &str,
     updated_at: &str,
 ) -> ProfileSummary {
@@ -265,6 +284,7 @@ fn summary(
         model: payload.model_values.get("model").cloned(),
         provider: payload.provider_id.clone(),
         reasoning_effort: payload.model_values.get("model_reasoning_effort").cloned(),
+        icon: icon.map(str::to_string),
         created_at: created_at.into(),
         updated_at: updated_at.into(),
     }
@@ -275,6 +295,7 @@ pub fn profile_summary(profile: &StoredProfile) -> ProfileSummary {
         &profile.id,
         &profile.name,
         &profile.payload,
+        profile.icon.as_deref(),
         &profile.created_at,
         &profile.updated_at,
     )
@@ -309,5 +330,25 @@ mod tests {
         };
         db.save_settings(&settings).unwrap();
         assert_eq!(db.settings().unwrap(), settings);
+    }
+
+    #[test]
+    fn set_profile_icon_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(dir.path()).unwrap();
+        let db = Database::open(&paths).unwrap();
+
+        let payload = ProfilePayload::default();
+        let summary = db.insert_profile("GLM High", &payload, "1").unwrap();
+        assert_eq!(summary.icon, None);
+
+        db.set_profile_icon(&summary.id, Some("zhipu"), "2")
+            .unwrap();
+        assert_eq!(db.profiles().unwrap()[0].icon.as_deref(), Some("zhipu"));
+
+        db.set_profile_icon(&summary.id, None, "3").unwrap();
+        assert_eq!(db.profiles().unwrap()[0].icon, None);
+
+        assert!(db.set_profile_icon("missing", Some("zhipu"), "4").is_err());
     }
 }

@@ -11,7 +11,9 @@ import {
   useMessage,
 } from "naive-ui";
 import ProfileCard from "../components/ProfileCard.vue";
+import ProfileIconEdit from "../components/ProfileIconEdit.vue";
 import { api } from "../api";
+import { providerIconUrl } from "../icons";
 import type { AppState, ProfileSummary, RestartStage } from "../types";
 
 const props = defineProps<{ state: AppState }>();
@@ -26,8 +28,14 @@ const modalVisible = ref(false);
 const modalMode = ref<"capture" | "rename">("capture");
 const profileName = ref("");
 const editingProfile = ref<ProfileSummary | null>(null);
+const iconEditingProfile = ref<ProfileSummary | null>(null);
 
 let unlisten: (() => void) | null = null;
+
+const activeProfile = computed(() =>
+  props.state.profiles.find((profile) => profile.id === props.state.active_profile_id) ?? null,
+);
+const activeIconUrl = computed(() => providerIconUrl(activeProfile.value?.icon));
 
 const progress = computed(() => {
   const values: Record<RestartStage, number> = {
@@ -79,6 +87,22 @@ async function submitModal() {
       message.success("配置档案已重命名");
     }
     modalVisible.value = false;
+    emit("refresh");
+  } catch (error) {
+    message.error(String(error));
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function saveIcon(icon: string | null) {
+  const profile = iconEditingProfile.value;
+  if (!profile || busy.value) return;
+  busy.value = true;
+  try {
+    await api.setProfileIcon(profile.id, icon);
+    message.success("档案图标已更新");
+    iconEditingProfile.value = null;
     emit("refresh");
   } catch (error) {
     message.error(String(error));
@@ -152,7 +176,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="mx-auto w-full max-w-none">
+  <ProfileIconEdit
+    v-if="iconEditingProfile"
+    :profile="iconEditingProfile"
+    @back="iconEditingProfile = null"
+    @save="saveIcon"
+  />
+  <section v-else class="mx-auto w-full max-w-none">
     <header class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="apple-title">配置档案</h1>
@@ -166,10 +196,14 @@ onBeforeUnmount(() => {
     </header>
 
     <div class="apple-group mt-7 flex flex-wrap items-center justify-between gap-5 px-5 py-4">
-      <div class="min-w-0">
-        <div class="muted text-sm">当前使用</div>
-        <div class="mt-1 truncate text-lg font-semibold tracking-tight">
-          {{ state.profiles.find((profile) => profile.id === state.active_profile_id)?.name ?? "未匹配" }}
+      <div class="flex min-w-0 items-center gap-3">
+        <img v-if="activeIconUrl" :src="activeIconUrl" alt="" class="h-10 w-10 shrink-0 rounded-[10px]" />
+        <span v-else class="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[#007aff]/10 text-sm font-bold text-[#007aff]" aria-hidden="true">{{ activeProfile?.name.charAt(0) ?? "未" }}</span>
+        <div class="min-w-0">
+          <div class="muted text-sm">当前使用</div>
+          <div class="mt-1 truncate text-lg font-semibold tracking-tight">
+            {{ activeProfile?.name ?? "未匹配" }}
+          </div>
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
@@ -216,6 +250,7 @@ onBeforeUnmount(() => {
             :busy="busy"
             @apply="applyProfile(profile)"
             @rename="openRename(profile)"
+            @edit="iconEditingProfile = profile"
             @remove="removeProfile(profile)"
           />
         </div>

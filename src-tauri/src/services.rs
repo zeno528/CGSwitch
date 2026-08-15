@@ -88,6 +88,12 @@ impl AppContext {
         self.database.delete_profile(id)
     }
 
+    pub fn set_profile_icon(&self, id: &str, icon: Option<&str>) -> AppResult<()> {
+        let icon = validated_icon(icon)?;
+        self.database
+            .set_profile_icon(id, icon.as_deref(), &now_ms().to_string())
+    }
+
     pub fn apply_profile(&self, id: &str) -> AppResult<()> {
         let _guard = self
             .operation
@@ -249,6 +255,24 @@ fn validated_name(name: &str) -> AppResult<String> {
     Ok(name.to_string())
 }
 
+/// 图标 id 对应 src/assets/providers/<id>.svg，仅校验格式；
+/// 合法 id 列表由前端注册表维护，未匹配的 id 前端按无图标渲染。
+fn validated_icon(icon: Option<&str>) -> AppResult<Option<String>> {
+    icon.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            if value.len() > 40
+                || !value
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+            {
+                return Err(app_err!("无效的图标标识"));
+            }
+            Ok(value.to_string())
+        })
+        .transpose()
+}
+
 fn emit(app: &AppHandle, stage: &str, message: Option<&str>) {
     let _ = app.emit(
         "restart-progress",
@@ -380,5 +404,18 @@ experimental_bearer_token = "old"
 
         assert!(context.is_managed_path(&context.paths.database.display().to_string()));
         assert!(!context.is_managed_path("C:\\unmanaged-path"));
+    }
+
+    #[test]
+    fn icon_ids_are_validated() {
+        assert_eq!(validated_icon(None).unwrap(), None);
+        assert_eq!(validated_icon(Some("  ")).unwrap(), None);
+        assert_eq!(
+            validated_icon(Some(" zhipu ")).unwrap().as_deref(),
+            Some("zhipu")
+        );
+        assert!(validated_icon(Some("Zhipu")).is_err());
+        assert!(validated_icon(Some("a!b")).is_err());
+        assert!(validated_icon(Some(&"x".repeat(41))).is_err());
     }
 }

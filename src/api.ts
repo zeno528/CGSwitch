@@ -12,6 +12,7 @@ const webProfiles: ProfileSummary[] = [
     model: "glm-5.3",
     provider: "ZAI",
     reasoning_effort: "high",
+    icon: "zhipu",
     created_at: "2026-08-15 10:00:00",
     updated_at: "2026-08-15 10:00:00",
   },
@@ -21,6 +22,7 @@ const webProfiles: ProfileSummary[] = [
     model: "glm-5-turbo",
     provider: "ZAI",
     reasoning_effort: "low",
+    icon: null,
     created_at: "2026-08-15 10:01:00",
     updated_at: "2026-08-15 10:01:00",
   },
@@ -30,6 +32,7 @@ const webProfiles: ProfileSummary[] = [
     model: "gpt-5.6",
     provider: null,
     reasoning_effort: "medium",
+    icon: "openai-chatgpt",
     created_at: "2026-08-15 10:02:00",
     updated_at: "2026-08-15 10:02:00",
   },
@@ -78,6 +81,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
         model: "glm-5.3",
         provider: "ZAI",
         reasoning_effort: "high",
+        icon: null,
         created_at: now,
         updated_at: now,
       };
@@ -87,6 +91,11 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     case "rename_profile": {
       const profile = webProfiles.find((item) => item.id === args?.id);
       if (profile) profile.name = String(args?.name ?? profile.name);
+      return undefined as T;
+    }
+    case "set_profile_icon": {
+      const profile = webProfiles.find((item) => item.id === args?.id);
+      if (profile) profile.icon = (args?.icon as string | null) ?? null;
       return undefined as T;
     }
     case "delete_profile": {
@@ -114,6 +123,7 @@ export const api = {
   getState: () => call<AppState>("get_state"),
   captureProfile: (name: string) => call<ProfileSummary>("capture_profile", { name }),
   renameProfile: (id: string, name: string) => call<void>("rename_profile", { id, name }),
+  setProfileIcon: (id: string, icon: string | null) => call<void>("set_profile_icon", { id, icon }),
   deleteProfile: (id: string) => call<void>("delete_profile", { id }),
   applyProfile: (id: string) => call<void>("apply_profile", { id }),
   restartCodex: () => call<void>("restart_codex"),

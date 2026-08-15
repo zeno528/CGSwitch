@@ -93,4 +93,8 @@ V1 安装包未签名。macOS Gatekeeper 拦截时，请确认安装包来源，
 
 SwitchGPT 的桌面应用进程重启和原子写入实现参考并改编自 [Codex++](https://github.com/BigPizzaV3/CodexPlusPlus)，界面主题思路参考 [LeagueAkari](https://github.com/LeagueAkari/LeagueAkari)。
 
-本项目采用 `AGPL-3.0-only`。LeagueAkari 为 MIT；如复制其主题代码，需保留其版权声明。
+本项目采用 `AGPL-3.0-only`。LeagueAkari 为 MIT；如复制其主题代码，需保留其版权声明。供应商图标来自 [thesvg.org](https://thesvg.org)（[glincker/thesvg](https://github.com/glincker/thesvg)，MIT），各 SVG 文件头已保留来源声明。
+
+## 维护供应商图标
+
+新增供应商：把 `<id>.svg` 放入 `src/assets/providers/`，图标会自动出现在档案编辑页的候选列表中；中文名称在 `src/icons.ts` 的 `LABELS` 里配置（缺省显示文件名）。

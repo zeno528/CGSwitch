@@ -20,6 +20,15 @@ pub fn rename_profile(id: String, name: String, state: State<'_, AppContext>) ->
 }
 
 #[tauri::command]
+pub fn set_profile_icon(
+    id: String,
+    icon: Option<String>,
+    state: State<'_, AppContext>,
+) -> AppResult<()> {
+    state.set_profile_icon(&id, icon.as_deref())
+}
+
+#[tauri::command]
 pub fn delete_profile(id: String, state: State<'_, AppContext>) -> AppResult<()> {
     state.delete_profile(&id)
 }

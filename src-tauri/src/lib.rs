@@ -20,6 +20,7 @@ pub fn run() {
             commands::get_state,
             commands::capture_profile,
             commands::rename_profile,
+            commands::set_profile_icon,
             commands::delete_profile,
             commands::apply_profile,
             commands::restart_codex,

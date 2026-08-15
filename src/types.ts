@@ -4,6 +4,7 @@ export interface ProfileSummary {
   model: string | null;
   provider: string | null;
   reasoning_effort: string | null;
+  icon: string | null;
   created_at: string;
   updated_at: string;
 }
