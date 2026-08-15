@@ -1,7 +1,6 @@
-use tauri::Manager;
 use tauri::{AppHandle, State};
 
-use crate::error::{app_err, AppResult};
+use crate::error::AppResult;
 use crate::models::{AppState, ProfileDetail, ProfileSummary, Settings};
 use crate::services::AppContext;
 
@@ -68,7 +67,9 @@ pub fn set_window_theme(dark: bool, app: AppHandle) -> AppResult<()> {
     }
     #[cfg(windows)]
     {
+        use crate::error::app_err;
         use std::ffi::c_void;
+        use tauri::Manager; // get_webview_window
         use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
         use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
         use windows::Win32::UI::WindowsAndMessaging::{SendMessageW, WM_NCACTIVATE};
