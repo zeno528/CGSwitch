@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod codex;
 pub mod commands;
 pub mod database;
@@ -7,15 +8,21 @@ pub mod models;
 pub mod paths;
 pub mod services;
 
+use std::sync::Arc;
+
 use crate::services::AppContext;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let context = AppContext::new(paths::app_paths().expect("无法定位用户数据目录"))
-        .expect("无法初始化 SwitchGPT 数据库");
+    let paths = paths::app_paths().expect("无法定位用户数据目录");
+    let context = AppContext::new(paths.clone()).expect("无法初始化 SwitchGPT 数据库");
+    let oauth_state = auth::CodexOAuthState(Arc::new(tokio::sync::RwLock::new(
+        auth::codex_oauth::CodexOAuthManager::new(paths.root.join("codex_oauth_auth.json")),
+    )));
 
     tauri::Builder::default()
         .manage(context)
+        .manage(oauth_state)
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
             commands::capture_profile,
@@ -27,6 +34,10 @@ pub fn run() {
             commands::apply_profile,
             commands::restart_codex,
             commands::set_window_theme,
+            commands::auth_start_login,
+            commands::auth_poll_for_account,
+            commands::auth_get_status,
+            commands::auth_remove_account,
             commands::get_settings,
             commands::save_settings,
             commands::open_path,

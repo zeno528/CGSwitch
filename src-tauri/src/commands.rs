@@ -1,5 +1,8 @@
 use tauri::{AppHandle, State};
 
+use crate::auth::codex_oauth::{
+    AuthStatus, CodexOAuthError, CodexOAuthState, DeviceCodeResponse, ManagedAccount,
+};
 use crate::error::AppResult;
 use crate::models::{AppState, ProfileDetail, ProfileSummary, Settings};
 use crate::services::AppContext;
@@ -98,6 +101,50 @@ pub fn set_window_theme(dark: bool, app: AppHandle) -> AppResult<()> {
         }
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn auth_start_login(
+    state: State<'_, CodexOAuthState>,
+) -> Result<DeviceCodeResponse, String> {
+    state
+        .0
+        .read()
+        .await
+        .start_device_flow()
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn auth_poll_for_account(
+    device_code: String,
+    state: State<'_, CodexOAuthState>,
+) -> Result<Option<ManagedAccount>, String> {
+    match state.0.write().await.poll_for_token(&device_code).await {
+        Ok(account) => Ok(account),
+        Err(CodexOAuthError::AuthorizationPending) => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn auth_get_status(state: State<'_, CodexOAuthState>) -> Result<AuthStatus, String> {
+    Ok(state.0.read().await.get_status().await)
+}
+
+#[tauri::command]
+pub async fn auth_remove_account(
+    account_id: String,
+    state: State<'_, CodexOAuthState>,
+) -> Result<(), String> {
+    state
+        .0
+        .write()
+        .await
+        .remove_account(&account_id)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
