@@ -27,6 +27,12 @@ body,
   height: 100%;
 }
 
+/* naive-ui 的 NConfigProvider 会渲染一层无高度包裹 div，
+   会截断 #app 的 100% 高度链（内部 h-full 因此失效、页面被内容撑高），补上高度约束 */
+.n-config-provider {
+  height: 100%;
+}
+
 body {
   margin: 0;
   background: var(--app-bg);

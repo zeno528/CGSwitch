@@ -133,10 +133,10 @@ async function openActiveFile() {
     @back="pickingIcon = false"
     @save="saveIcon"
   />
-  <section v-else class="mx-auto flex h-full w-full max-w-none flex-col">
+  <section v-else class="mx-auto flex h-[calc(100vh-3.5rem)] w-full max-w-none flex-col">
     <button
       type="button"
-      class="-ml-2 flex items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-black/5 dark:hover:bg-white/8"
+      class="-ml-2 flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-black/5 dark:hover:bg-white/8"
       aria-label="返回"
       @click="emit('back')"
     >
@@ -167,13 +167,9 @@ async function openActiveFile() {
 
     <div class="apple-group mt-6 p-5 sm:p-6">
       <div class="grid gap-4 sm:grid-cols-2">
-        <div>
+        <div class="sm:col-span-2">
           <div class="muted mb-1.5 text-[13px]">名称</div>
           <n-input v-model:value="name" maxlength="50" placeholder="档案名称" />
-        </div>
-        <div>
-          <div class="muted mb-1.5 text-[13px]">供应商</div>
-          <n-input :value="detail?.provider ?? '官方'" readonly />
         </div>
         <div v-if="detail?.provider" class="sm:col-span-2">
           <div class="muted mb-1.5 text-[13px]">调用地址</div>
@@ -208,25 +204,24 @@ async function openActiveFile() {
         <n-button size="small" secondary title="用默认编辑器打开当前选中的文件" @click="openActiveFile">打开</n-button>
       </div>
 
-      <div class="mt-4 min-h-0 flex-1 overflow-auto pr-1">
-        <pre v-if="activeTab === 'config'" class="mono overflow-x-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ liveConfigFragment }}</pre>
-        <div v-else-if="activeTab === 'auth'" class="text-sm">
-          <pre v-if="detail?.auth_content" class="mono overflow-x-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ detail.auth_content }}</pre>
+      <div class="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden pr-1">
+        <pre v-if="activeTab === 'config'" class="mono min-h-0 flex-1 overflow-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ liveConfigFragment }}</pre>
+        <div v-else-if="activeTab === 'auth'" class="flex h-full min-h-0 flex-col text-sm">
+          <pre v-if="detail?.auth_content" class="mono min-h-0 flex-1 overflow-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ detail.auth_content }}</pre>
           <p v-else class="muted mt-2 text-xs">认证文件（~/.codex/auth.json）不存在或无法读取。</p>
         </div>
-        <div v-else class="text-sm">
+        <div v-else class="flex h-full min-h-0 flex-col text-sm">
           <div class="flex justify-between gap-4 py-2">
             <span class="muted">模型目录</span>
             <span class="mono">{{ catalogPath }}</span>
           </div>
-          <pre v-if="detail?.catalog_content" class="mono mt-2 overflow-x-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ detail.catalog_content }}</pre>
+          <pre v-if="detail?.catalog_content" class="mono mt-2 min-h-0 flex-1 overflow-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ detail.catalog_content }}</pre>
           <p v-else class="muted mt-2 text-xs">模型目录文件不存在或无法读取，文件内容未显示。</p>
         </div>
       </div>
     </div>
 
     <div class="mt-5 flex items-center justify-end gap-2">
-      <span class="muted mr-auto text-xs">保存仅更新档案快照，切换时才写回 config.toml</span>
       <n-button @click="emit('back')">取消</n-button>
       <n-button type="primary" :loading="saving" @click="save">保存</n-button>
     </div>
