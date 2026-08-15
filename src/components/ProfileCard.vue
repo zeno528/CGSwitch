@@ -24,7 +24,7 @@ const emit = defineEmits<{
       <ProfileIconTile :name="profile.name" :icon="profile.icon" />
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2">
-          <h3 class="truncate font-semibold">{{ profile.name }}</h3>
+          <h3 class="cursor-pointer truncate font-semibold transition-colors hover:text-[#007aff]" title="点击重命名" @click="emit('rename')">{{ profile.name }}</h3>
           <n-tag v-if="active" type="success" size="small">当前生效</n-tag>
         </div>
         <div class="muted mt-1 flex flex-wrap gap-1.5 text-xs">
@@ -36,7 +36,6 @@ const emit = defineEmits<{
     </div>
     <div class="flex shrink-0 items-center gap-2" @dblclick.stop>
       <n-button type="primary" size="small" :disabled="busy || active" @click="emit('apply')">应用</n-button>
-      <n-button size="small" :disabled="busy" @click="emit('rename')">重命名</n-button>
       <button
         type="button"
         class="grid h-8 w-8 place-items-center rounded-lg text-[#ff3b30]/60 transition-colors hover:bg-[#ff3b30]/10 hover:text-[#ff3b30] disabled:pointer-events-none disabled:opacity-40"
