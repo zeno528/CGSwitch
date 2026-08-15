@@ -118,6 +118,9 @@ let webSettings: Settings = {
   codex_app_path: null,
   auto_restart: false,
   restart_timeout_ms: 5000,
+  autostart_enabled: false,
+  silent_start: false,
+  minimize_to_tray: false,
 };
 
 function webState(): AppState {

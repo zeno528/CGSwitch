@@ -56,11 +56,17 @@ async function saveGeneral() {
       ...previous,
       theme: form.theme,
       auto_restart: form.auto_restart,
+      autostart_enabled: form.autostart_enabled,
+      silent_start: form.silent_start,
+      minimize_to_tray: form.minimize_to_tray,
     });
     emit("saved", settings);
   } catch (error) {
     form.theme = previous.theme;
     form.auto_restart = previous.auto_restart;
+    form.autostart_enabled = previous.autostart_enabled;
+    form.silent_start = previous.silent_start;
+    form.minimize_to_tray = previous.minimize_to_tray;
     emit("previewTheme", previous.theme);
     message.error(String(error));
   } finally {
@@ -76,6 +82,11 @@ function updateTheme(theme: Settings["theme"]) {
 
 function updateAutoRestart(autoRestart: boolean) {
   form.auto_restart = autoRestart;
+  void saveGeneral();
+}
+
+function updateStartupToggle(key: "autostart_enabled" | "silent_start" | "minimize_to_tray", value: boolean) {
+  form[key] = value;
   void saveGeneral();
 }
 
@@ -141,6 +152,57 @@ async function openPath(item: PathInfo) {
           </div>
         </n-form-item>
       </n-form>
+      <n-divider />
+      <div class="flex flex-col gap-5">
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-start gap-3">
+            <svg class="mt-0.5 h-4 w-4 shrink-0 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M12 3.5v7" stroke-linecap="round" />
+              <path d="M7.2 6.2a7.5 7.5 0 1 0 9.6 0" stroke-linecap="round" />
+            </svg>
+            <div>
+              <div class="text-sm font-semibold">开机自启</div>
+              <div class="muted mt-0.5 text-xs">登录系统后自动启动 SwitchGPT</div>
+            </div>
+          </div>
+          <n-switch
+            v-model:value="form.autostart_enabled"
+            @update:value="updateStartupToggle('autostart_enabled', $event)"
+          />
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-start gap-3">
+            <svg class="mt-0.5 h-4 w-4 shrink-0 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M20 13.6A8.2 8.2 0 1 1 10.4 4a6.4 6.4 0 0 0 9.6 9.6Z" stroke-linejoin="round" />
+            </svg>
+            <div>
+              <div class="text-sm font-semibold">静默启动</div>
+              <div class="muted mt-0.5 text-xs">启动时不显示主窗口，驻留系统托盘</div>
+            </div>
+          </div>
+          <n-switch
+            v-model:value="form.silent_start"
+            @update:value="updateStartupToggle('silent_start', $event)"
+          />
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-start gap-3">
+            <svg class="mt-0.5 h-4 w-4 shrink-0 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M4 14v2a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-2" stroke-linecap="round" />
+              <path d="M12 3.5v8" stroke-linecap="round" />
+              <path d="m8.5 8.5 3.5 3.5 3.5-3.5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <div>
+              <div class="text-sm font-semibold">关闭时最小化到托盘</div>
+              <div class="muted mt-0.5 text-xs">点击关闭按钮时隐藏到托盘而不是退出</div>
+            </div>
+          </div>
+          <n-switch
+            v-model:value="form.minimize_to_tray"
+            @update:value="updateStartupToggle('minimize_to_tray', $event)"
+          />
+        </div>
+      </div>
     </div>
 
     <div v-else-if="section === 'codex'" class="apple-group mt-4 p-5 sm:p-6">

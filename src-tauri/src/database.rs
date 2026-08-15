@@ -113,6 +113,15 @@ impl Database {
             ("codex_app_path", serde_json::json!(settings.codex_app_path)),
             ("auto_restart", serde_json::json!(settings.auto_restart)),
             (
+                "autostart_enabled",
+                serde_json::json!(settings.autostart_enabled),
+            ),
+            ("silent_start", serde_json::json!(settings.silent_start)),
+            (
+                "minimize_to_tray",
+                serde_json::json!(settings.minimize_to_tray),
+            ),
+            (
                 "restart_timeout_ms",
                 serde_json::json!(settings.restart_timeout_ms),
             ),

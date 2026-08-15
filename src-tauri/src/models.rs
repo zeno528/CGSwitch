@@ -45,6 +45,12 @@ pub struct Settings {
     pub auto_restart: bool,
     #[serde(default = "default_restart_timeout")]
     pub restart_timeout_ms: u64,
+    #[serde(default)]
+    pub autostart_enabled: bool,
+    #[serde(default)]
+    pub silent_start: bool,
+    #[serde(default)]
+    pub minimize_to_tray: bool,
 }
 
 pub fn default_restart_timeout() -> u64 {
@@ -58,6 +64,9 @@ impl Default for Settings {
             codex_app_path: None,
             auto_restart: false,
             restart_timeout_ms: default_restart_timeout(),
+            autostart_enabled: false,
+            silent_start: false,
+            minimize_to_tray: false,
         }
     }
 }

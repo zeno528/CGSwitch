@@ -180,8 +180,26 @@ pub fn get_settings(state: State<'_, AppContext>) -> AppResult<Settings> {
 }
 
 #[tauri::command]
-pub fn save_settings(settings: Settings, state: State<'_, AppContext>) -> AppResult<Settings> {
-    state.save_settings(&settings)
+pub fn save_settings(
+    app: AppHandle,
+    settings: Settings,
+    state: State<'_, AppContext>,
+) -> AppResult<Settings> {
+    let saved = state.save_settings(&settings)?;
+    sync_autostart(&app, &saved)?;
+    Ok(saved)
+}
+
+fn sync_autostart(app: &AppHandle, settings: &Settings) -> AppResult<()> {
+    use tauri_plugin_autostart::ManagerExt;
+    if settings.autostart_enabled {
+        app.autolaunch()
+            .enable()
+            .map_err(|error| app_err!("同步开机自启设置失败: {error}"))
+    } else {
+        let _ = app.autolaunch().disable();
+        Ok(())
+    }
 }
 
 #[tauri::command]
