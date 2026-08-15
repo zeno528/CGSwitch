@@ -1,0 +1,78 @@
+# 手动发行：Actions → Release → Run workflow
+# 版本号取自仓库根目录 VERSION 文件，打 tag 为 v{VERSION}；
+# 产物以 prerelease（预发布）状态发布，测试通过后手动改为正式版。
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: version
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+      - name: 创建预发布（已存在则跳过，支持重跑）
+        run: |
+          TAG="v$VERSION"
+          if ! gh release view "$TAG"; then
+            gh release create "$TAG" --prerelease --generate-notes --target "$GITHUB_SHA"
+          fi
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+  build:
+    needs: create-release
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            rust-target: x86_64-pc-windows-msvc
+            upload-globs: "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi"
+          - name: macos-arm64
+            os: macos-latest
+            rust-target: aarch64-apple-darwin
+            upload-globs: "src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg"
+          - name: macos-x64
+            os: macos-latest
+            rust-target: x86_64-apple-darwin
+            upload-globs: "src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg"
+    steps:
+      - uses: actions/checkout@v7
+      - run: corepack enable
+        shell: bash
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: rustup target add ${{ matrix.rust-target }}
+        shell: bash
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build --target ${{ matrix.rust-target }}
+      - name: 上传产物到预发布
+        run: gh release upload "v$VERSION" ${{ matrix.upload-globs }} --clobber
+        shell: bash
+        env:
+          VERSION: ${{ needs.create-release.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
