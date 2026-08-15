@@ -9,7 +9,6 @@ import {
   NInputNumber,
   NList,
   NListItem,
-  NSelect,
   NSwitch,
   useMessage,
 } from "naive-ui";
@@ -25,10 +24,10 @@ const saving = ref(false);
 const savingGeneral = ref(false);
 const openingPath = ref<string | null>(null);
 const section = ref<"general" | "codex" | "about">("general");
-const themeOptions = [
-  { label: "跟随系统", value: "system" },
+const themeOptions: { label: string; value: Settings["theme"] }[] = [
   { label: "浅色", value: "light" },
   { label: "深色", value: "dark" },
+  { label: "跟随系统", value: "system" },
 ];
 
 async function save() {
@@ -103,17 +102,41 @@ async function openPath(item: PathInfo) {
     </div>
 
     <div v-if="section === 'general'" class="apple-group mt-4 p-5 sm:p-6">
-      <h2 class="text-lg font-semibold tracking-tight">通用</h2>
       <n-form class="mt-5" label-placement="top">
         <n-form-item label="主题">
-          <div class="w-full space-y-2">
-            <n-select v-model:value="form.theme" :options="themeOptions" :loading="savingGeneral" @update:value="updateTheme" />
-            <p class="muted text-xs">选择后立即生效并保存。</p>
+          <div>
+            <div class="apple-group inline-flex p-1">
+              <button
+                v-for="option in themeOptions"
+                :key="option.value"
+                type="button"
+                class="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-xl text-sm transition-colors"
+                :class="form.theme === option.value ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'"
+                :aria-pressed="form.theme === option.value"
+                @click="updateTheme(option.value)"
+              >
+                <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <template v-if="option.value === 'system'">
+                    <rect x="3.5" y="5" width="17" height="11" rx="2" />
+                    <path d="M9.5 19.5h5M12 16v3.5" stroke-linecap="round" />
+                  </template>
+                  <template v-else-if="option.value === 'light'">
+                    <circle cx="12" cy="12" r="4" />
+                    <path d="M12 3.5v1.8M12 18.7v1.8M3.5 12h1.8M18.7 12h1.8M6 6l1.3 1.3M16.7 16.7 18 18M18 6l-1.3 1.3M7.3 16.7 6 18" stroke-linecap="round" />
+                  </template>
+                  <template v-else>
+                    <path d="M20 13.6A8.2 8.2 0 1 1 10.4 4a6.4 6.4 0 0 0 9.6 9.6Z" stroke-linejoin="round" />
+                  </template>
+                </svg>
+                <span>{{ option.label }}</span>
+              </button>
+            </div>
+            <p class="muted mt-2 text-xs">选择后立即生效并保存。</p>
           </div>
         </n-form-item>
         <n-form-item label="应用配置后自动重启 Codex">
           <div class="flex items-center gap-3">
-            <n-switch v-model:value="form.auto_restart" :loading="savingGeneral" @update:value="updateAutoRestart" />
+            <n-switch v-model:value="form.auto_restart" @update:value="updateAutoRestart" />
             <span class="muted text-sm">关闭时仅写入 config.toml，由你手动点击重启。</span>
           </div>
         </n-form-item>
@@ -121,7 +144,6 @@ async function openPath(item: PathInfo) {
     </div>
 
     <div v-else-if="section === 'codex'" class="apple-group mt-4 p-5 sm:p-6">
-      <h2 class="text-lg font-semibold tracking-tight">Codex</h2>
       <n-form class="mt-5" label-placement="top">
         <n-form-item label="Codex / ChatGPT 应用路径覆盖">
           <n-input v-model:value="form.codex_app_path" clearable placeholder="留空使用自动识别" />
@@ -136,7 +158,7 @@ async function openPath(item: PathInfo) {
     </div>
 
     <div v-else class="apple-group mt-4 p-5 sm:p-6">
-      <h2 class="text-lg font-semibold tracking-tight">数据与路径</h2>
+      <h2 class="text-[15px] font-semibold tracking-tight">数据与路径</h2>
       <p class="muted mt-2 text-sm">所有本机数据固定保存在用户 Home 目录，不会进入 Git。</p>
       <n-divider />
       <n-list class="bg-transparent" :show-divider="true">

@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   NConfigProvider,
   NDialogProvider,
-  NGlobalStyle,
   NLayout,
   NMessageProvider,
   darkTheme,
@@ -19,7 +18,7 @@ type View = "profiles" | "settings";
 
 const view = ref<View>("profiles");
 const sidebarCollapsed = ref(false);
-const themeTransitioning = ref(false);
+const sidebarFlyoutArmed = ref(true);
 const state = ref<AppState | null>(null);
 const loadError = ref("");
 const systemDark = ref(window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -35,7 +34,11 @@ const isDark = computed(() => {
 });
 const naiveTheme = computed(() => (isDark.value ? darkTheme : null));
 const isSidebarCollapsed = sidebarCollapsed;
-let themeTransitionId = 0;
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
+  if (sidebarCollapsed.value) sidebarFlyoutArmed.value = false;
+}
 
 async function refresh() {
   try {
@@ -53,15 +56,7 @@ async function saveSettings(settings: Settings) {
 
 async function previewTheme(theme: Settings["theme"]) {
   if (!state.value || state.value.settings.theme === theme) return;
-  const transitionId = ++themeTransitionId;
-  themeTransitioning.value = true;
-  await nextTick();
-  if (transitionId !== themeTransitionId || !state.value) return;
   state.value = { ...state.value, settings: { ...state.value.settings, theme } };
-  await nextTick();
-  requestAnimationFrame(() => {
-    if (transitionId === themeTransitionId) themeTransitioning.value = false;
-  });
 }
 
 watch(
@@ -84,10 +79,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <n-config-provider :theme="naiveTheme" :theme-overrides="themeOverrides">
+  <n-config-provider :theme="naiveTheme" :theme-overrides="themeOverrides" inline-theme-disabled>
     <n-dialog-provider>
       <n-message-provider>
-        <n-global-style />
         <n-layout class="h-full! rounded-none! bg-transparent!">
           <div class="flex min-h-screen">
             <aside class="apple-sidebar relative min-h-screen shrink-0" :class="isSidebarCollapsed ? ['w-[60px]', 'apple-sidebar--collapsed'] : 'w-[160px]'">
@@ -106,15 +100,15 @@ onBeforeUnmount(() => {
               </div>
 
               <nav class="mx-2 mt-6 space-y-1">
-                <button type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-r-full before:bg-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="配置档案" @click="view = 'profiles'">
+                <button type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-r-full before:bg-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="配置档案" @click="view = 'profiles'" @mouseenter="sidebarFlyoutArmed = true">
                   <svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                     <rect x="4.5" y="4.5" width="15" height="15" rx="3" />
                     <path d="M8.5 9h7M8.5 12h7M8.5 15h4" stroke-linecap="round" />
                   </svg>
                   <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">配置档案</span>
-                  <span v-if="isSidebarCollapsed" class="apple-sidebar-flyout" aria-hidden="true">配置档案</span>
+                  <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">配置档案</span>
                 </button>
-                <button type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'settings' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-r-full before:bg-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="设置" @click="view = 'settings'">
+                <button type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'settings' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-r-full before:bg-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="设置" @click="view = 'settings'" @mouseenter="sidebarFlyoutArmed = true">
                   <svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                     <path d="M5.5 7.5h13M5.5 12h13M5.5 16.5h13" stroke-linecap="round" />
                     <circle cx="9" cy="7.5" r="1.5" fill="var(--panel-bg)" />
@@ -122,18 +116,18 @@ onBeforeUnmount(() => {
                     <circle cx="11" cy="16.5" r="1.5" fill="var(--panel-bg)" />
                   </svg>
                   <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">设置</span>
-                  <span v-if="isSidebarCollapsed" class="apple-sidebar-flyout" aria-hidden="true">设置</span>
+                  <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">设置</span>
                 </button>
               </nav>
 
               <div class="absolute inset-x-2 bottom-4">
-                <button type="button" class="apple-sidebar-nav-button flex h-9 w-full items-center rounded-[10px] text-sm" :class="isSidebarCollapsed ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" :aria-label="isSidebarCollapsed ? '展开侧边栏' : '收缩侧边栏'" @click="sidebarCollapsed = !sidebarCollapsed">
+                <button type="button" class="apple-sidebar-nav-button flex h-9 w-full items-center rounded-[10px] text-sm font-medium hover:bg-black/5 dark:hover:bg-white/8" :aria-label="isSidebarCollapsed ? '展开侧边栏' : '收缩侧边栏'" @click="toggleSidebar" @mouseenter="sidebarFlyoutArmed = true">
                   <svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
                     <rect x="4.5" y="5.5" width="15" height="13" rx="3" />
                     <path d="M12 5.5v13" stroke-linecap="round" />
                   </svg>
                   <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">收缩侧边栏</span>
-                  <span v-if="isSidebarCollapsed" class="apple-sidebar-flyout" aria-hidden="true">展开侧边栏</span>
+                  <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">展开侧边栏</span>
                 </button>
               </div>
             </aside>
@@ -152,7 +146,6 @@ onBeforeUnmount(() => {
                 <p v-if="loadError" class="muted mt-4 text-sm">{{ loadError }}</p>
               </div>
             </main>
-            <div v-if="themeTransitioning" class="theme-transition-cover" aria-hidden="true" />
           </div>
         </n-layout>
       </n-message-provider>

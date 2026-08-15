@@ -197,8 +197,10 @@ onBeforeUnmount(() => {
 
     <div class="apple-group mt-7 flex flex-wrap items-center justify-between gap-5 px-5 py-4">
       <div class="flex min-w-0 items-center gap-3">
-        <img v-if="activeIconUrl" :src="activeIconUrl" alt="" class="h-10 w-10 shrink-0 rounded-[10px]" />
-        <span v-else class="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[#007aff]/10 text-sm font-bold text-[#007aff]" aria-hidden="true">{{ activeProfile?.name.charAt(0) ?? "未" }}</span>
+        <div class="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[#f0f0f3]" aria-hidden="true">
+          <img v-if="activeIconUrl" :src="activeIconUrl" alt="" class="h-6 w-6" />
+          <span v-else class="text-sm font-bold text-[#007aff]">{{ activeProfile?.name.charAt(0) ?? "未" }}</span>
+        </div>
         <div class="min-w-0">
           <div class="muted text-sm">当前使用</div>
           <div class="mt-1 truncate text-lg font-semibold tracking-tight">
@@ -236,7 +238,7 @@ onBeforeUnmount(() => {
 
     <div class="mt-8">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold tracking-tight">我的档案</h2>
+        <h2 class="text-[15px] font-semibold tracking-tight">我的档案</h2>
         <span class="muted text-sm">{{ state.profiles.length }} 个档案</span>
       </div>
       <n-empty v-if="state.profiles.length === 0" description="还没有配置档案。先把 ~/.codex/config.toml 调整到目标状态，再点击“捕获当前配置”。" class="apple-group mt-3 py-14" />

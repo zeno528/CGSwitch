@@ -40,6 +40,9 @@ body {
     "Microsoft YaHei",
     system-ui,
     sans-serif;
+  /* 与 naive-ui NGlobalStyle 原先注入的基准一致（已移除该组件，由这里接管） */
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 :root.dark body {
@@ -74,6 +77,12 @@ body {
 
 .mono {
   font-family: "JetBrains Mono", Consolas, "Cascadia Mono", monospace;
+}
+
+/* 表单标签颜色挂全局主题变量：naive-ui 主题规则的再生成本身有几帧延迟，
+   走我们自己的变量轨可与 .dark 类同帧翻转，避免切换时标签短暂不可见 */
+.n-form-item .n-form-item-label {
+  color: var(--text-secondary);
 }
 
 * {
@@ -142,10 +151,10 @@ body {
 }
 
 .apple-title {
-  font-size: clamp(1.5rem, 2vw, 1.75rem);
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.1;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
 }
 
 .apple-group {
@@ -156,21 +165,14 @@ body {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-.theme-transition-cover {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: var(--app-bg);
-}
-
 .startup-skeleton > div {
   background: color-mix(in srgb, var(--panel-border) 64%, transparent);
 }
 
 .startup-skeleton__title {
   border-radius: 6px;
-  height: 30px;
-  width: 118px;
+  height: 22px;
+  width: 96px;
 }
 
 .startup-skeleton__subtitle {
