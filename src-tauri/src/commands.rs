@@ -3,7 +3,7 @@ use tauri::{AppHandle, State};
 use crate::auth::codex_oauth::{
     AuthStatus, CodexOAuthError, CodexOAuthState, DeviceCodeResponse, ManagedAccount,
 };
-use crate::error::AppResult;
+use crate::error::{app_err, AppResult};
 use crate::models::{AppState, ProfileDetail, ProfileSummary, Settings};
 use crate::services::AppContext;
 
@@ -145,6 +145,33 @@ pub async fn auth_remove_account(
         .remove_account(&account_id)
         .await
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn open_url(url: String) -> AppResult<()> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err(app_err!("仅支持打开 http(s) 链接"));
+    }
+    #[cfg(windows)]
+    {
+        use windows::core::HSTRING;
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let url_wide = HSTRING::from(&url);
+        let operation = HSTRING::from("open");
+        let result =
+            unsafe { ShellExecuteW(None, &operation, &url_wide, None, None, SW_SHOWNORMAL) };
+        if result.0 as usize <= 32 {
+            return Err(app_err!("无法打开系统浏览器"));
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new("open").arg(&url).spawn();
+        let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+    }
+    Ok(())
 }
 
 #[tauri::command]

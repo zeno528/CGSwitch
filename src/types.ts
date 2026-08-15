@@ -21,6 +21,27 @@ export interface ProfileDetail {
   updated_at: string;
 }
 
+export interface DeviceCodeResponse {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  expires_in: number;
+  interval: number;
+}
+
+export interface ManagedAccount {
+  id: string;
+  login: string;
+  authenticated_at: number;
+  is_default: boolean;
+}
+
+export interface AuthStatus {
+  authenticated: boolean;
+  default_account_id: string | null;
+  accounts: ManagedAccount[];
+}
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   codex_app_path: string | null;

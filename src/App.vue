@@ -107,7 +107,7 @@ onBeforeUnmount(() => {
           <div class="flex min-h-screen">
             <aside class="apple-sidebar relative min-h-screen shrink-0" :class="isSidebarCollapsed ? ['w-[60px]', 'apple-sidebar--collapsed'] : 'w-[160px]'">
               <div class="apple-sidebar-brand mx-3 mt-3 flex items-center gap-3">
-                <div class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-sm font-bold text-[#007aff] shadow-sm dark:bg-white/10">SG</div>
+                <img src="/logo.png" alt="SwitchGPT" class="h-9 w-9 shrink-0" />
                 <div class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">
                   <div class="text-sm font-bold">SwitchGPT</div>
                   <div class="app-version" :aria-label="`版本 ${version.trim()}`">

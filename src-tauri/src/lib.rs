@@ -38,6 +38,7 @@ pub fn run() {
             commands::auth_poll_for_account,
             commands::auth_get_status,
             commands::auth_remove_account,
+            commands::open_url,
             commands::get_settings,
             commands::save_settings,
             commands::open_path,

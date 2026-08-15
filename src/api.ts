@@ -1,5 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppState, ProfileDetail, ProfileSummary, RestartStage, Settings } from "./types";
+import type {
+  AppState,
+  AuthStatus,
+  DeviceCodeResponse,
+  ManagedAccount,
+  ProfileDetail,
+  ProfileSummary,
+  RestartStage,
+  Settings,
+} from "./types";
 
 export const isTauri = typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
 
@@ -164,8 +173,8 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       profile.name = String(args?.name ?? profile.name);
       const detail = webDetails[profile.id];
       if (detail) {
-        if (typeof args?.base_url === "string") detail.base_url = args.base_url || null;
-        if (typeof args?.api_key === "string") detail.api_key = args.api_key || null;
+        if (typeof args?.baseUrl === "string") detail.base_url = args.baseUrl || null;
+        if (typeof args?.apiKey === "string") detail.api_key = args.apiKey || null;
       }
       return { ...profile } as T;
     }
@@ -179,6 +188,10 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       await new Promise((resolve) => setTimeout(resolve, 500));
       return undefined as T;
     case "set_window_theme":
+      return undefined as T;
+    case "auth_get_status":
+      return { authenticated: false, default_account_id: null, accounts: [] } as T;
+    case "open_url":
       return undefined as T;
     case "save_settings":
       webSettings = { ...(args?.settings as Settings) };
@@ -199,11 +212,18 @@ export const api = {
   setProfileIcon: (id: string, icon: string | null) => call<void>("set_profile_icon", { id, icon }),
   getProfile: (id: string) => call<ProfileDetail>("get_profile", { id }),
   updateProfile: (id: string, name: string, baseUrl?: string, apiKey?: string) =>
-    call<ProfileSummary>("update_profile", { id, name, base_url: baseUrl, api_key: apiKey }),
+    call<ProfileSummary>("update_profile", { id, name, baseUrl, apiKey }),
   deleteProfile: (id: string) => call<void>("delete_profile", { id }),
   applyProfile: (id: string) => call<void>("apply_profile", { id }),
   restartCodex: () => call<void>("restart_codex"),
   setWindowTheme: (dark: boolean) => call<void>("set_window_theme", { dark }),
+  authStartLogin: () => call<DeviceCodeResponse>("auth_start_login"),
+  authPollForAccount: (deviceCode: string) =>
+    call<ManagedAccount | null>("auth_poll_for_account", { deviceCode }),
+  authGetStatus: () => call<AuthStatus>("auth_get_status"),
+  authRemoveAccount: (accountId: string) =>
+    call<void>("auth_remove_account", { accountId }),
+  openUrl: (url: string) => call<void>("open_url", { url }),
   getSettings: () => call<Settings>("get_settings"),
   saveSettings: (settings: Settings) => call<Settings>("save_settings", { settings }),
   openPath: (path: string) => call<void>("open_path", { path }),

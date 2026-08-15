@@ -13,6 +13,7 @@ import {
   useMessage,
 } from "naive-ui";
 import { api } from "../api";
+import ChatGPTAccount from "../components/ChatGPTAccount.vue";
 import SegmentedControl from "../components/SegmentedControl.vue";
 import type { AppState, PathInfo, Settings } from "../types";
 
@@ -24,7 +25,7 @@ const form = reactive<Settings>({ ...props.state.settings });
 const saving = ref(false);
 const savingGeneral = ref(false);
 const openingPath = ref<string | null>(null);
-const section = ref<"general" | "codex" | "about">("general");
+const section = ref<"general" | "codex" | "account" | "about">("general");
 const themeOptions: { label: string; value: Settings["theme"] }[] = [
   { label: "浅色", value: "light" },
   { label: "深色", value: "dark" },
@@ -102,6 +103,7 @@ async function openPath(item: PathInfo) {
       :options="[
         { value: 'general', label: '通用' },
         { value: 'codex', label: '应用' },
+        { value: 'account', label: '账号' },
         { value: 'about', label: '关于' },
       ]"
     />
@@ -159,6 +161,13 @@ async function openPath(item: PathInfo) {
           <n-button type="primary" :loading="saving" @click="save">保存设置</n-button>
         </div>
       </n-form>
+    </div>
+
+    <div v-else-if="section === 'account'" class="apple-group mt-4 p-5 sm:p-6">
+      <h2 class="text-[15px] font-semibold tracking-tight">ChatGPT 账号</h2>
+      <div class="mt-4">
+        <ChatGPTAccount />
+      </div>
     </div>
 
     <div v-else class="apple-group mt-4 p-5 sm:p-6">
