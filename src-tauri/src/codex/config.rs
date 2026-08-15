@@ -114,6 +114,24 @@ pub fn matches_profile(document: &DocumentMut, payload: &ProfilePayload) -> AppR
     Ok(normalize_provider(&current.provider_body)? == normalize_provider(&payload.provider_body)?)
 }
 
+/// 宽松匹配：档案的模型键必须是 live 配置的子集且值一致，
+/// 允许 live 配置在使用过程中累计额外的模型键（如 model_catalog_json）。
+pub fn subset_match(document: &DocumentMut, payload: &ProfilePayload) -> AppResult<bool> {
+    let current = capture_from_document(document)?;
+    if current.provider_id != payload.provider_id {
+        return Ok(false);
+    }
+    for (key, raw) in &payload.model_values {
+        let Some(live_raw) = current.model_values.get(key) else {
+            return Ok(false);
+        };
+        if parse_value(live_raw)?.to_string() != parse_value(raw)?.to_string() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 fn is_model_key(key: &str) -> bool {
     key == "model" || (key.starts_with("model_") && key != "model_providers")
 }

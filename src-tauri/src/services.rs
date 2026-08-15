@@ -199,11 +199,15 @@ impl AppContext {
             .operation
             .lock()
             .map_err(|_| app_err!("操作锁已损坏"))?;
-        let payload = self.database.profile(id)?.payload;
         let config_path = self.paths.codex_config();
         let original = std::fs::read_to_string(&config_path)
             .map_err(|error| app_err!("无法读取 {}: {error}", config_path.display()))?;
         let mut document = codex_config::parse_document(&original)?;
+
+        // 切换前把当前 live 配置回写进正在生效的档案，使档案跟随使用中的累计更新
+        self.autosync_active_profile(id, &document)?;
+
+        let payload = self.database.profile(id)?.payload;
         codex_config::apply_to_document(&mut document, &payload)?;
         let updated = document.to_string();
 
@@ -216,6 +220,53 @@ impl AppContext {
             Some("configuration applied"),
             &now_ms().to_string(),
         )?;
+        Ok(())
+    }
+
+    fn autosync_active_profile(
+        &self,
+        target_id: &str,
+        document: &toml_edit::DocumentMut,
+    ) -> AppResult<()> {
+        let profiles = self.database.profiles()?;
+        let active_id = self.active_profile_id(&profiles)?.or_else(|| {
+            let candidates: Vec<String> = profiles
+                .iter()
+                .filter(|profile| profile.id != target_id)
+                .filter(|profile| {
+                    codex_config::subset_match(document, &profile.payload).unwrap_or(false)
+                })
+                .map(|profile| profile.id.clone())
+                .collect();
+            (candidates.len() == 1).then(|| candidates[0].clone())
+        });
+        let Some(active_id) = active_id else {
+            return Ok(());
+        };
+        if active_id == target_id {
+            return Ok(());
+        }
+        let Some(profile) = profiles.iter().find(|profile| profile.id == active_id) else {
+            return Ok(());
+        };
+        let Ok(live) = codex_config::capture_from_document(document) else {
+            return Ok(());
+        };
+        if live == profile.payload {
+            return Ok(());
+        }
+        if let Err(error) =
+            self.database
+                .update_profile(&active_id, &profile.name, &live, &now_ms().to_string())
+        {
+            let _ = self.database.record_event(
+                Some(&active_id),
+                "autosync",
+                "failed",
+                Some(&error.0),
+                &now_ms().to_string(),
+            );
+        }
         Ok(())
     }
 
@@ -495,6 +546,86 @@ experimental_bearer_token = "old"
         assert!(text.contains("https://api.example"));
         assert!(text.contains("[mcp_servers.keep]"));
         assert!(context.paths.config_backup.read_dir().unwrap().count() > 0);
+    }
+
+    #[test]
+    fn apply_profile_autosyncs_accumulated_active_profile() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        let context = AppContext::new(paths).unwrap();
+        let write = |text: &str| std::fs::write(context.paths.codex_config(), text).unwrap();
+
+        write(
+            r#"
+model = "glm-5.3"
+model_provider = "ZAI"
+model_reasoning_effort = "high"
+
+[model_providers.ZAI]
+name = "ZAI"
+base_url = "https://api.example"
+experimental_bearer_token = "secret"
+"#,
+        );
+        let profile_a = context.capture_profile("A").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+
+        write(
+            r#"
+model = "other-model"
+model_provider = "ZAI"
+model_reasoning_effort = "low"
+
+[model_providers.ZAI]
+name = "ZAI"
+base_url = "https://old.example"
+experimental_bearer_token = "old"
+"#,
+        );
+        let profile_b = context.capture_profile("B").unwrap();
+
+        // B 使用期间 live 配置累计了新的模型键和 provider 字段
+        write(
+            r#"
+model = "other-model"
+model_provider = "ZAI"
+model_reasoning_effort = "low"
+model_catalog_json = "zai.json"
+
+[mcp_servers.keep]
+command = "node"
+
+[model_providers.ZAI]
+name = "ZAI"
+base_url = "https://old.example"
+experimental_bearer_token = "old"
+new_field = "accumulated"
+"#,
+        );
+
+        context.apply_profile(&profile_a.id).unwrap();
+
+        let stored_b = context.database.profile(&profile_b.id).unwrap();
+        assert_eq!(
+            stored_b
+                .payload
+                .model_values
+                .get("model_catalog_json")
+                .map(|raw| raw.trim().trim_matches('"')),
+            Some("zai.json")
+        );
+        assert!(stored_b
+            .payload
+            .provider_body
+            .as_deref()
+            .unwrap()
+            .contains("new_field = \"accumulated\""));
+        assert_eq!(
+            context.get_state().unwrap().active_profile_id.as_deref(),
+            Some(profile_a.id.as_str())
+        );
     }
 
     #[test]

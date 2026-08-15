@@ -120,39 +120,34 @@ async function openPath(item: PathInfo) {
     />
 
     <div v-if="section === 'general'" class="apple-group mt-4 p-5 sm:p-6">
-      <n-form label-placement="top">
-        <n-form-item label="主题">
-          <div>
-            <div class="apple-group inline-flex gap-1 p-1">
-              <button
-                v-for="option in themeOptions"
-                :key="option.value"
-                type="button"
-                class="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-xl text-sm transition-colors"
-                :class="form.theme === option.value ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'"
-                :aria-pressed="form.theme === option.value"
-                @click="updateTheme(option.value)"
-              >
-                <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                  <template v-if="option.value === 'system'">
-                    <rect x="3.5" y="5" width="17" height="11" rx="2" />
-                    <path d="M9.5 19.5h5M12 16v3.5" stroke-linecap="round" />
-                  </template>
-                  <template v-else-if="option.value === 'light'">
-                    <circle cx="12" cy="12" r="4" />
-                    <path d="M12 3.5v1.8M12 18.7v1.8M3.5 12h1.8M18.7 12h1.8M6 6l1.3 1.3M16.7 16.7 18 18M18 6l-1.3 1.3M7.3 16.7 6 18" stroke-linecap="round" />
-                  </template>
-                  <template v-else>
-                    <path d="M20 13.6A8.2 8.2 0 1 1 10.4 4a6.4 6.4 0 0 0 9.6 9.6Z" stroke-linejoin="round" />
-                  </template>
-                </svg>
-                <span>{{ option.label }}</span>
-              </button>
-            </div>
-          </div>
-        </n-form-item>
-      </n-form>
-      <n-divider />
+      <div class="muted mb-2 text-sm">主题</div>
+      <div class="apple-group inline-flex gap-1 p-1">
+        <button
+          v-for="option in themeOptions"
+          :key="option.value"
+          type="button"
+          class="inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-xl text-sm transition-colors"
+          :class="form.theme === option.value ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'"
+          :aria-pressed="form.theme === option.value"
+          @click="updateTheme(option.value)"
+        >
+          <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <template v-if="option.value === 'system'">
+              <rect x="3.5" y="5" width="17" height="11" rx="2" />
+              <path d="M9.5 19.5h5M12 16v3.5" stroke-linecap="round" />
+            </template>
+            <template v-else-if="option.value === 'light'">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 3.5v1.8M12 18.7v1.8M3.5 12h1.8M18.7 12h1.8M6 6l1.3 1.3M16.7 16.7 18 18M18 6l-1.3 1.3M7.3 16.7 6 18" stroke-linecap="round" />
+            </template>
+            <template v-else>
+              <path d="M20 13.6A8.2 8.2 0 1 1 10.4 4a6.4 6.4 0 0 0 9.6 9.6Z" stroke-linejoin="round" />
+            </template>
+          </svg>
+          <span>{{ option.label }}</span>
+        </button>
+      </div>
+      <n-divider :style="{ marginTop: '16px' }" />
       <div class="flex flex-col gap-5">
         <div class="flex items-center justify-between gap-4">
           <div class="flex items-start gap-3">
