@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { NButton, NInput, useMessage } from "naive-ui";
 import ProfileIconEdit from "./ProfileIconEdit.vue";
 import ProfileIconTile from "./ProfileIconTile.vue";
@@ -28,6 +28,7 @@ const apiKey = ref("");
 const selectedIcon = ref<string | null>(props.profile?.icon ?? null);
 const activeTab = ref<"config" | "auth" | "models">("config");
 const presetKind = ref("");
+const createCatalog = ref("");
 
 const creating = computed(() => props.create === true);
 const selectedPreset = computed(
@@ -41,7 +42,12 @@ const showProviderFields = computed(() =>
 
 const tabs = computed(() => {
   if (creating.value) {
-    return [{ id: "config" as const, label: "config" }];
+    const list: { id: "config" | "auth" | "models"; label: string }[] = [
+      { id: "config", label: "config" },
+    ];
+    if (selectedPreset.value?.model_values.model_catalog_json)
+      list.push({ id: "models", label: "models.json" });
+    return list;
   }
   const list: { id: "config" | "auth" | "models"; label: string }[] = [
     { id: "config", label: "config" },
@@ -101,6 +107,23 @@ function selectPreset(kind: string) {
   selectedIcon.value = preset.icon;
   activeTab.value = "config";
 }
+
+watch(presetKind, async (kind) => {
+  if (!creating.value || !kind) {
+    createCatalog.value = "";
+    return;
+  }
+  const preset = builtinPresets.find((item) => item.kind === kind);
+  if (!preset?.model_values.model_catalog_json) {
+    createCatalog.value = "";
+    return;
+  }
+  try {
+    createCatalog.value = (await api.getBuiltinCatalog(kind)) ?? "";
+  } catch {
+    createCatalog.value = "";
+  }
+});
 
 onMounted(async () => {
   if (creating.value) return;
@@ -205,7 +228,7 @@ async function openActiveFile() {
     @back="pickingIcon = false"
     @save="saveIcon"
   />
-  <section v-else class="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-none flex-col">
+  <section v-else class="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-none flex-col" @keydown.ctrl.enter="save">
     <button
       type="button"
       class="-ml-2 flex w-fit items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-black/5 dark:hover:bg-white/8"
@@ -222,7 +245,7 @@ async function openActiveFile() {
 
     <div v-if="creating" class="apple-group mt-6 p-5 sm:p-6">
       <div class="flex items-baseline justify-between gap-3">
-        <div class="muted text-[13px]">选择供应商</div>
+        <div class="field-label">选择供应商</div>
         <span class="muted text-xs">选择后自动填充官方默认配置</span>
       </div>
       <div class="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
@@ -247,37 +270,36 @@ async function openActiveFile() {
       </div>
     </div>
 
-    <div class="mt-6 flex justify-center">
-      <button
-        type="button"
-        class="group relative grid h-[76px] w-[76px] place-items-center rounded-[22px] transition-opacity hover:opacity-80"
-        title="点击更换图标"
-        :aria-label="'更换图标'"
-        @click="pickingIcon = true"
-      >
-        <ProfileIconTile :name="detail?.name ?? name" :icon="selectedIcon" size="lg" />
-        <span class="absolute -bottom-1.5 -right-1.5 grid h-6 w-6 place-items-center rounded-full bg-[#007aff] text-white shadow" aria-hidden="true">
-          <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
-            <path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" stroke-linejoin="round" />
-          </svg>
-        </span>
-      </button>
-    </div>
-
     <div class="apple-group mt-6 p-5 sm:p-6">
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div class="sm:col-span-2">
-          <div class="muted mb-1.5 text-[13px]">名称</div>
-          <n-input v-model:value="name" maxlength="50" placeholder="档案名称" />
+      <div class="flex items-center gap-4">
+        <button
+          type="button"
+          class="relative grid h-[61px] w-[61px] shrink-0 place-items-center rounded-[16px] transition-opacity hover:opacity-80"
+          title="点击更换图标"
+          :aria-label="'更换图标'"
+          @click="pickingIcon = true"
+        >
+          <span class="relative grid h-full w-full place-items-center">
+            <ProfileIconTile :name="detail?.name ?? name" :icon="selectedIcon" size="fill" />
+            <span class="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-[#007aff] text-white shadow" aria-hidden="true">
+              <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                <path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" stroke-linejoin="round" />
+              </svg>
+            </span>
+          </span>
+        </button>
+        <div class="min-w-0 flex-1">
+          <div class="field-label mb-1.5">名称</div>
+          <n-input v-model:value="name" :bordered="false" class="underline-input" maxlength="50" placeholder="档案名称" />
         </div>
-        <div v-if="showProviderFields" class="sm:col-span-2">
-          <div class="muted mb-1.5 text-[13px]">调用地址</div>
-          <n-input v-model:value="baseUrl" placeholder="https://api.example.com/v1" />
-        </div>
-        <div v-if="showProviderFields" class="sm:col-span-2">
-          <div class="muted mb-1.5 text-[13px]">密钥</div>
-          <n-input v-model:value="apiKey" type="password" show-password-on="click" placeholder="请输入 API 密钥" />
-        </div>
+      </div>
+      <div v-if="showProviderFields" class="mt-4">
+        <div class="field-label mb-1.5">调用地址</div>
+        <n-input v-model:value="baseUrl" placeholder="https://api.example.com/v1" />
+      </div>
+      <div v-if="showProviderFields" class="mt-4">
+        <div class="field-label mb-1.5">密钥</div>
+        <n-input v-model:value="apiKey" type="password" show-password-on="click" placeholder="请输入 API 密钥" />
       </div>
     </div>
 
@@ -311,10 +333,10 @@ async function openActiveFile() {
         </div>
         <div v-else class="flex h-full min-h-0 flex-col text-sm">
           <div class="flex justify-between gap-4 py-2">
-            <span class="muted">模型目录</span>
+            <span class="field-label">模型目录</span>
             <span class="mono">{{ catalogPath }}</span>
           </div>
-          <pre v-if="detail?.catalog_content" class="mono mt-2 min-h-0 flex-1 overflow-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ detail.catalog_content }}</pre>
+          <pre v-if="creating ? createCatalog : detail?.catalog_content" class="mono mt-2 min-h-0 flex-1 overflow-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ creating ? createCatalog : detail?.catalog_content }}</pre>
           <p v-else class="muted mt-2 text-xs">模型目录文件不存在或无法读取，文件内容未显示。</p>
         </div>
       </div>

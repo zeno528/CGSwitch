@@ -119,7 +119,7 @@ async function openPath(item: PathInfo) {
     />
 
     <div v-if="section === 'general'" class="apple-group mt-4 p-5 sm:p-6">
-      <div class="muted mb-2 text-sm">主题</div>
+      <div class="field-label mb-2">主题</div>
       <div class="apple-group inline-flex gap-1 p-1">
         <button
           v-for="option in themeOptions"

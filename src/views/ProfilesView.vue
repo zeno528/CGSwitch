@@ -194,7 +194,7 @@ onBeforeUnmount(() => {
       <div class="flex min-w-0 items-center gap-3">
         <ProfileIconTile :name="activeProfile?.name ?? '未匹配'" :icon="activeProfile?.icon ?? null" />
         <div class="min-w-0">
-          <div class="muted text-sm">当前使用</div>
+          <div class="field-label">当前使用</div>
           <div class="mt-1 truncate text-lg font-semibold tracking-tight">
             {{ activeProfile?.name ?? "未匹配" }}
           </div>

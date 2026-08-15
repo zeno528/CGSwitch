@@ -28,6 +28,14 @@ pub fn add_builtin_profile(
 }
 
 #[tauri::command]
+pub fn get_builtin_catalog(
+    kind: String,
+    state: State<'_, AppContext>,
+) -> AppResult<Option<String>> {
+    state.get_builtin_catalog(&kind)
+}
+
+#[tauri::command]
 pub fn rename_profile(id: String, name: String, state: State<'_, AppContext>) -> AppResult<()> {
     state.rename_profile(&id, &name)
 }

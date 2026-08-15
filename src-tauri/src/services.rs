@@ -186,6 +186,15 @@ impl AppContext {
         Ok(profile_summary(&stored))
     }
 
+    /// 返回内置模板自带的关联文件原文（deepseek/智谱 的 models.json、minimax 的 custom-catalog.json），
+    /// 供创建页在保存前预览；ChatGPT 无关联文件返回 None。
+    pub fn get_builtin_catalog(&self, kind: &str) -> AppResult<Option<String>> {
+        let template = builtin::template(kind)?;
+        Ok(template
+            .catalog
+            .map(|(_, bytes)| String::from_utf8_lossy(bytes).into_owned()))
+    }
+
     pub fn rename_profile(&self, id: &str, name: &str) -> AppResult<()> {
         let name = validated_name(name)?;
         let profiles = self.database.profiles()?;
@@ -1106,6 +1115,27 @@ experimental_bearer_token = "old-key"
             .unwrap_err();
         assert!(error.0.contains("请先填写 API 密钥"));
         assert!(context.database.profiles().unwrap().is_empty());
+    }
+
+    #[test]
+    fn get_builtin_catalog_returns_embedded_file_content() {
+        let home = tempfile::tempdir().unwrap();
+        let context = AppContext::new(crate::paths::from_home(home.path()).unwrap()).unwrap();
+
+        assert_eq!(
+            context.get_builtin_catalog("deepseek").unwrap(),
+            Some(String::from_utf8_lossy(crate::builtin::DEEPSEEK_MODELS).into_owned())
+        );
+        assert_eq!(
+            context.get_builtin_catalog("zhipu").unwrap(),
+            Some(String::from_utf8_lossy(crate::builtin::ZHIPU_MODELS).into_owned())
+        );
+        assert_eq!(
+            context.get_builtin_catalog("minimax").unwrap(),
+            Some(String::from_utf8_lossy(crate::builtin::MINIMAX_CATALOG).into_owned())
+        );
+        assert_eq!(context.get_builtin_catalog("chatgpt").unwrap(), None);
+        assert!(context.get_builtin_catalog("unknown").is_err());
     }
 
     #[test]

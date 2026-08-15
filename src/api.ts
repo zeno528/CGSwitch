@@ -193,6 +193,11 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       };
       return profile as T;
     }
+    case "get_builtin_catalog": {
+      const preset = builtinPresetByKind(String(args?.kind ?? ""));
+      if (!preset?.model_values.model_catalog_json) return null as T;
+      return '{\n  "models": [\n    { "id": "preview", "name": "模型目录预览" }\n  ]\n}' as T;
+    }
     case "rename_profile": {
       const profile = webProfiles.find((item) => item.id === args?.id);
       if (profile) profile.name = String(args?.name ?? profile.name);
@@ -250,6 +255,7 @@ export const api = {
   captureProfile: (name: string) => call<ProfileSummary>("capture_profile", { name }),
   addBuiltinProfile: (kind: string, baseUrl?: string, apiKey?: string) =>
     call<ProfileSummary>("add_builtin_profile", { kind, baseUrl, apiKey }),
+  getBuiltinCatalog: (kind: string) => call<string | null>("get_builtin_catalog", { kind }),
   renameProfile: (id: string, name: string) => call<void>("rename_profile", { id, name }),
   setProfileIcon: (id: string, icon: string | null) => call<void>("set_profile_icon", { id, icon }),
   getProfile: (id: string) => call<ProfileDetail>("get_profile", { id }),

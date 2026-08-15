@@ -33,6 +33,7 @@ pub fn run() {
             commands::get_state,
             commands::capture_profile,
             commands::add_builtin_profile,
+            commands::get_builtin_catalog,
             commands::rename_profile,
             commands::set_profile_icon,
             commands::get_profile,
