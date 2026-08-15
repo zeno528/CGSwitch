@@ -27,10 +27,10 @@ const emit = defineEmits<{
           <h3 class="truncate font-semibold">{{ profile.name }}</h3>
           <n-tag v-if="active" type="success" size="small">当前生效</n-tag>
         </div>
-        <div class="muted mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-          <span class="mono">{{ profile.model ?? "未设置" }}</span>
-          <span>{{ profile.provider ?? "官方" }}</span>
-          <span>推理：{{ profile.reasoning_effort ?? "默认" }}</span>
+        <div class="muted mt-1 flex flex-wrap gap-1.5 text-xs">
+          <span class="rounded-full border border-current/15 bg-black/4 px-2.5 py-0.5 dark:bg-white/8">{{ profile.model ?? "未设置" }}</span>
+          <span class="rounded-full border border-current/15 bg-black/4 px-2.5 py-0.5 dark:bg-white/8">{{ profile.provider ?? "官方" }}</span>
+          <span class="rounded-full border border-current/15 bg-black/4 px-2.5 py-0.5 dark:bg-white/8">{{ profile.reasoning_effort ?? "默认" }}</span>
         </div>
       </div>
     </div>

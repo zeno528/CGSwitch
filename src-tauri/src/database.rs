@@ -302,13 +302,17 @@ fn summary(
     ProfileSummary {
         id: id.into(),
         name: name.into(),
-        model: payload.model_values.get("model").cloned(),
+        model: display_text(payload.model_values.get("model")),
         provider: payload.provider_id.clone(),
-        reasoning_effort: payload.model_values.get("model_reasoning_effort").cloned(),
+        reasoning_effort: display_text(payload.model_values.get("model_reasoning_effort")),
         icon: icon.map(str::to_string),
         created_at: created_at.into(),
         updated_at: updated_at.into(),
     }
+}
+
+fn display_text(value: Option<&String>) -> Option<String> {
+    value.map(|raw| raw.trim().trim_matches('"').to_string())
 }
 
 pub fn profile_summary(profile: &StoredProfile) -> ProfileSummary {

@@ -63,7 +63,7 @@ body {
   align-items: center;
   color: var(--text-secondary);
   display: inline-flex;
-  font-family: "JetBrains Mono", Consolas, "Cascadia Mono", monospace;
+  font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 10px;
   gap: 4px;
   letter-spacing: 0.02em;
@@ -76,7 +76,7 @@ body {
 }
 
 .mono {
-  font-family: "JetBrains Mono", Consolas, "Cascadia Mono", monospace;
+  font-family: Consolas, "Cascadia Mono", monospace;
 }
 
 /* 表单标签颜色挂全局主题变量（与 .dark 类同帧翻转），并去掉 naive-ui
