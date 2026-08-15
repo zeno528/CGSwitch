@@ -138,9 +138,52 @@ fn normalize_provider(body: &Option<String>) -> AppResult<BTreeMap<String, Strin
         .collect())
 }
 
+pub fn update_provider_body(
+    body: &str,
+    base_url: Option<&str>,
+    api_key: Option<&str>,
+) -> AppResult<String> {
+    let mut document: DocumentMut = body
+        .parse()
+        .map_err(|_| app_err!("配置档案中的 provider 数据无效"))?;
+    if let Some(value) = base_url {
+        set_table_value(&mut document, "base_url", value);
+    }
+    if let Some(value) = api_key {
+        set_table_value(&mut document, "experimental_bearer_token", value);
+    }
+    Ok(document.to_string())
+}
+
+fn set_table_value(document: &mut DocumentMut, key: &str, value: &str) {
+    if value.trim().is_empty() {
+        document.remove(key);
+    } else {
+        let parsed = Value::from(value.trim().to_string());
+        document.insert(key, Item::Value(parsed));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_provider_body_sets_and_removes_fields() {
+        let body = r#"
+name = "ZAI"
+base_url = "https://old.example"
+experimental_bearer_token = "old"
+"#;
+        let updated =
+            update_provider_body(body, Some("https://api.z.ai"), Some("new-key")).unwrap();
+        assert!(updated.contains(r#"base_url = "https://api.z.ai""#));
+        assert!(updated.contains(r#"experimental_bearer_token = "new-key""#));
+
+        let cleared = update_provider_body(&updated, None, Some("")).unwrap();
+        assert!(!cleared.contains("experimental_bearer_token"));
+        assert!(cleared.contains(r#"base_url = "https://api.z.ai""#));
+    }
 
     const SOURCE: &str = r#"
 model = "glm-5.3"

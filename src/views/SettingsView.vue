@@ -13,6 +13,7 @@ import {
   useMessage,
 } from "naive-ui";
 import { api } from "../api";
+import SegmentedControl from "../components/SegmentedControl.vue";
 import type { AppState, PathInfo, Settings } from "../types";
 
 const props = defineProps<{ state: AppState }>();
@@ -95,17 +96,21 @@ async function openPath(item: PathInfo) {
     <h1 class="apple-title">设置</h1>
     <p class="muted mt-2 text-sm">控制外观、Codex 路径和重启行为。</p>
 
-    <div class="apple-group mt-6 flex p-1">
-      <button type="button" class="h-9 flex-1 rounded-xl px-3 text-sm transition-colors" :class="section === 'general' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" @click="section = 'general'">通用</button>
-      <button type="button" class="h-9 flex-1 rounded-xl px-3 text-sm transition-colors" :class="section === 'codex' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" @click="section = 'codex'">Codex</button>
-      <button type="button" class="h-9 flex-1 rounded-xl px-3 text-sm transition-colors" :class="section === 'about' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" @click="section = 'about'">关于</button>
-    </div>
+    <SegmentedControl
+      v-model="section"
+      class="mt-6"
+      :options="[
+        { value: 'general', label: '通用' },
+        { value: 'codex', label: '应用' },
+        { value: 'about', label: '关于' },
+      ]"
+    />
 
     <div v-if="section === 'general'" class="apple-group mt-4 p-5 sm:p-6">
-      <n-form class="mt-5" label-placement="top">
+      <n-form label-placement="top">
         <n-form-item label="主题">
           <div>
-            <div class="apple-group inline-flex p-1">
+            <div class="apple-group inline-flex gap-1 p-1">
               <button
                 v-for="option in themeOptions"
                 :key="option.value"
@@ -131,22 +136,21 @@ async function openPath(item: PathInfo) {
                 <span>{{ option.label }}</span>
               </button>
             </div>
-            <p class="muted mt-2 text-xs">选择后立即生效并保存。</p>
-          </div>
-        </n-form-item>
-        <n-form-item label="应用配置后自动重启 Codex">
-          <div class="flex items-center gap-3">
-            <n-switch v-model:value="form.auto_restart" @update:value="updateAutoRestart" />
-            <span class="muted text-sm">关闭时仅写入 config.toml，由你手动点击重启。</span>
           </div>
         </n-form-item>
       </n-form>
     </div>
 
     <div v-else-if="section === 'codex'" class="apple-group mt-4 p-5 sm:p-6">
-      <n-form class="mt-5" label-placement="top">
+      <n-form label-placement="top">
         <n-form-item label="Codex / ChatGPT 应用路径覆盖">
           <n-input v-model:value="form.codex_app_path" clearable placeholder="留空使用自动识别" />
+        </n-form-item>
+        <n-form-item label="应用配置后自动重启 Codex">
+          <div class="flex items-center gap-3">
+            <n-switch v-model:value="form.auto_restart" @update:value="updateAutoRestart" />
+            <span class="muted text-sm">关闭时仅写入 config.toml，由你手动点击重启。</span>
+          </div>
         </n-form-item>
         <n-form-item label="重启等待超时（毫秒）">
           <n-input-number v-model:value="form.restart_timeout_ms" :min="1000" :max="60000" :step="500" class="w-full" />

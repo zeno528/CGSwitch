@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import { NButton, NTag } from "naive-ui";
-import { providerIconUrl } from "../icons";
+import ProfileIconTile from "./ProfileIconTile.vue";
 import type { ProfileSummary } from "../types";
 
 const props = defineProps<{
@@ -17,16 +16,12 @@ const emit = defineEmits<{
   edit: [];
 }>();
 
-const iconUrl = computed(() => providerIconUrl(props.profile.icon));
 </script>
 
 <template>
-  <article class="flex flex-col gap-4 px-5 py-4 transition-colors sm:flex-row sm:items-center sm:justify-between" :class="active ? 'bg-[var(--selection-bg)]' : 'hover:bg-black/3 dark:hover:bg-white/4'" title="双击编辑图标" @dblclick="emit('edit')">
+  <article class="flex flex-col gap-4 px-5 py-4 transition-colors sm:flex-row sm:items-center sm:justify-between" :class="active ? 'bg-[linear-gradient(90deg,var(--selection-bg),transparent_65%)]' : 'hover:bg-black/3 dark:hover:bg-white/4'" title="双击编辑" @dblclick="emit('edit')">
     <div class="flex min-w-0 flex-1 items-center gap-3">
-      <div class="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[#f0f0f3]" aria-hidden="true">
-        <img v-if="iconUrl" :src="iconUrl" alt="" class="h-6 w-6" />
-        <span v-else class="text-sm font-bold text-[#007aff]">{{ profile.name.charAt(0) }}</span>
-      </div>
+      <ProfileIconTile :name="profile.name" :icon="profile.icon" />
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2">
           <h3 class="truncate font-semibold">{{ profile.name }}</h3>
@@ -39,7 +34,7 @@ const iconUrl = computed(() => providerIconUrl(props.profile.icon));
         </div>
       </div>
     </div>
-    <div class="flex shrink-0 items-center gap-2">
+    <div class="flex shrink-0 items-center gap-2" @dblclick.stop>
       <n-button type="primary" size="small" :disabled="busy || active" @click="emit('apply')">应用</n-button>
       <n-button size="small" :disabled="busy" @click="emit('rename')">重命名</n-button>
       <n-button size="small" quaternary type="error" :disabled="busy" @click="emit('remove')">删除</n-button>

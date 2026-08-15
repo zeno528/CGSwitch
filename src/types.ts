@@ -9,6 +9,18 @@ export interface ProfileSummary {
   updated_at: string;
 }
 
+export interface ProfileDetail {
+  id: string;
+  name: string;
+  icon: string | null;
+  provider: string | null;
+  base_url: string | null;
+  api_key: string | null;
+  model_values: Record<string, string>;
+  config_fragment: string;
+  updated_at: string;
+}
+
 export interface Settings {
   theme: "system" | "light" | "dark";
   codex_app_path: string | null;

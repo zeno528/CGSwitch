@@ -79,14 +79,40 @@ body {
   font-family: "JetBrains Mono", Consolas, "Cascadia Mono", monospace;
 }
 
-/* 表单标签颜色挂全局主题变量：naive-ui 主题规则的再生成本身有几帧延迟，
-   走我们自己的变量轨可与 .dark 类同帧翻转，避免切换时标签短暂不可见 */
+/* 表单标签颜色挂全局主题变量（与 .dark 类同帧翻转），并去掉 naive-ui
+   自带的 color .3s 过渡，避免深浅色切换时标签颜色慢半拍 */
 .n-form-item .n-form-item-label {
-  color: var(--text-secondary);
+  color: var(--text-secondary) !important;
+  transition: none !important;
 }
 
 * {
   scrollbar-width: thin;
+}
+
+/* 窗口滚动条：常驻（避免内容变高时出现/消失导致页面抖动），
+   轨道直接用窗口底色，缩略图用主题化半透明色。
+   注：Chromium 下自定义 ::-webkit-scrollbar 会覆盖标准属性，故只写 webkit 一套 */
+main {
+  scrollbar-gutter: stable;
+}
+
+main::-webkit-scrollbar {
+  width: 10px;
+}
+
+main::-webkit-scrollbar-track {
+  background: var(--app-bg);
+}
+
+main::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-secondary) 35%, transparent);
+  border: 2px solid var(--app-bg);
+  border-radius: 8px;
+}
+
+main::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-secondary) 55%, transparent);
 }
 
 .apple-sidebar {
@@ -206,15 +232,34 @@ button {
   transition: transform 100ms ease-out, opacity 150ms ease-out, background-color 150ms ease-out;
 }
 
-button:active {
-  transform: scale(0.97);
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     scroll-behavior: auto !important;
-    transition-duration: 1ms !important;
+  transition-duration: 1ms !important;
   }
+}
+
+/* 弹窗出场提速：保留 naive-ui 原版进入动画（250ms 从 scale(0.5) 以点击位置为原点淡入），
+   仅把出场 250ms → 120ms，作用于全部 n-modal 与 useDialog 弹窗 */
+.n-modal.fade-in-scale-up-transition-leave-active {
+  transition:
+    opacity 0.12s cubic-bezier(0.4, 0, 1, 1),
+    transform 0.12s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.n-modal-mask.fade-in-transition-leave-active {
+  transition: opacity 0.12s cubic-bezier(0, 0, 0.2, 1) !important;
+}
+
+.apple-sidebar-indicator {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 3px;
+  height: 20px;
+  border-radius: 0 3px 3px 0;
+  background: #007aff;
+  transition: top 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }

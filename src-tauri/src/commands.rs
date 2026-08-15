@@ -1,7 +1,8 @@
+use tauri::Manager;
 use tauri::{AppHandle, State};
 
-use crate::error::AppResult;
-use crate::models::{AppState, ProfileSummary, Settings};
+use crate::error::{app_err, AppResult};
+use crate::models::{AppState, ProfileDetail, ProfileSummary, Settings};
 use crate::services::AppContext;
 
 #[tauri::command]
@@ -29,6 +30,22 @@ pub fn set_profile_icon(
 }
 
 #[tauri::command]
+pub fn get_profile(id: String, state: State<'_, AppContext>) -> AppResult<ProfileDetail> {
+    state.get_profile(&id)
+}
+
+#[tauri::command]
+pub fn update_profile(
+    id: String,
+    name: String,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    state: State<'_, AppContext>,
+) -> AppResult<ProfileSummary> {
+    state.update_profile(&id, &name, base_url.as_deref(), api_key.as_deref())
+}
+
+#[tauri::command]
 pub fn delete_profile(id: String, state: State<'_, AppContext>) -> AppResult<()> {
     state.delete_profile(&id)
 }
@@ -41,6 +58,45 @@ pub fn apply_profile(id: String, state: State<'_, AppContext>) -> AppResult<()> 
 #[tauri::command]
 pub fn restart_codex(app: AppHandle, state: State<'_, AppContext>) -> AppResult<()> {
     state.restart_codex(&app)
+}
+
+#[tauri::command]
+pub fn set_window_theme(dark: bool, app: AppHandle) -> AppResult<()> {
+    #[cfg(not(windows))]
+    {
+        let _ = (dark, app);
+    }
+    #[cfg(windows)]
+    {
+        use std::ffi::c_void;
+        use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+        use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE};
+        use windows::Win32::UI::WindowsAndMessaging::{SendMessageW, WM_NCACTIVATE};
+
+        if let Some(window) = app.get_webview_window("main") {
+            let hwnd = window
+                .hwnd()
+                .map_err(|error| app_err!("无法获取窗口句柄: {error}"))?;
+            let ours = HWND(hwnd.0);
+            let value = i32::from(dark);
+            let raw: *const c_void = &value as *const i32 as *const c_void;
+            unsafe {
+                DwmSetWindowAttribute(
+                    ours,
+                    DWMWA_USE_IMMERSIVE_DARK_MODE,
+                    raw,
+                    std::mem::size_of::<i32>() as u32,
+                )
+            }
+            .map_err(|error| app_err!("无法设置窗口标题栏主题: {error}"))?;
+            // 强制立即重绘标题栏，避免 DWM 延迟刷新导致与内容主题切换不同步
+            unsafe {
+                SendMessageW(ours, WM_NCACTIVATE, Some(WPARAM(0)), Some(LPARAM(0)));
+                SendMessageW(ours, WM_NCACTIVATE, Some(WPARAM(1)), Some(LPARAM(0)));
+            }
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]

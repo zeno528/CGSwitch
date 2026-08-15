@@ -10,10 +10,10 @@ import {
   useDialog,
   useMessage,
 } from "naive-ui";
+import ProfileEdit from "../components/ProfileEdit.vue";
 import ProfileCard from "../components/ProfileCard.vue";
-import ProfileIconEdit from "../components/ProfileIconEdit.vue";
+import ProfileIconTile from "../components/ProfileIconTile.vue";
 import { api } from "../api";
-import { providerIconUrl } from "../icons";
 import type { AppState, ProfileSummary, RestartStage } from "../types";
 
 const props = defineProps<{ state: AppState }>();
@@ -28,14 +28,13 @@ const modalVisible = ref(false);
 const modalMode = ref<"capture" | "rename">("capture");
 const profileName = ref("");
 const editingProfile = ref<ProfileSummary | null>(null);
-const iconEditingProfile = ref<ProfileSummary | null>(null);
+const modalProfile = ref<ProfileSummary | null>(null);
 
 let unlisten: (() => void) | null = null;
 
 const activeProfile = computed(() =>
   props.state.profiles.find((profile) => profile.id === props.state.active_profile_id) ?? null,
 );
-const activeIconUrl = computed(() => providerIconUrl(activeProfile.value?.icon));
 
 const progress = computed(() => {
   const values: Record<RestartStage, number> = {
@@ -63,16 +62,20 @@ const stageText = computed(() => {
 
 function openCapture() {
   modalMode.value = "capture";
-  editingProfile.value = null;
+  modalProfile.value = null;
   profileName.value = "";
   modalVisible.value = true;
 }
 
 function openRename(profile: ProfileSummary) {
   modalMode.value = "rename";
-  editingProfile.value = profile;
+  modalProfile.value = profile;
   profileName.value = profile.name;
   modalVisible.value = true;
+}
+
+function blurActiveOnModalLeave() {
+  (document.activeElement as HTMLElement | null)?.blur?.();
 }
 
 async function submitModal() {
@@ -82,27 +85,11 @@ async function submitModal() {
     if (modalMode.value === "capture") {
       await api.captureProfile(profileName.value);
       message.success("配置档案已捕获");
-    } else if (editingProfile.value) {
-      await api.renameProfile(editingProfile.value.id, profileName.value);
+    } else if (modalProfile.value) {
+      await api.renameProfile(modalProfile.value.id, profileName.value);
       message.success("配置档案已重命名");
     }
     modalVisible.value = false;
-    emit("refresh");
-  } catch (error) {
-    message.error(String(error));
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function saveIcon(icon: string | null) {
-  const profile = iconEditingProfile.value;
-  if (!profile || busy.value) return;
-  busy.value = true;
-  try {
-    await api.setProfileIcon(profile.id, icon);
-    message.success("档案图标已更新");
-    iconEditingProfile.value = null;
     emit("refresh");
   } catch (error) {
     message.error(String(error));
@@ -176,11 +163,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <ProfileIconEdit
-    v-if="iconEditingProfile"
-    :profile="iconEditingProfile"
-    @back="iconEditingProfile = null"
-    @save="saveIcon"
+  <ProfileEdit
+    v-if="editingProfile"
+    :profile="editingProfile"
+    @back="editingProfile = null"
+    @changed="emit('refresh')"
   />
   <section v-else class="mx-auto w-full max-w-none">
     <header class="flex flex-wrap items-end justify-between gap-4">
@@ -197,10 +184,7 @@ onBeforeUnmount(() => {
 
     <div class="apple-group mt-7 flex flex-wrap items-center justify-between gap-5 px-5 py-4">
       <div class="flex min-w-0 items-center gap-3">
-        <div class="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[#f0f0f3]" aria-hidden="true">
-          <img v-if="activeIconUrl" :src="activeIconUrl" alt="" class="h-6 w-6" />
-          <span v-else class="text-sm font-bold text-[#007aff]">{{ activeProfile?.name.charAt(0) ?? "未" }}</span>
-        </div>
+        <ProfileIconTile :name="activeProfile?.name ?? '未匹配'" :icon="activeProfile?.icon ?? null" />
         <div class="min-w-0">
           <div class="muted text-sm">当前使用</div>
           <div class="mt-1 truncate text-lg font-semibold tracking-tight">
@@ -239,7 +223,6 @@ onBeforeUnmount(() => {
     <div class="mt-8">
       <div class="flex items-center justify-between">
         <h2 class="text-[15px] font-semibold tracking-tight">我的档案</h2>
-        <span class="muted text-sm">{{ state.profiles.length }} 个档案</span>
       </div>
       <n-empty v-if="state.profiles.length === 0" description="还没有配置档案。先把 ~/.codex/config.toml 调整到目标状态，再点击“捕获当前配置”。" class="apple-group mt-3 py-14" />
       <template v-else>
@@ -252,14 +235,14 @@ onBeforeUnmount(() => {
             :busy="busy"
             @apply="applyProfile(profile)"
             @rename="openRename(profile)"
-            @edit="iconEditingProfile = profile"
+            @edit="editingProfile = profile"
             @remove="removeProfile(profile)"
           />
         </div>
       </template>
     </div>
 
-    <n-modal v-model:show="modalVisible" preset="card" class="max-w-[460px]" title="配置档案">
+    <n-modal v-model:show="modalVisible" preset="card" class="max-w-[460px]" title="配置档案" @after-leave="blurActiveOnModalLeave">
       <div class="space-y-4">
         <p class="muted text-sm">
           {{ modalMode === "capture" ? "为当前 Codex 配置创建一个可回滚的档案。" : "输入新的配置档案名称。" }}

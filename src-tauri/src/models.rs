@@ -23,6 +23,19 @@ pub struct ProfileSummary {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ProfileDetail {
+    pub id: String,
+    pub name: String,
+    pub icon: Option<String>,
+    pub provider: Option<String>,
+    pub base_url: Option<String>,
+    pub api_key: Option<String>,
+    pub model_values: std::collections::BTreeMap<String, String>,
+    pub config_fragment: String,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Settings {
     pub theme: String,

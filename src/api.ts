@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppState, ProfileSummary, RestartStage, Settings } from "./types";
+import type { AppState, ProfileDetail, ProfileSummary, RestartStage, Settings } from "./types";
 
-const isTauri = typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
+export const isTauri = typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
 
 type RestartProgressHandler = (payload: { stage: RestartStage; message: string | null }) => void;
 
@@ -45,6 +45,64 @@ const webPaths = [
   { label: "数据库备份", path: "C:\\Users\\<user>\\.switchgpt\\backups\\database" },
   { label: "日志", path: "C:\\Users\\<user>\\.switchgpt\\logs" },
 ];
+
+interface WebDetail {
+  base_url: string | null;
+  api_key: string | null;
+  model_values: Record<string, string>;
+  config_fragment: string;
+}
+
+const webDetails: Record<string, WebDetail> = {
+  "profile-zai-glm-high": {
+    base_url: "https://open.bigmodel.cn/api/v1",
+    api_key: "sk-demo",
+    model_values: {
+      model: '"glm-5.3"',
+      model_reasoning_effort: '"high"',
+      model_catalog_json: '"zai.json"',
+    },
+    config_fragment:
+      'model = "glm-5.3"\nmodel_reasoning_effort = "high"\nmodel_catalog_json = "zai.json"\n\n[model_providers.ZAI]\nname = "ZAI"\nbase_url = "https://open.bigmodel.cn/api/v1"\nwire_api = "responses"\nexperimental_bearer_token = "••••••••"',
+  },
+  "profile-zai-glm-fast": {
+    base_url: "https://open.bigmodel.cn/api/v1",
+    api_key: null,
+    model_values: {
+      model: '"glm-5-turbo"',
+      model_reasoning_effort: '"low"',
+      model_catalog_json: '"zai.json"',
+    },
+    config_fragment:
+      'model = "glm-5-turbo"\nmodel_reasoning_effort = "low"\nmodel_catalog_json = "zai.json"\n\n[model_providers.ZAI]\nname = "ZAI"\nbase_url = "https://open.bigmodel.cn/api/v1"\nwire_api = "responses"',
+  },
+  "profile-official": {
+    base_url: null,
+    api_key: null,
+    model_values: {
+      model: '"gpt-5.6"',
+      model_reasoning_effort: '"medium"',
+    },
+    config_fragment: 'model = "gpt-5.6"\nmodel_reasoning_effort = "medium"',
+  },
+};
+
+function webProfileDetail(id: string): ProfileDetail {
+  const profile = webProfiles.find((item) => item.id === id);
+  if (!profile) throw new Error("配置档案不存在");
+  const detail = webDetails[id];
+  return {
+    id: profile.id,
+    name: profile.name,
+    icon: profile.icon,
+    provider: profile.provider,
+    base_url: detail?.base_url ?? null,
+    api_key: detail?.api_key ?? null,
+    model_values: detail?.model_values ?? {},
+    config_fragment: detail?.config_fragment ?? "",
+    updated_at: profile.updated_at,
+  };
+}
 
 let webSettings: Settings = {
   theme: "system",
@@ -98,6 +156,19 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       if (profile) profile.icon = (args?.icon as string | null) ?? null;
       return undefined as T;
     }
+    case "get_profile":
+      return webProfileDetail(String(args?.id)) as T;
+    case "update_profile": {
+      const profile = webProfiles.find((item) => item.id === args?.id);
+      if (!profile) throw new Error("配置档案不存在");
+      profile.name = String(args?.name ?? profile.name);
+      const detail = webDetails[profile.id];
+      if (detail) {
+        if (typeof args?.base_url === "string") detail.base_url = args.base_url || null;
+        if (typeof args?.api_key === "string") detail.api_key = args.api_key || null;
+      }
+      return { ...profile } as T;
+    }
     case "delete_profile": {
       const index = webProfiles.findIndex((item) => item.id === args?.id);
       if (index >= 0) webProfiles.splice(index, 1);
@@ -106,6 +177,8 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     case "apply_profile":
     case "restart_codex":
       await new Promise((resolve) => setTimeout(resolve, 500));
+      return undefined as T;
+    case "set_window_theme":
       return undefined as T;
     case "save_settings":
       webSettings = { ...(args?.settings as Settings) };
@@ -124,9 +197,13 @@ export const api = {
   captureProfile: (name: string) => call<ProfileSummary>("capture_profile", { name }),
   renameProfile: (id: string, name: string) => call<void>("rename_profile", { id, name }),
   setProfileIcon: (id: string, icon: string | null) => call<void>("set_profile_icon", { id, icon }),
+  getProfile: (id: string) => call<ProfileDetail>("get_profile", { id }),
+  updateProfile: (id: string, name: string, baseUrl?: string, apiKey?: string) =>
+    call<ProfileSummary>("update_profile", { id, name, base_url: baseUrl, api_key: apiKey }),
   deleteProfile: (id: string) => call<void>("delete_profile", { id }),
   applyProfile: (id: string) => call<void>("apply_profile", { id }),
   restartCodex: () => call<void>("restart_codex"),
+  setWindowTheme: (dark: boolean) => call<void>("set_window_theme", { dark }),
   getSettings: () => call<Settings>("get_settings"),
   saveSettings: (settings: Settings) => call<Settings>("save_settings", { settings }),
   openPath: (path: string) => call<void>("open_path", { path }),

@@ -9,7 +9,7 @@ import {
 } from "naive-ui";
 import ProfilesView from "./views/ProfilesView.vue";
 import SettingsView from "./views/SettingsView.vue";
-import { api } from "./api";
+import { api, isTauri } from "./api";
 import { themeOverrides } from "./theme";
 import type { AppState, Settings } from "./types";
 import version from "../VERSION?raw";
@@ -19,6 +19,9 @@ type View = "profiles" | "settings";
 const view = ref<View>("profiles");
 const sidebarCollapsed = ref(false);
 const sidebarFlyoutArmed = ref(true);
+const profilesNavBtn = ref<HTMLElement | null>(null);
+const settingsNavBtn = ref<HTMLElement | null>(null);
+const indicatorTop = ref(8);
 const state = ref<AppState | null>(null);
 const loadError = ref("");
 const systemDark = ref(window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -34,6 +37,18 @@ const isDark = computed(() => {
 });
 const naiveTheme = computed(() => (isDark.value ? darkTheme : null));
 const isSidebarCollapsed = sidebarCollapsed;
+
+async function syncWindowTitleBarTheme(dark: boolean) {
+  if (!isTauri) return;
+  await api.setWindowTheme(dark);
+}
+
+function updateSidebarIndicator() {
+  const target = view.value === "profiles" ? profilesNavBtn.value : settingsNavBtn.value;
+  if (target) indicatorTop.value = target.offsetTop + 8;
+}
+
+watch(view, updateSidebarIndicator);
 
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value;
@@ -61,7 +76,12 @@ async function previewTheme(theme: Settings["theme"]) {
 
 watch(
   isDark,
-  (dark) => {
+  async (dark) => {
+    try {
+      await syncWindowTitleBarTheme(dark);
+    } catch {
+      // 标题栏同步失败不阻塞内容切换
+    }
     document.documentElement.classList.toggle("dark", dark);
     document.documentElement.style.colorScheme = dark ? "dark" : "light";
   },
@@ -70,6 +90,7 @@ watch(
 
 onMounted(async () => {
   media.addEventListener("change", mediaListener);
+  updateSidebarIndicator();
   await refresh();
 });
 
@@ -99,8 +120,9 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <nav class="mx-2 mt-6 space-y-1">
-                <button type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-r-full before:bg-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="配置档案" @click="view = 'profiles'" @mouseenter="sidebarFlyoutArmed = true">
+              <nav class="relative mx-2 mt-6 space-y-1">
+                <span class="apple-sidebar-indicator" :style="{ top: `${indicatorTop}px` }" aria-hidden="true" />
+                <button ref="profilesNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="配置档案" @click="view = 'profiles'" @mouseenter="sidebarFlyoutArmed = true">
                   <svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                     <rect x="4.5" y="4.5" width="15" height="15" rx="3" />
                     <path d="M8.5 9h7M8.5 12h7M8.5 15h4" stroke-linecap="round" />
@@ -108,7 +130,7 @@ onBeforeUnmount(() => {
                   <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">配置档案</span>
                   <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">配置档案</span>
                 </button>
-                <button type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'settings' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff] before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-r-full before:bg-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="设置" @click="view = 'settings'" @mouseenter="sidebarFlyoutArmed = true">
+                <button ref="settingsNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'settings' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="设置" @click="view = 'settings'" @mouseenter="sidebarFlyoutArmed = true">
                   <svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                     <path d="M5.5 7.5h13M5.5 12h13M5.5 16.5h13" stroke-linecap="round" />
                     <circle cx="9" cy="7.5" r="1.5" fill="var(--panel-bg)" />

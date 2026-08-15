@@ -146,18 +146,17 @@ impl Database {
         Ok(profiles)
     }
 
-    pub fn profile_payload(&self, id: &str) -> AppResult<ProfilePayload> {
+    pub fn profile(&self, id: &str) -> AppResult<StoredProfile> {
         let connection = self.lock()?;
-        let payload = connection
+        connection
             .query_row(
-                "SELECT payload_json FROM profiles WHERE id = ?1",
+                "SELECT id, name, payload_json, icon, created_at, updated_at FROM profiles WHERE id = ?1",
                 params![id],
-                |row| row.get::<_, String>(0),
+                profile_from_row,
             )
             .optional()
             .map_err(|error| app_err!("无法读取配置档案: {error}"))?
-            .ok_or_else(|| app_err!("配置档案不存在"))?;
-        serde_json::from_str(&payload).map_err(|_| app_err!("配置档案格式无效"))
+            .ok_or_else(|| app_err!("配置档案不存在"))
     }
 
     pub fn insert_profile(
@@ -192,6 +191,28 @@ impl Database {
             return Err(app_err!("配置档案不存在"));
         }
         Ok(())
+    }
+
+    pub fn update_profile(
+        &self,
+        id: &str,
+        name: &str,
+        payload: &ProfilePayload,
+        timestamp: &str,
+    ) -> AppResult<StoredProfile> {
+        let payload_json =
+            serde_json::to_string(payload).map_err(|_| app_err!("配置档案序列化失败"))?;
+        let connection = self.lock()?;
+        connection
+            .query_row(
+                "UPDATE profiles SET name=?2, payload_json=?3, updated_at=?4 WHERE id=?1
+                 RETURNING id, name, payload_json, icon, created_at, updated_at",
+                params![id, name, payload_json, timestamp],
+                profile_from_row,
+            )
+            .optional()
+            .map_err(|error| app_err!("无法更新配置档案: {error}"))?
+            .ok_or_else(|| app_err!("配置档案不存在"))
     }
 
     pub fn rename_profile(&self, id: &str, name: &str, timestamp: &str) -> AppResult<()> {
