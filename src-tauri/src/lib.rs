@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod builtin;
 pub mod codex;
 pub mod commands;
 pub mod database;
@@ -31,6 +32,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
             commands::capture_profile,
+            commands::add_builtin_profile,
             commands::rename_profile,
             commands::set_profile_icon,
             commands::get_profile,

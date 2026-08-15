@@ -9,6 +9,9 @@ pub struct ProfilePayload {
     pub provider_id: Option<String>,
     #[serde(default)]
     pub provider_body: Option<String>,
+    /// 内置官方档案类型（deepseek/minimax/zhipu/chatgpt）；普通捕获的档案为 None。
+    #[serde(default)]
+    pub builtin: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

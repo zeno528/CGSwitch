@@ -18,6 +18,16 @@ pub fn capture_profile(name: String, state: State<'_, AppContext>) -> AppResult<
 }
 
 #[tauri::command]
+pub fn add_builtin_profile(
+    kind: String,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    state: State<'_, AppContext>,
+) -> AppResult<ProfileSummary> {
+    state.add_builtin_profile(&kind, base_url.as_deref(), api_key.as_deref())
+}
+
+#[tauri::command]
 pub fn rename_profile(id: String, name: String, state: State<'_, AppContext>) -> AppResult<()> {
     state.rename_profile(&id, &name)
 }

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { builtinPresetByKind } from "./presets";
 import type {
   AppState,
   AuthStatus,
@@ -164,6 +165,34 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       webProfiles.unshift(profile);
       return profile as T;
     }
+    case "add_builtin_profile": {
+      const preset = builtinPresetByKind(String(args?.kind ?? ""));
+      if (!preset) throw new Error("未知的内置档案类型");
+      const rawKey = String(args?.apiKey ?? "");
+      const apiKey = preset.provider ? rawKey : null;
+      const rawBaseUrl = String(args?.baseUrl ?? "");
+      const baseUrl = preset.provider ? rawBaseUrl || preset.base_url : null;
+      if (preset.provider && !rawKey.trim()) throw new Error("请先填写 API 密钥");
+      const now = new Date().toISOString();
+      const profile: ProfileSummary = {
+        id: `profile-${Date.now()}`,
+        name: preset.name,
+        model: preset.model,
+        provider: preset.provider,
+        reasoning_effort: preset.model_values.model_reasoning_effort?.replace(/^"|"$/g, "") ?? null,
+        icon: preset.icon,
+        created_at: now,
+        updated_at: now,
+      };
+      webProfiles.unshift(profile);
+      webDetails[profile.id] = {
+        base_url: baseUrl,
+        api_key: apiKey,
+        model_values: preset.model_values,
+        config_fragment: preset.fragment,
+      };
+      return profile as T;
+    }
     case "rename_profile": {
       const profile = webProfiles.find((item) => item.id === args?.id);
       if (profile) profile.name = String(args?.name ?? profile.name);
@@ -219,6 +248,8 @@ function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
 export const api = {
   getState: () => call<AppState>("get_state"),
   captureProfile: (name: string) => call<ProfileSummary>("capture_profile", { name }),
+  addBuiltinProfile: (kind: string, baseUrl?: string, apiKey?: string) =>
+    call<ProfileSummary>("add_builtin_profile", { kind, baseUrl, apiKey }),
   renameProfile: (id: string, name: string) => call<void>("rename_profile", { id, name }),
   setProfileIcon: (id: string, icon: string | null) => call<void>("set_profile_icon", { id, icon }),
   getProfile: (id: string) => call<ProfileDetail>("get_profile", { id }),

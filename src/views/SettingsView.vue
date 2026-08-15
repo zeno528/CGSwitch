@@ -106,7 +106,6 @@ async function openPath(item: PathInfo) {
 <template>
   <section class="mx-auto w-full max-w-none">
     <h1 class="apple-title">设置</h1>
-    <p class="muted mt-2 text-sm">控制外观、Codex 路径和重启行为。</p>
 
     <SegmentedControl
       v-model="section"

@@ -2,6 +2,7 @@ use std::{path::Path, sync::Mutex};
 
 use tauri::{AppHandle, Emitter};
 
+use crate::builtin;
 use crate::codex::{config as codex_config, process as codex_process};
 use crate::database::{profile_summary, Database, StoredProfile};
 use crate::error::{app_err, AppResult};
@@ -35,6 +36,27 @@ fn parse_provider_detail(body: &str) -> AppResult<ProviderDetail> {
         api_key: value("experimental_bearer_token"),
         fragment,
     })
+}
+
+fn provider_api_key(body: &str) -> Option<String> {
+    let document = codex_config::parse_document(body).ok()?;
+    document
+        .as_table()
+        .get("experimental_bearer_token")
+        .and_then(toml_edit::Item::as_str)
+        .map(str::to_string)
+}
+
+fn is_builtin_placeholder(payload: &ProfilePayload, key: &str) -> bool {
+    payload
+        .builtin
+        .as_deref()
+        .and_then(|kind| builtin::template(kind).ok())
+        .is_some_and(|template| {
+            template
+                .placeholder
+                .is_some_and(|placeholder| placeholder == key.as_bytes())
+        })
 }
 
 fn profile_config_fragment(payload: &ProfilePayload) -> String {
@@ -113,6 +135,57 @@ impl AppContext {
         Ok(summary)
     }
 
+    pub fn add_builtin_profile(
+        &self,
+        kind: &str,
+        base_url: Option<&str>,
+        api_key: Option<&str>,
+    ) -> AppResult<ProfileSummary> {
+        let template = builtin::template(kind)?;
+        let profiles = self.database.profiles()?;
+        if profiles
+            .iter()
+            .any(|profile| profile.name.eq_ignore_ascii_case(template.name))
+        {
+            return Err(app_err!("已存在同名配置档案"));
+        }
+        let base_url = base_url.map(str::trim).filter(|value| !value.is_empty());
+        let api_key = api_key.map(str::trim).filter(|key| !key.is_empty());
+        if template.placeholder.is_some() && api_key.is_none() {
+            return Err(app_err!("请先填写 API 密钥"));
+        }
+        // 只创建快照，不写生产环境；快照内容与最终应用时渲染的 config 一致
+        let rendered = template.render_config(None)?;
+        let text =
+            std::str::from_utf8(&rendered).map_err(|_| app_err!("内置模板不是有效 UTF-8"))?;
+        let mut payload =
+            codex_config::capture_from_document(&codex_config::parse_document(text)?)?;
+        payload.builtin = Some(template.kind.to_string());
+        if base_url.is_some() || api_key.is_some() {
+            let body = payload
+                .provider_body
+                .as_deref()
+                .ok_or_else(|| app_err!("内置档案缺少供应商配置"))?;
+            payload.provider_body =
+                Some(codex_config::update_provider_body(body, base_url, api_key)?);
+        }
+        let timestamp = now_ms().to_string();
+        let summary = self
+            .database
+            .insert_profile(template.name, &payload, &timestamp)?;
+        self.database
+            .set_profile_icon(&summary.id, Some(template.icon), &timestamp)?;
+        self.database.record_event(
+            Some(&summary.id),
+            "add_builtin",
+            "success",
+            Some("added built-in profile"),
+            &timestamp,
+        )?;
+        let stored = self.database.profile(&summary.id)?;
+        Ok(profile_summary(&stored))
+    }
+
     pub fn rename_profile(&self, id: &str, name: &str) -> AppResult<()> {
         let name = validated_name(name)?;
         let profiles = self.database.profiles()?;
@@ -144,22 +217,42 @@ impl AppContext {
             .as_deref()
             .map(parse_provider_detail)
             .transpose()?;
+        let api_key = provider
+            .as_ref()
+            .and_then(|detail| detail.api_key.clone())
+            .filter(|key| !is_builtin_placeholder(payload, key));
+        let (config_fragment, catalog_content) = match payload.builtin.as_deref() {
+            Some(kind) => {
+                let template = builtin::template(kind)?;
+                let api_key = payload.provider_body.as_deref().and_then(provider_api_key);
+                let rendered = template.render_config(api_key.as_deref())?;
+                let fragment = String::from_utf8_lossy(&rendered).into_owned();
+                let catalog = template
+                    .catalog
+                    .map(|(_, bytes)| String::from_utf8_lossy(bytes).into_owned());
+                (fragment, catalog)
+            }
+            None => (
+                profile_config_fragment(payload),
+                payload
+                    .model_values
+                    .get("model_catalog_json")
+                    .map(|raw| raw.trim().trim_matches('"'))
+                    .map(|path| self.paths.codex_home.join(path))
+                    .and_then(|file| read_optional_text(&file)),
+            ),
+        };
         Ok(ProfileDetail {
             id: stored.id.clone(),
             name: stored.name.clone(),
             icon: stored.icon.clone(),
             provider: payload.provider_id.clone(),
             base_url: provider.as_ref().and_then(|detail| detail.base_url.clone()),
-            api_key: provider.as_ref().and_then(|detail| detail.api_key.clone()),
+            api_key,
             model_values: payload.model_values.clone(),
-            config_fragment: profile_config_fragment(payload),
+            config_fragment,
             auth_content: read_optional_text(&self.paths.codex_home.join("auth.json")),
-            catalog_content: payload
-                .model_values
-                .get("model_catalog_json")
-                .map(|raw| raw.trim().trim_matches('"'))
-                .map(|path| self.paths.codex_home.join(path))
-                .and_then(|file| read_optional_text(&file)),
+            catalog_content,
             updated_at: stored.updated_at.clone(),
         })
     }
@@ -196,7 +289,7 @@ impl AppContext {
         let mut write_back = false;
         if (base_url.is_some() || api_key.is_some()) && payload.provider_id.is_some() {
             let profiles = self.database.profiles()?;
-            let live = std::fs::read_to_string(&self.paths.codex_config()).ok();
+            let live = std::fs::read_to_string(self.paths.codex_config()).ok();
             if let Some(document) = live
                 .as_deref()
                 .and_then(|text| codex_config::parse_document(text).ok())
@@ -211,12 +304,16 @@ impl AppContext {
             .database
             .update_profile(id, &name, &payload, &now_ms().to_string())?;
         if write_back {
-            self.write_live_provider_update(
-                id,
-                payload.provider_id.as_deref().expect("已检查 provider_id"),
-                base_url,
-                api_key,
-            )?;
+            if payload.builtin.is_some() {
+                self.apply_builtin_profile(id, &payload, "update")?;
+            } else {
+                self.write_live_provider_update(
+                    id,
+                    payload.provider_id.as_deref().expect("已检查 provider_id"),
+                    base_url,
+                    api_key,
+                )?;
+            }
         }
         Ok(profile_summary(&updated))
     }
@@ -253,6 +350,13 @@ impl AppContext {
         let raw = Path::new(reference);
         let path = if raw.is_absolute() {
             raw.to_path_buf()
+        } else if let Some(rest) = reference.strip_prefix("~/") {
+            // 模板里的 ~/.codex/... 是相对用户主目录的完整路径
+            self.paths
+                .codex_home
+                .parent()
+                .unwrap_or(&self.paths.codex_home)
+                .join(rest)
         } else {
             self.paths.codex_home.join(raw)
         };
@@ -286,6 +390,10 @@ impl AppContext {
         self.autosync_active_profile(id, &document)?;
 
         let payload = self.database.profile(id)?.payload;
+        if payload.builtin.is_some() {
+            return self.apply_builtin_profile(id, &payload, "apply");
+        }
+
         codex_config::apply_to_document(&mut document, &payload)?;
         let updated = document.to_string();
 
@@ -296,6 +404,47 @@ impl AppContext {
             "apply",
             "success",
             Some("configuration applied"),
+            &now_ms().to_string(),
+        )?;
+        Ok(())
+    }
+
+    /// 内置官方档案：整文件替换为模板原文（仅替换密钥占位符），
+    /// 并写入本档案自带的关联文件（deepseek/智谱各自独立的 models.json、minimax 的 custom-catalog.json），
+    /// 写生产文件前都先备份旧文件。
+    fn apply_builtin_profile(
+        &self,
+        profile_id: &str,
+        payload: &ProfilePayload,
+        action: &str,
+    ) -> AppResult<()> {
+        let kind = payload
+            .builtin
+            .as_deref()
+            .ok_or_else(|| app_err!("档案缺少内置类型"))?;
+        let template = builtin::template(kind)?;
+        let api_key = payload.provider_body.as_deref().and_then(provider_api_key);
+        let rendered = template.render_config(api_key.as_deref())?;
+
+        let config_path = self.paths.codex_config();
+        backup_file(&config_path, &self.paths.config_backup, "config")?;
+        atomic_write(&config_path, &rendered)?;
+
+        if let Some((target, bytes)) = template.catalog {
+            let destination = self.paths.codex_home.join(target);
+            let stem = Path::new(target)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("codex-file");
+            backup_file(&destination, &self.paths.codex_files_backup, stem)?;
+            atomic_write(&destination, bytes)?;
+        }
+
+        self.database.record_event(
+            Some(profile_id),
+            action,
+            "success",
+            Some("built-in configuration applied"),
             &now_ms().to_string(),
         )?;
         Ok(())
@@ -314,6 +463,10 @@ impl AppContext {
         let Some(profile) = profiles.iter().find(|profile| profile.id == active_id) else {
             return Ok(());
         };
+        // 内置档案是固定官方模板，应用时整文件替换，不参与累计更新回写
+        if profile.payload.builtin.is_some() {
+            return Ok(());
+        }
         let Ok(live) = codex_config::capture_from_document(document) else {
             return Ok(());
         };
@@ -882,5 +1035,285 @@ experimental_bearer_token = "old-key"
         assert!(validated_icon(Some("Zhipu")).is_err());
         assert!(validated_icon(Some("a!b")).is_err());
         assert!(validated_icon(Some(&"x".repeat(41))).is_err());
+    }
+
+    #[test]
+    fn add_builtin_profile_creates_snapshot_only() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        let original = "model = \"glm-5.3\"\n";
+        std::fs::write(paths.codex_config(), original).unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+        let profile = context
+            .add_builtin_profile("deepseek", Some("https://custom.example"), Some("sk-test"))
+            .unwrap();
+
+        assert_eq!(profile.name, "DeepSeek 官方");
+        assert_eq!(profile.model.as_deref(), Some("deepseek-v4-flash"));
+        assert_eq!(profile.provider.as_deref(), Some("deepseek"));
+        assert_eq!(profile.reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(profile.icon.as_deref(), Some("deepseek"));
+
+        let stored = context.database.profile(&profile.id).unwrap();
+        assert_eq!(stored.payload.builtin.as_deref(), Some("deepseek"));
+        assert_eq!(
+            stored
+                .payload
+                .model_values
+                .get("model_catalog_json")
+                .map(|raw| raw.trim().trim_matches('"')),
+            Some("~/.codex/models.json")
+        );
+        assert!(stored
+            .payload
+            .provider_body
+            .as_deref()
+            .unwrap()
+            .contains("sk-test"));
+        assert!(stored
+            .payload
+            .provider_body
+            .as_deref()
+            .unwrap()
+            .contains("https://custom.example"));
+
+        // 添加只存快照，不写生产配置
+        assert_eq!(
+            std::fs::read_to_string(context.paths.codex_config()).unwrap(),
+            original
+        );
+
+        let error = context
+            .add_builtin_profile("deepseek", None, None)
+            .unwrap_err();
+        assert!(error.0.contains("已存在同名配置档案"));
+    }
+
+    #[test]
+    fn add_builtin_profile_requires_api_key() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(paths.codex_config(), "model = \"glm-5.3\"\n").unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+        let error = context
+            .add_builtin_profile("deepseek", None, None)
+            .unwrap_err();
+        assert!(error.0.contains("请先填写 API 密钥"));
+        assert!(context.database.profiles().unwrap().is_empty());
+    }
+
+    #[test]
+    fn apply_builtin_profile_writes_exact_config_and_catalog() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(
+            paths.codex_config(),
+            "model = \"other\"\n[mcp_servers.keep]\ncommand = \"node\"\n",
+        )
+        .unwrap();
+        let old_models = b"{\"models\":[]}";
+        std::fs::write(paths.codex_home.join("models.json"), old_models).unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+        let profile = context
+            .add_builtin_profile("deepseek", None, Some("sk-test"))
+            .unwrap();
+        context.apply_profile(&profile.id).unwrap();
+
+        // 整文件替换，模板之外的键全部清掉，仅密钥占位符被替换
+        let config = std::fs::read(context.paths.codex_config()).unwrap();
+        let expected = crate::builtin::template("deepseek")
+            .unwrap()
+            .render_config(Some("sk-test"))
+            .unwrap();
+        assert_eq!(config, expected);
+        assert!(!String::from_utf8_lossy(&config).contains("<你的 DeepSeek API Key>"));
+        // 关联文件按本档案字节写入，旧文件已备份
+        let models = std::fs::read(context.paths.codex_home.join("models.json")).unwrap();
+        assert_eq!(models, crate::builtin::DEEPSEEK_MODELS);
+        let backup = std::fs::read_dir(context.paths.codex_files_backup.clone())
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        assert_eq!(std::fs::read(backup).unwrap(), old_models);
+        assert!(context.paths.config_backup.read_dir().unwrap().count() > 0);
+    }
+
+    #[test]
+    fn update_builtin_profile_writes_key_back_when_active() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(paths.codex_config(), "model = \"other\"\n").unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+        let profile = context
+            .add_builtin_profile("deepseek", None, Some("sk-old"))
+            .unwrap();
+        context.apply_profile(&profile.id).unwrap();
+        assert_eq!(
+            context.get_state().unwrap().active_profile_id.as_deref(),
+            Some(profile.id.as_str())
+        );
+
+        context
+            .update_profile(
+                &profile.id,
+                "DeepSeek 官方",
+                Some("https://api.deepseek.com/"),
+                Some("sk-real"),
+            )
+            .unwrap();
+
+        let config = std::fs::read(context.paths.codex_config()).unwrap();
+        let expected = crate::builtin::template("deepseek")
+            .unwrap()
+            .render_config(Some("sk-real"))
+            .unwrap();
+        assert_eq!(config, expected);
+        assert!(!String::from_utf8_lossy(&config).contains("<你的 DeepSeek API Key>"));
+
+        let detail = context.get_profile(&profile.id).unwrap();
+        assert_eq!(detail.api_key.as_deref(), Some("sk-real"));
+        assert!(detail.config_fragment.contains("sk-real"));
+    }
+
+    #[test]
+    fn builtin_catalogs_are_not_mixed() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(paths.codex_config(), "model = \"other\"\n").unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+        let deepseek = context
+            .add_builtin_profile("deepseek", None, Some("sk-d"))
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let zhipu = context
+            .add_builtin_profile("zhipu", None, Some("sk-z"))
+            .unwrap();
+
+        context.apply_profile(&deepseek.id).unwrap();
+        assert_eq!(
+            std::fs::read(context.paths.codex_home.join("models.json")).unwrap(),
+            crate::builtin::DEEPSEEK_MODELS
+        );
+
+        context.apply_profile(&zhipu.id).unwrap();
+        assert_eq!(
+            std::fs::read(context.paths.codex_home.join("models.json")).unwrap(),
+            crate::builtin::ZHIPU_MODELS
+        );
+    }
+
+    #[test]
+    fn apply_minimax_inserts_catalog_line_and_writes_catalog() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(paths.codex_config(), "model = \"other\"\n").unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+        let profile = context
+            .add_builtin_profile("minimax", None, Some("mm-key"))
+            .unwrap();
+        context.apply_profile(&profile.id).unwrap();
+
+        let config = std::fs::read(context.paths.codex_config()).unwrap();
+        let expected = crate::builtin::template("minimax")
+            .unwrap()
+            .render_config(Some("mm-key"))
+            .unwrap();
+        assert_eq!(config, expected);
+        assert!(String::from_utf8_lossy(&config)
+            .contains("model_catalog_json = \"~/.codex/model-catalogs/custom-catalog.json\""));
+        assert!(!String::from_utf8_lossy(&config).contains("<MINIMAX_API_KEY>"));
+
+        let catalog = std::fs::read(
+            context
+                .paths
+                .codex_home
+                .join("model-catalogs")
+                .join("custom-catalog.json"),
+        )
+        .unwrap();
+        assert_eq!(catalog, crate::builtin::MINIMAX_CATALOG);
+    }
+
+    #[test]
+    fn apply_chatgpt_writes_official_default_and_keeps_auth() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(
+            paths.codex_config(),
+            "model_provider = \"ZAI\"\nmodel = \"glm-5.3\"\n\n[model_providers.ZAI]\nname = \"ZAI\"\nbase_url = \"https://open.bigmodel.cn/api/v1\"\nexperimental_bearer_token = \"old-key\"\n",
+        )
+        .unwrap();
+        std::fs::write(paths.codex_home.join("auth.json"), b"{\"login\":\"kept\"}").unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+        let profile = context.add_builtin_profile("chatgpt", None, None).unwrap();
+        context.apply_profile(&profile.id).unwrap();
+
+        assert_eq!(
+            std::fs::read(context.paths.codex_config()).unwrap(),
+            crate::builtin::CHATGPT_CONFIG
+        );
+        assert_eq!(
+            std::fs::read(context.paths.codex_home.join("auth.json")).unwrap(),
+            b"{\"login\":\"kept\"}"
+        );
+        assert!(!context.paths.codex_home.join("models.json").exists());
+    }
+
+    #[test]
+    fn builtin_placeholder_key_is_not_exposed_as_api_key() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(paths.codex_config(), "model = \"glm-5.3\"\n").unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+        // 兼容仍带占位符密钥的旧数据：get_profile 不应把占位符当成密钥回显
+        let payload = ProfilePayload {
+            builtin: Some("deepseek".into()),
+            model_values: [
+                ("model".to_string(), "\"deepseek-v4-flash\"".into()),
+                ("model_reasoning_effort".to_string(), "\"high\"".into()),
+                ("model_catalog_json".to_string(), "\"~/.codex/models.json\"".into()),
+            ]
+            .into_iter()
+            .collect(),
+            provider_id: Some("deepseek".into()),
+            provider_body: Some(
+                "name = \"deepseek\"\nbase_url = \"https://api.deepseek.com/\"\nwire_api = \"responses\"\nexperimental_bearer_token = \"<你的 DeepSeek API Key>\""
+                    .into(),
+            ),
+        };
+        let summary = context
+            .database
+            .insert_profile("DeepSeek 旧数据", &payload, &now_ms().to_string())
+            .unwrap();
+
+        let detail = context.get_profile(&summary.id).unwrap();
+        assert_eq!(detail.api_key, None);
+        assert!(detail.config_fragment.contains("<你的 DeepSeek API Key>"));
     }
 }

@@ -28,6 +28,7 @@ const modalVisible = ref(false);
 const modalMode = ref<"capture" | "rename">("capture");
 const profileName = ref("");
 const editingProfile = ref<ProfileSummary | null>(null);
+const creatingProfile = ref(false);
 const modalProfile = ref<ProfileSummary | null>(null);
 
 let unlisten: (() => void) | null = null;
@@ -169,15 +170,22 @@ onBeforeUnmount(() => {
     @back="editingProfile = null"
     @changed="emit('refresh')"
   />
+  <ProfileEdit
+    v-else-if="creatingProfile"
+    :profile="null"
+    create
+    @back="creatingProfile = false"
+    @changed="emit('refresh')"
+  />
   <section v-else class="mx-auto w-full max-w-none">
     <header class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="apple-title">配置档案</h1>
-        <p class="muted mt-2 text-sm">保存常用配置，在需要时切换并重启 Codex。</p>
       </div>
       <div class="flex gap-2">
         <n-button @click="emit('refresh')">刷新</n-button>
-        <n-button type="primary" :disabled="busy" @click="openCapture">捕获当前配置</n-button>
+        <n-button secondary :disabled="busy" @click="openCapture">捕获当前配置</n-button>
+        <n-button type="primary" :disabled="busy" @click="creatingProfile = true">添加档案</n-button>
         <n-button secondary :disabled="busy" :loading="restartStage !== 'idle' && restartStage !== 'success' && restartStage !== 'error'" @click="restart(false)">重启 Codex</n-button>
       </div>
     </header>
@@ -224,7 +232,7 @@ onBeforeUnmount(() => {
       <div class="flex items-center justify-between">
         <h2 class="text-[15px] font-semibold tracking-tight">我的档案</h2>
       </div>
-      <n-empty v-if="state.profiles.length === 0" description="还没有配置档案。先把 ~/.codex/config.toml 调整到目标状态，再点击“捕获当前配置”。" class="apple-group mt-3 py-14" />
+      <n-empty v-if="state.profiles.length === 0" description="还没有配置档案。可以添加内置官方档案，或先把 ~/.codex/config.toml 调整到目标状态，再点击“捕获当前配置”。" class="apple-group mt-3 py-14" />
       <template v-else>
         <div class="apple-group mt-3 divide-y divide-[var(--panel-border)]">
           <ProfileCard

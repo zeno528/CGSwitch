@@ -1,0 +1,10 @@
+model_provider = "ZAI"
+model = "glm-5.3"
+model_reasoning_effort = "max"
+model_catalog_json = "~/.codex/models.json"
+
+[model_providers.ZAI]
+name = "ZAI"
+base_url = "https://open.bigmodel.cn/api/v1"
+experimental_bearer_token = "<Your API Key>"
+wire_api = "responses"

@@ -1,24 +1,16 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref } from "vue";
 import { NButton } from "naive-ui";
 import { providerIcons } from "../icons";
-import type { ProfileSummary } from "../types";
 
-const props = defineProps<{ profile: ProfileSummary }>();
+const props = defineProps<{ icon: string | null; name: string }>();
 
 const emit = defineEmits<{
   back: [];
   save: [icon: string | null];
 }>();
 
-const selected = ref<string | null>(props.profile.icon);
-
-watch(
-  () => props.profile.id,
-  () => {
-    selected.value = props.profile.icon;
-  },
-);
+const selected = ref<string | null>(props.icon);
 </script>
 
 <template>
@@ -32,7 +24,7 @@ watch(
       <svg class="h-4 w-4 shrink-0 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <path d="M15 5.5 8.5 12l6.5 6.5" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
-      <span class="apple-title">编辑档案图标</span>
+      <span class="apple-title">选择档案图标</span>
     </button>
 
     <div class="apple-group mt-7 p-5">

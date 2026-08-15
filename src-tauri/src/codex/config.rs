@@ -50,6 +50,7 @@ pub fn capture_from_document(document: &DocumentMut) -> AppResult<ProfilePayload
         model_values,
         provider_id,
         provider_body,
+        builtin: None,
     })
 }
 

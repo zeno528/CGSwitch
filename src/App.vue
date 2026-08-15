@@ -104,8 +104,8 @@ onBeforeUnmount(() => {
     <n-dialog-provider>
       <n-message-provider>
         <n-layout class="h-full! rounded-none! bg-transparent!">
-          <div class="flex min-h-screen">
-            <aside class="apple-sidebar relative min-h-screen shrink-0" :class="isSidebarCollapsed ? ['w-[60px]', 'apple-sidebar--collapsed'] : 'w-[160px]'">
+          <div class="flex h-screen">
+            <aside class="apple-sidebar relative h-full shrink-0" :class="isSidebarCollapsed ? ['w-[60px]', 'apple-sidebar--collapsed'] : 'w-[160px]'">
               <div class="apple-sidebar-brand mx-3 mt-3 flex items-center gap-3">
                 <img src="/logo.png" alt="SwitchGPT" class="h-9 w-9 shrink-0" />
                 <div class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">
