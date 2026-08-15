@@ -268,6 +268,21 @@ impl Database {
         Ok(())
     }
 
+    /// 最近一次成功应用的档案 id（应用记录被删除时返回 None 由调用方回退匹配）。
+    pub fn latest_applied_profile(&self) -> AppResult<Option<String>> {
+        let connection = self.lock()?;
+        connection
+            .query_row(
+                "SELECT profile_id FROM switch_events
+                 WHERE action = 'apply' AND status = 'success' AND profile_id IS NOT NULL
+                 ORDER BY created_at DESC LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| app_err!("无法读取最近应用记录: {error}"))
+    }
+
     fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, Connection>> {
         self.connection
             .lock()

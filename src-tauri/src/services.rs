@@ -92,7 +92,17 @@ impl AppContext {
     pub fn get_state(&self) -> AppResult<AppState> {
         let settings = self.database.settings()?;
         let profiles = self.database.profiles()?;
-        let active_profile_id = self.active_profile_id(&profiles)?;
+        let live = self.live_document();
+        let active_profile_id = match self.database.latest_applied_profile()? {
+            Some(id) if profiles.iter().any(|profile| profile.id == id) => Some(id),
+            _ => match &live {
+                Some(document) => self.matching_active_profile(&profiles, document, None)?,
+                None => self.active_profile_id(&profiles)?,
+            },
+        };
+        let live_payload = live
+            .as_ref()
+            .and_then(|document| codex_config::capture_from_document(document).ok());
         let process_ids = codex_process::find_process_ids(settings.codex_app_path.as_deref());
         let (display_path, source) =
             codex_process::codex_display_path(settings.codex_app_path.as_deref());
@@ -100,7 +110,16 @@ impl AppContext {
         Ok(AppState {
             profiles: profiles
                 .iter()
-                .map(profile_summary)
+                .map(|profile| {
+                    let mut stored = profile.clone();
+                    // 激活中的档案：标签读取当前配置文件状态；其余档案读取数据库最新字段
+                    if Some(&stored.id) == active_profile_id.as_ref() {
+                        if let Some(live) = &live_payload {
+                            stored.payload = live.clone();
+                        }
+                    }
+                    profile_summary(&stored)
+                })
                 .collect::<Vec<ProfileSummary>>(),
             active_profile_id,
             codex: CodexAppStatus {
@@ -111,6 +130,11 @@ impl AppContext {
             settings,
             paths: self.path_info(),
         })
+    }
+
+    fn live_document(&self) -> Option<toml_edit::DocumentMut> {
+        let text = std::fs::read_to_string(self.paths.codex_config()).ok()?;
+        codex_config::parse_document(&text).ok()
     }
 
     pub fn capture_profile(&self, name: &str) -> AppResult<ProfileSummary> {
@@ -1136,6 +1160,92 @@ experimental_bearer_token = "old-key"
         );
         assert_eq!(context.get_builtin_catalog("chatgpt").unwrap(), None);
         assert!(context.get_builtin_catalog("unknown").is_err());
+    }
+
+    #[test]
+    fn get_state_tags_active_profile_from_live_config() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(
+            paths.codex_config(),
+            "model = \"glm-5.3\"\nmodel_provider = \"ZAI\"\nmodel_reasoning_effort = \"high\"\n\n[model_providers.ZAI]\nname = \"ZAI\"\nbase_url = \"https://api.example\"\nexperimental_bearer_token = \"secret\"\n",
+        )
+        .unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+        let profile = context.capture_profile("ZAI High").unwrap();
+        context.apply_profile(&profile.id).unwrap();
+
+        // 数据库快照滞后：DB 里推理强度是 old，live 配置手动改成 medium 并累计新键
+        let mut payload = context.database.profile(&profile.id).unwrap().payload;
+        payload
+            .model_values
+            .insert("model_reasoning_effort".into(), "\"old\"".into());
+        context
+            .database
+            .update_profile(&profile.id, "ZAI High", &payload, &now_ms().to_string())
+            .unwrap();
+        std::fs::write(
+            context.paths.codex_config(),
+            "model = \"glm-5.3\"\nmodel_provider = \"ZAI\"\nmodel_reasoning_effort = \"medium\"\nmodel_catalog_json = \"zai.json\"\n\n[mcp_servers.keep]\ncommand = \"node\"\n\n[model_providers.ZAI]\nname = \"ZAI\"\nbase_url = \"https://api.example\"\nexperimental_bearer_token = \"secret\"\n",
+        )
+        .unwrap();
+
+        let state = context.get_state().unwrap();
+        assert_eq!(
+            state.active_profile_id.as_deref(),
+            Some(profile.id.as_str())
+        );
+        let summary = state
+            .profiles
+            .iter()
+            .find(|item| item.id == profile.id)
+            .unwrap();
+        assert_eq!(summary.model.as_deref(), Some("glm-5.3"));
+        assert_eq!(summary.provider.as_deref(), Some("ZAI"));
+        assert_eq!(summary.reasoning_effort.as_deref(), Some("medium"));
+        // 数据库旧值保持不变，仅展示层读取 live
+        assert_eq!(
+            context
+                .database
+                .profile(&profile.id)
+                .unwrap()
+                .payload
+                .model_values
+                .get("model_reasoning_effort")
+                .map(|raw| raw.trim().trim_matches('"')),
+            Some("old")
+        );
+    }
+
+    #[test]
+    fn get_state_falls_back_to_subset_match_without_apply_event() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(
+            paths.codex_config(),
+            "model = \"glm-5.3\"\nmodel_provider = \"ZAI\"\nmodel_reasoning_effort = \"high\"\n\n[model_providers.ZAI]\nname = \"ZAI\"\nbase_url = \"https://api.example\"\nexperimental_bearer_token = \"secret\"\n",
+        )
+        .unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+        let profile = context.capture_profile("ZAI High").unwrap();
+        // live 累计新键，严格匹配失效，但档案仍是唯一子集候选
+        std::fs::write(
+            context.paths.codex_config(),
+            "model = \"glm-5.3\"\nmodel_provider = \"ZAI\"\nmodel_reasoning_effort = \"high\"\nmodel_catalog_json = \"zai.json\"\n\n[mcp_servers.keep]\ncommand = \"node\"\n\n[model_providers.ZAI]\nname = \"ZAI\"\nbase_url = \"https://api.example\"\nexperimental_bearer_token = \"secret\"\n",
+        )
+        .unwrap();
+
+        let state = context.get_state().unwrap();
+        assert_eq!(
+            state.active_profile_id.as_deref(),
+            Some(profile.id.as_str())
+        );
     }
 
     #[test]

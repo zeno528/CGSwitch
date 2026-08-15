@@ -37,7 +37,22 @@ const emit = defineEmits<{
     <div class="flex shrink-0 items-center gap-2" @dblclick.stop>
       <n-button type="primary" size="small" :disabled="busy || active" @click="emit('apply')">应用</n-button>
       <n-button size="small" :disabled="busy" @click="emit('rename')">重命名</n-button>
-      <n-button size="small" quaternary type="error" :disabled="busy" @click="emit('remove')">删除</n-button>
+      <button
+        type="button"
+        class="grid h-8 w-8 place-items-center rounded-lg text-[#ff3b30]/60 transition-colors hover:bg-[#ff3b30]/10 hover:text-[#ff3b30] disabled:pointer-events-none disabled:opacity-40"
+        :disabled="busy || active"
+        title="删除"
+        aria-label="删除"
+        @click="emit('remove')"
+      >
+        <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9.5 4.5a2.5 2.5 0 0 1 5 0" />
+          <path d="M5 6.5h14" />
+          <path d="M6 6.5V18a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6.5" />
+          <path d="M9.5 10v4.5" />
+          <path d="M14.5 10v4.5" />
+        </svg>
+      </button>
     </div>
   </article>
 </template>

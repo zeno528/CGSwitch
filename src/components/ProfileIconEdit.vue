@@ -37,6 +37,7 @@ const selected = ref<string | null>(props.icon);
           :class="selected === icon.id ? 'border-[#007aff] bg-[var(--selection-bg)]' : 'border-[var(--panel-border)] hover:bg-black/3 dark:hover:bg-white/4'"
           :aria-pressed="selected === icon.id"
           @click="selected = icon.id"
+          @dblclick="emit('save', icon.id)"
         >
           <span class="grid h-7 w-7 place-items-center rounded-lg bg-[#f0f0f3]" aria-hidden="true">
             <img :src="icon.url" :alt="icon.label" class="h-4 w-4" />

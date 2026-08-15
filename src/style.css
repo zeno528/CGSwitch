@@ -120,6 +120,11 @@ body {
   transition: none !important;
 }
 
+/* 删除确认弹窗：标题与操作按钮统一红色语义 */
+.delete-profile-dialog .n-dialog__title {
+  color: #ff3b30;
+}
+
 /* 全局悬浮滚动条：默认隐藏，鼠标进入可滚动区域时才显现缩略图，
    轨道始终透明（与所在背景合并），视觉上弱且不抢眼。
    注：Chromium 下自定义 ::-webkit-scrollbar 会覆盖标准属性，故只写 webkit 一套 */
@@ -163,6 +168,21 @@ main {
   background: var(--sidebar-bg);
   transition: width 360ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: width;
+}
+
+/* 与侧边栏同款动画曲线（360ms cubic-bezier(0.22,1,0.36,1)），
+   用于卡片内展开/收起内容的入场出场（如重启进度） */
+.apple-reveal-enter-active,
+.apple-reveal-leave-active {
+  transition:
+    opacity 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.apple-reveal-enter-from,
+.apple-reveal-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 
 .apple-sidebar-label {
