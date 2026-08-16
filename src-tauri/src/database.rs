@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Row};
@@ -8,6 +9,9 @@ use serde::{Deserialize, Serialize};
 use crate::error::{app_err, AppResult};
 use crate::models::{ProfileKind, ProfilePayload, ProfileSummary};
 use crate::paths::AppPaths;
+
+/// profile id 进程内自增后缀：同一毫秒内创建多个预设也不会撞唯一约束。
+static PROFILE_ID_SEQ: AtomicU64 = AtomicU64::new(0);
 
 const SCHEMA_V1: &str = r#"
 CREATE TABLE app_state (
@@ -118,7 +122,10 @@ impl Database {
         payload: &ProfilePayload,
         timestamp: &str,
     ) -> AppResult<ProfileSummary> {
-        let id = format!("profile-{timestamp}");
+        let id = format!(
+            "profile-{timestamp}-{}",
+            PROFILE_ID_SEQ.fetch_add(1, Ordering::Relaxed)
+        );
         let payload_json =
             serde_json::to_string(payload).map_err(|_| app_err!("配置预设序列化失败"))?;
         let kind = if payload.provider_id.is_none() {
@@ -528,6 +535,7 @@ fn summary(
         reasoning_effort: display_text(payload.model_values.get("model_reasoning_effort")),
         has_key: payload_has_key(payload),
         admin_url: payload.admin_url.clone(),
+        show_balance: payload.show_balance,
         icon: icon.map(str::to_string),
         created_at: created_at.into(),
         updated_at: updated_at.into(),

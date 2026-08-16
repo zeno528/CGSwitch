@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { NButton, NTag, useMessage } from "naive-ui";
+import LoadingSpinner from "./LoadingSpinner.vue";
 import ProfileIconTile from "./ProfileIconTile.vue";
 import { api } from "../api";
-import type { ProfileSummary } from "../types";
+import { useWindowActivation } from "../composables/useWindowActivation";
+import type { DeepSeekBalanceInfo, ProfileSummary } from "../types";
+
+// 模块级缓存：切换视图/窗口时数字立即可见，不等网络
+const balanceInfoCache = new Map<string, DeepSeekBalanceInfo>();
 
 const props = defineProps<{
   profile: ProfileSummary;
@@ -12,6 +17,7 @@ const props = defineProps<{
   subscriptionAuthed?: boolean;
   subscriptionAccount?: string | null;
   boundAccount?: string | null;
+  balanceCache?: Record<string, DeepSeekBalanceInfo>;
 }>();
 
 const emit = defineEmits<{
@@ -25,6 +31,73 @@ const emit = defineEmits<{
 const message = useMessage();
 const testing = ref(false);
 const connectionState = ref<"unknown" | "ok" | "fail">("unknown");
+// 最近一次成功拿到的余额数字；拿到过就常驻，刷新失败/返回不可用都不清空
+const balanceInfo = ref<DeepSeekBalanceInfo | null>(null);
+const balanceFetching = ref(false);
+const balanceError = ref("");
+
+const isDeepSeek = computed(() => props.profile.provider === "deepseek");
+const balanceText = computed(() => {
+  if (balanceInfo.value) {
+    const symbol = balanceInfo.value.currency === "USD" ? "$" : "¥";
+    return `余额 ${symbol}${balanceInfo.value.total_balance}`;
+  }
+  // 规矩：像模型/供应商胶囊一样始终有内容；失败文案只在获取失败时显示
+  return balanceError.value ? "查询失败" : "余额 --";
+});
+const balanceTitle = computed(() => {
+  if (!balanceError.value) return "DeepSeek 余额，点击刷新";
+  return balanceInfo.value
+    ? `余额刷新失败：${balanceError.value}（显示上次余额，点击重试）`
+    : `余额查询失败：${balanceError.value}（点击重试）`;
+});
+
+async function fetchBalance() {
+  if (
+    !isDeepSeek.value ||
+    !props.profile.show_balance ||
+    !props.profile.has_key ||
+    balanceFetching.value
+  ) {
+    return;
+  }
+  balanceFetching.value = true;
+  try {
+    const result = await api.getDeepseekBalance(props.profile.id);
+    balanceError.value = "";
+    const info = result.balance_infos[0];
+    if (info) {
+      balanceInfo.value = info;
+      balanceInfoCache.set(props.profile.id, info);
+      void api.setProfileBalance(props.profile.id, info);
+    }
+  } catch (error) {
+    balanceError.value = String(error);
+  } finally {
+    balanceFetching.value = false;
+  }
+}
+
+onMounted(() => {
+  if (!isDeepSeek.value) return;
+  // 先取缓存数字（模块缓存 > 应用状态缓存），保证首次渲染就有数字
+  balanceInfo.value =
+    balanceInfoCache.get(props.profile.id) ??
+    props.balanceCache?.[props.profile.id] ??
+    null;
+  void fetchBalance();
+});
+
+// 看 APP 时刷新余额（窗口激活即拉取，不轮询）
+useWindowActivation({ onActive: () => void fetchBalance() });
+
+// 预设级开关从关到开（编辑页保存后返回）时补拉一次余额
+watch(
+  () => props.profile.show_balance,
+  (enabled) => {
+    if (enabled) void fetchBalance();
+  },
+);
 
 watch(
   () => props.profile.id,
@@ -108,6 +181,21 @@ async function testConnection() {
           <span class="rounded-full border border-current/15 bg-black/4 px-1 py-px leading-none dark:bg-white/8">{{ profile.provider ?? "官方" }}</span>
           <span class="rounded-full border border-current/15 bg-black/4 px-1 py-px leading-none dark:bg-white/8">{{ profile.reasoning_effort ?? "默认" }}</span>
           <button
+            v-if="isDeepSeek && profile.show_balance"
+            type="button"
+            class="flex items-center gap-1 rounded-full border border-current/15 bg-black/4 px-1.5 py-px leading-none dark:bg-white/8"
+            :class="balanceError && !balanceInfo ? 'text-[#ff3b30]/80' : 'text-[#007aff]'"
+            :title="balanceTitle"
+            :aria-label="'DeepSeek 余额'"
+            @click.stop="fetchBalance"
+          >
+            <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="6" width="20" height="12" rx="2" />
+              <path d="M2 10h20" />
+            </svg>
+            {{ balanceText }}
+          </button>
+          <button
             v-if="profile.admin_url"
             type="button"
             class="grid h-4 w-4 place-items-center rounded-full text-[#007aff] transition-colors hover:bg-[#007aff]/10"
@@ -145,10 +233,7 @@ async function testConnection() {
         :aria-label="'测试连通性'"
         @click="testConnection"
       >
-        <svg v-if="testing" class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="2.5" />
-          <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-        </svg>
+        <LoadingSpinner v-if="testing" size="md" />
         <svg v-else class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M4.5 11.5a13 13 0 0 1 15 0" />
           <path d="M7.5 15a8.5 8.5 0 0 1 9 0" />

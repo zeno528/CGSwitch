@@ -5,6 +5,8 @@ import type {
   AuthStatus,
   CodexAppStatus,
   DatabaseBackupInfo,
+  DeepSeekBalance,
+  DeepSeekBalanceInfo,
   DeviceCodeResponse,
   ManagedAccount,
   ProfileDetail,
@@ -28,6 +30,7 @@ const webProfiles: ProfileSummary[] = [
     reasoning_effort: "high",
     has_key: true,
     admin_url: "https://open.bigmodel.cn/console",
+    show_balance: true,
     icon: "zhipu",
     created_at: "2026-08-15 10:00:00",
     updated_at: "2026-08-15 10:00:00",
@@ -41,6 +44,7 @@ const webProfiles: ProfileSummary[] = [
     reasoning_effort: "low",
     has_key: false,
     admin_url: null,
+    show_balance: true,
     icon: null,
     created_at: "2026-08-15 10:01:00",
     updated_at: "2026-08-15 10:01:00",
@@ -54,6 +58,7 @@ const webProfiles: ProfileSummary[] = [
     reasoning_effort: "medium",
     has_key: false,
     admin_url: null,
+    show_balance: true,
     icon: "openai-chatgpt",
     created_at: "2026-08-15 10:02:00",
     updated_at: "2026-08-15 10:02:00",
@@ -136,6 +141,7 @@ function webProfileDetail(id: string): ProfileDetail {
     raw_catalog: detail?.raw_catalog ?? null,
     raw_auth: detail?.raw_auth ?? null,
     admin_url: profile.admin_url,
+    show_balance: profile.show_balance,
     updated_at: profile.updated_at,
   };
 }
@@ -151,11 +157,14 @@ let webSettings: Settings = {
 };
 
 let webBackups: DatabaseBackupInfo[] = [];
+// 与后端一致：激活状态只由“应用/捕获”显式建立，添加预设不激活
+let webActiveProfileId: string | null = null;
+const webBalanceCache: Record<string, DeepSeekBalanceInfo> = {};
 
 function webState(): AppState {
   return {
     profiles: [...webProfiles],
-    active_profile_id: webProfiles[0]?.id ?? null,
+    active_profile_id: webActiveProfileId,
     codex: {
       running: true,
       display_path: "OpenAI.Codex_2p2nqsd0c76g0!App",
@@ -163,6 +172,7 @@ function webState(): AppState {
     },
     settings: { ...webSettings },
     paths: webPaths,
+    balance_cache: { ...webBalanceCache },
   };
 }
 
@@ -185,11 +195,14 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
         reasoning_effort: "high",
         has_key: true,
         admin_url: null,
+        show_balance: true,
         icon: null,
         created_at: now,
         updated_at: now,
       };
       webProfiles.unshift(profile);
+      // 捕获即建立“当前 live = 该预设”的显式关联
+      webActiveProfileId = profile.id;
       return profile as T;
     }
     case "add_builtin_profile": {
@@ -201,7 +214,6 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       const baseUrl = preset.provider ? rawBaseUrl || preset.base_url : null;
       const rawAdminUrl = String(args?.adminUrl ?? "");
       const adminUrl = rawAdminUrl || preset.admin_url;
-      if (preset.provider && !rawKey.trim()) throw new Error("请先填写 API 密钥");
       const now = new Date().toISOString();
       const profile: ProfileSummary = {
         id: `profile-${Date.now()}`,
@@ -210,8 +222,9 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
         model: preset.model,
         provider: preset.provider,
         reasoning_effort: preset.model_values.model_reasoning_effort?.replace(/^"|"$/g, "") ?? null,
-        has_key: Boolean(preset.provider),
+        has_key: preset.provider ? Boolean(rawKey.trim()) : false,
         admin_url: adminUrl,
+        show_balance: true,
         icon: preset.icon,
         created_at: now,
         updated_at: now,
@@ -237,6 +250,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
         has_key: Boolean(args?.apiKey),
         admin_url:
           typeof args?.adminUrl === "string" && args.adminUrl ? args.adminUrl : null,
+        show_balance: true,
         icon: "custom",
         created_at: now,
         updated_at: now,
@@ -272,6 +286,26 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       await new Promise((resolve) => setTimeout(resolve, 300));
       return { ok: true, latency_ms: 87, status: 200, error: null } as T;
     }
+    case "get_deepseek_balance": {
+      const profile = webProfiles.find((item) => item.id === args?.id);
+      if (!profile) throw new Error("配置预设不存在");
+      if (profile.provider !== "deepseek") {
+        throw new Error("该预设不是 DeepSeek 供应商，无法查询余额");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      return {
+        is_available: true,
+        balance_infos: [
+          {
+            currency: "CNY",
+            total_balance: "110.00",
+            granted_balance: "10.00",
+            topped_up_balance: "100.00",
+          },
+        ],
+        latency_ms: 210,
+      } as T;
+    }
     case "export_database": {
       const name = `cgswitch-export-${Date.now()}.db`;
       webBackups.unshift({ name, size_bytes: 20480 });
@@ -297,6 +331,17 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     case "set_profile_icon": {
       const profile = webProfiles.find((item) => item.id === args?.id);
       if (profile) profile.icon = (args?.icon as string | null) ?? null;
+      return undefined as T;
+    }
+    case "set_profile_show_balance": {
+      const profile = webProfiles.find((item) => item.id === args?.id);
+      if (profile) profile.show_balance = Boolean(args?.enabled);
+      return undefined as T;
+    }
+    case "set_profile_balance": {
+      if (typeof args?.id === "string" && args?.info) {
+        webBalanceCache[args.id] = args.info as DeepSeekBalanceInfo;
+      }
       return undefined as T;
     }
     case "duplicate_profile": {
@@ -345,6 +390,9 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       return undefined as T;
     }
     case "apply_profile":
+      webActiveProfileId = typeof args?.id === "string" ? args.id : null;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return undefined as T;
     case "restart_codex":
       await new Promise((resolve) => setTimeout(resolve, 500));
       return undefined as T;
@@ -409,6 +457,8 @@ export const api = {
   getBuiltinCatalog: (kind: string) => call<string | null>("get_builtin_catalog", { kind }),
   testProfileConnection: (id: string, baseUrl?: string, apiKey?: string) =>
     call<ProfileConnectionResult>("test_profile_connection", { id, baseUrl, apiKey }),
+  getDeepseekBalance: (id: string) =>
+    call<DeepSeekBalance>("get_deepseek_balance", { id }),
   exportDatabase: () => call<string>("export_database"),
   exportDatabaseTo: (path: string) => call<string>("export_database_to", { path }),
   importDatabase: (path: string) => call<void>("import_database", { path }),
@@ -417,6 +467,10 @@ export const api = {
   deleteDatabaseBackup: (name: string) => call<void>("delete_database_backup", { name }),
   renameProfile: (id: string, name: string) => call<void>("rename_profile", { id, name }),
   setProfileIcon: (id: string, icon: string | null) => call<void>("set_profile_icon", { id, icon }),
+  setProfileShowBalance: (id: string, enabled: boolean) =>
+    call<void>("set_profile_show_balance", { id, enabled }),
+  setProfileBalance: (id: string, info: DeepSeekBalanceInfo) =>
+    call<void>("set_profile_balance", { id, info }),
   setProfileAccount: (id: string, accountId: string | null) =>
     call<void>("set_profile_account", { id, accountId }),
   duplicateProfile: (id: string) => call<ProfileSummary>("duplicate_profile", { id }),

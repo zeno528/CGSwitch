@@ -89,6 +89,12 @@ function openRename(profile: ProfileSummary) {
   modalVisible.value = true;
 }
 
+function closeEdit() {
+  editingProfile.value = null;
+  // 编辑页可能读取过外部修改后的 live 配置，返回列表时重新拉取状态
+  emit("refresh");
+}
+
 function blurActiveOnModalLeave() {
   (document.activeElement as HTMLElement | null)?.blur?.();
 }
@@ -99,7 +105,7 @@ async function submitModal() {
   try {
     if (modalMode.value === "capture") {
       await api.captureProfile(profileName.value);
-      message.success("配置预设已捕获");
+      message.success("已捕获并设为使用中");
     } else if (modalProfile.value) {
       await api.renameProfile(modalProfile.value.id, profileName.value);
       message.success("配置预设已重命名");
@@ -213,7 +219,7 @@ onBeforeUnmount(() => {
   <ProfileEdit
     v-if="editingProfile"
     :profile="editingProfile"
-    @back="editingProfile = null"
+    @back="closeEdit"
     @changed="emit('refresh')"
   />
   <ProfileEdit
@@ -302,6 +308,7 @@ onBeforeUnmount(() => {
             :subscription-authed="subscriptionAuthed"
             :subscription-account="subscriptionAccount"
             :bound-account="boundAccountLogin(profile)"
+            :balance-cache="state.balance_cache"
             @apply="applyProfile(profile)"
             @rename="openRename(profile)"
             @edit="editingProfile = profile"

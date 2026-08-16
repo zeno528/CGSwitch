@@ -75,8 +75,10 @@ impl BuiltinTemplate {
         let Some(placeholder) = self.placeholder else {
             return Ok(bytes);
         };
-        let start = find_subslice(&bytes, placeholder)
-            .ok_or_else(|| app_err!("{} 模板缺少密钥占位符", self.name))?;
+        let Some(start) = find_subslice(&bytes, placeholder) else {
+            // 编辑结果里已没有占位符（例如用户直接写入了真实密钥）：原样保留，不报错
+            return Ok(bytes);
+        };
         let mut bytes = bytes;
         bytes.splice(
             start..start + placeholder.len(),

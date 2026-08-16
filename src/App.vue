@@ -10,6 +10,7 @@ import {
 import ProfilesView from "./views/ProfilesView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import { api, isTauri } from "./api";
+import { useWindowActivation } from "./composables/useWindowActivation";
 import { themeOverrides } from "./theme";
 import type { AppState, Settings } from "./types";
 import version from "../VERSION?raw";
@@ -137,17 +138,20 @@ onMounted(async () => {
   updateSidebarIndicator();
   await refresh();
   syncCodexPolling();
-  document.addEventListener("visibilitychange", syncCodexPolling);
-  window.addEventListener("blur", stopCodexPolling);
-  window.addEventListener("focus", syncCodexPolling);
 });
 
 onBeforeUnmount(() => {
   stopCodexPolling();
-  document.removeEventListener("visibilitychange", syncCodexPolling);
-  window.removeEventListener("blur", stopCodexPolling);
-  window.removeEventListener("focus", syncCodexPolling);
   media.removeEventListener("change", mediaListener);
+});
+
+// 窗口激活（含从托盘唤出）即同步一次 live → 数据库/卡片；失焦/隐藏时暂停 Codex 状态轮询
+useWindowActivation({
+  onActive: () => {
+    void refresh();
+    syncCodexPolling();
+  },
+  onInactive: () => stopCodexPolling(),
 });
 </script>
 

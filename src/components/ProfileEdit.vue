@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref, watch } from "vue";
-import { NButton, NInput, NSelect, useMessage } from "naive-ui";
+import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from "vue";
+import { NButton, NInput, NSelect, NSwitch, useMessage } from "naive-ui";
+import LoadingSpinner from "./LoadingSpinner.vue";
 import ProfileIconEdit from "./ProfileIconEdit.vue";
 import ProfileIconTile from "./ProfileIconTile.vue";
 import { api } from "../api";
@@ -19,6 +20,106 @@ const props = defineProps<{
   profile: ProfileSummary | null;
   create?: boolean;
 }>();
+
+// 读取 [model_providers.*] 段里的 base_url / 密钥，供编辑器回填表单
+function readProviderFields(text: string): { base_url: string; experimental_bearer_token: string } {
+  const values = { base_url: "", experimental_bearer_token: "" };
+  const lines = text.split("\n");
+  let providerId: string | null = null;
+  for (const line of lines) {
+    const m = /^model_provider\s*=\s*"([^"]+)"/.exec(line.trim());
+    if (m) {
+      providerId = m[1];
+      break;
+    }
+  }
+  let inProvider = false;
+  let done = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^\[.+\]$/.test(trimmed)) {
+      const section = /^\[model_providers\.(.+)\]$/.exec(trimmed);
+      if (section && !done) {
+        // 只处理 model_provider 指向的段；无 model_provider 时退化为第一段
+        inProvider = providerId === null || section[1] === providerId;
+        if (inProvider) done = true;
+      } else {
+        inProvider = false;
+      }
+      continue;
+    }
+    if (!inProvider) continue;
+    const m =
+      /^(base_url|experimental_bearer_token)\s*=\s*(?:(['"])(.*?)\2|([^\s]+))/.exec(trimmed);
+    if (!m) continue;
+    const field = m[1] as "base_url" | "experimental_bearer_token";
+    values[field] = m[3] ?? m[4] ?? "";
+  }
+  return values;
+}
+
+// 把表单里的地址/密钥写回编辑器 provider 段；缺失的行在段尾补上
+function patchProviderFields(text: string, baseUrl: string, apiKey: string): string {
+  const escape = (value: string, quote: string) =>
+    value.replace(/\\/g, "\\\\").replace(new RegExp(quote, "g"), "\\" + quote);
+  const base = baseUrl.trim();
+  const key = apiKey.trim();
+  const lines = text.split("\n");
+  let providerId: string | null = null;
+  for (const line of lines) {
+    const m = /^model_provider\s*=\s*"([^"]+)"/.exec(line.trim());
+    if (m) {
+      providerId = m[1];
+      break;
+    }
+  }
+  let inProvider = false;
+  let done = false;
+  let replacedBase = false;
+  let replacedKey = false;
+  const out: string[] = [];
+  const flushMissing = () => {
+    if (!inProvider) return;
+    if (base && !replacedBase) out.push(`base_url = "${escape(base, '"')}"`);
+    if (key && !replacedKey) out.push(`experimental_bearer_token = "${escape(key, '"')}"`);
+    inProvider = false;
+  };
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^\[.+\]$/.test(trimmed)) {
+      flushMissing();
+      const section = /^\[model_providers\.(.+)\]$/.exec(trimmed);
+      if (section && !done) {
+        inProvider = providerId === null || section[1] === providerId;
+        if (inProvider) done = true;
+      } else {
+        inProvider = false;
+      }
+      replacedBase = false;
+      replacedKey = false;
+      out.push(line);
+      continue;
+    }
+    if (!inProvider) {
+      out.push(line);
+      continue;
+    }
+    const m = /^(base_url|experimental_bearer_token)\s*=\s*(['"]?)(.*?)\2\s*$/.exec(trimmed);
+    if (!m) {
+      out.push(line);
+      continue;
+    }
+    const field = m[1];
+    const quote = m[2] || '"';
+    const value = field === "base_url" ? base : key;
+    const indent = line.slice(0, line.length - line.trimStart().length);
+    if (field === "base_url") replacedBase = true;
+    else replacedKey = true;
+    out.push(`${indent}${field} = ${quote}${escape(value, quote)}${quote}`);
+  }
+  flushMissing();
+  return out.join("\n");
+}
 
 const emit = defineEmits<{
   back: [];
@@ -43,20 +144,31 @@ const presetKind = ref("");
 const configText = ref("");
 const configTouched = ref(false);
 const catalogTouched = ref(false);
-let configBaselineSet = false;
 const catalogText = ref("");
 const authText = ref("");
 const configInitial = ref("");
 const catalogInitial = ref("");
 const authInitial = ref("");
+const showBalance = ref(true);
+const savingBalance = ref(false);
+// 初始数据装载完成后才允许双向同步，避免装载时产生假差异
+let initialized = false;
 
 const creating = computed(() => props.create === true);
 const selectedPreset = computed(
   () => builtinPresets.find((preset) => preset.kind === presetKind.value) ?? null,
 );
-const configDirty = computed(() => configText.value !== configInitial.value);
-const catalogDirty = computed(() => catalogText.value !== catalogInitial.value);
-const authDirty = computed(() => authText.value !== authInitial.value);
+// 编辑器会把 CRLF 规范成 LF，比较时统一换行避免误报“未保存”
+const normalizeNewlines = (text: string) => text.replace(/\r\n/g, "\n");
+const configDirty = computed(
+  () => normalizeNewlines(configText.value) !== normalizeNewlines(configInitial.value),
+);
+const catalogDirty = computed(
+  () => normalizeNewlines(catalogText.value) !== normalizeNewlines(catalogInitial.value),
+);
+const authDirty = computed(
+  () => normalizeNewlines(authText.value) !== normalizeNewlines(authInitial.value),
+);
 const showProviderFields = computed(() =>
   creating.value
     ? Boolean(selectedPreset.value?.base_url)
@@ -141,8 +253,7 @@ const canSave = computed(() => {
   if (!creating.value) return true;
   if (isCustom.value) return Boolean(configText.value.trim());
   const preset = selectedPreset.value;
-  if (!preset) return false;
-  return !preset.base_url || Boolean(apiKey.value.trim());
+  return Boolean(preset);
 });
 
 function selectPreset(kind: string) {
@@ -161,19 +272,19 @@ function selectPreset(kind: string) {
     authInitial.value = customAuthTemplate;
     configTouched.value = false;
     catalogTouched.value = false;
-    configBaselineSet = false;
     activeTab.value = "config";
     return;
   }
   const preset = builtinPresets.find((item) => item.kind === kind);
   if (!preset) return;
   configTouched.value = false;
-  configBaselineSet = false;
   presetKind.value = kind;
   name.value = preset.name;
   baseUrl.value = preset.base_url;
   adminUrl.value = preset.admin_url ?? "";
   apiKey.value = "";
+  configText.value = patchProviderFields(preset.fragment, baseUrl.value, apiKey.value);
+  configInitial.value = configText.value;
   selectedIcon.value = preset.icon;
   activeTab.value = "config";
   if (kind === "chatgpt") loadAuthStatus();
@@ -250,18 +361,23 @@ watch(presetKind, async (kind) => {
   }
 });
 
-// 创建模式：配置预览跟随表单字段刷新，用户手动改动后停止自动刷新
-watch(liveConfigFragment, (fragment) => {
-  if (!creating.value) return;
-  if (!configTouched.value) configText.value = fragment;
-  // 首次填充时建立“未保存”基准：此后任何改动（字段或编辑器）才显示圆点
-  if (!configBaselineSet) {
-    configBaselineSet = true;
-    configInitial.value = fragment;
-  }
+// 表单地址/密钥 → 编辑器 provider 段（所见即所得，始终同步）
+watch([baseUrl, apiKey], () => {
+  if (!initialized) return;
+  const next = patchProviderFields(configText.value, baseUrl.value, apiKey.value);
+  if (next !== configText.value) configText.value = next;
 });
 
+// 编辑器 provider 段 → 表单地址/密钥（所见即所得，始终同步）
 watch(configText, (text) => {
+  if (!initialized) return;
+  const fields = readProviderFields(text);
+  if (fields.base_url !== baseUrl.value) baseUrl.value = fields.base_url;
+  // 模板占位符（<你的 API Key> 等）不应当回填进输入框
+  const key = /^<.*>$/.test(fields.experimental_bearer_token)
+    ? ""
+    : fields.experimental_bearer_token;
+  if (key !== apiKey.value) apiKey.value = key;
   if (creating.value && text !== liveConfigFragment.value) {
     configTouched.value = true;
   }
@@ -275,6 +391,9 @@ onMounted(async () => {
       if (!props.profile) throw new Error("缺少预设信息");
       detail.value = await api.getProfile(props.profile.id);
       name.value = detail.value.name;
+      configText.value = detail.value.raw_config ?? detail.value.config_fragment;
+      catalogText.value = detail.value.raw_catalog ?? detail.value.catalog_content ?? "";
+      authText.value = detail.value.raw_auth ?? detail.value.auth_content ?? "";
       baseUrl.value = detail.value.base_url ?? "";
       apiKey.value = detail.value.api_key ?? "";
       adminUrl.value = detail.value.admin_url ?? "";
@@ -282,17 +401,17 @@ onMounted(async () => {
       if (detail.value.provider === null) {
         boundAccountId.value = detail.value.account_id ?? "";
       }
-      configText.value = detail.value.raw_config ?? detail.value.config_fragment;
-      catalogText.value = detail.value.raw_catalog ?? detail.value.catalog_content ?? "";
-      authText.value = detail.value.raw_auth ?? detail.value.auth_content ?? "";
       configInitial.value = configText.value;
       catalogInitial.value = catalogText.value;
       authInitial.value = authText.value;
+      showBalance.value = detail.value.show_balance;
     } catch (error) {
       loadError.value = String(error);
     }
   }
   await loadAuthStatus();
+  await nextTick();
+  initialized = true;
 });
 
 async function saveIcon(icon: string | null) {
@@ -316,6 +435,19 @@ async function saveIcon(icon: string | null) {
   }
 }
 
+async function toggleBalance(enabled: boolean) {
+  if (savingBalance.value || !props.profile) return;
+  savingBalance.value = true;
+  try {
+    await api.setProfileShowBalance(props.profile.id, enabled);
+  } catch (error) {
+    showBalance.value = !enabled;
+    message.error(String(error));
+  } finally {
+    savingBalance.value = false;
+  }
+}
+
 async function save() {
   if (saving.value) return;
   if (creating.value) {
@@ -325,10 +457,6 @@ async function save() {
     }
     if (!selectedPreset.value) {
       message.error("请先选择供应商");
-      return;
-    }
-    if (selectedPreset.value.base_url && !apiKey.value.trim()) {
-      message.error("请先填写 API 密钥");
       return;
     }
   }
@@ -387,7 +515,6 @@ async function save() {
       }
       message.success("配置预设已更新");
     }
-    emit("changed");
     emit("back");
   } catch (error) {
     message.error(String(error));
@@ -485,10 +612,7 @@ async function save() {
             :disabled="!apiKey.trim() || !baseUrl.trim()"
             @click="testConnection"
           >
-            <svg v-if="testing" class="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="2.5" />
-              <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-            </svg>
+            <LoadingSpinner v-if="testing" />
             <svg v-else class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 12h3l2-7 4 14 2-7h3" />
             </svg>
@@ -523,6 +647,13 @@ async function save() {
         </div>
         <n-input v-model:value="adminUrl" placeholder="https://console.example.com（可选）" />
       </div>
+      <div v-if="!creating && detail?.provider === 'deepseek'" class="mt-4 flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="text-sm font-semibold">余额查询</div>
+          <div class="muted mt-0.5 text-xs">窗口激活时自动刷新，点击余额手动刷新</div>
+        </div>
+        <n-switch v-model:value="showBalance" :disabled="savingBalance" @update:value="toggleBalance" />
+      </div>
     </div>
 
       <div class="apple-group mt-[var(--gap-section)] flex shrink-0 flex-col p-[var(--gap-card)]">
@@ -532,7 +663,7 @@ async function save() {
             v-for="tab in tabs"
             :key="tab.id"
             type="button"
-            class="flex h-8 items-center gap-1.5 rounded-[10px] px-3 text-[13px] transition-colors"
+            class="relative flex h-8 items-center gap-1.5 rounded-[10px] px-3 text-[13px] transition-colors"
             :class="activeTab === tab.id ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'muted hover:bg-black/5 dark:hover:bg-white/8'"
             :aria-pressed="activeTab === tab.id"
             @click="activeTab = tab.id"

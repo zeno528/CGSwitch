@@ -4,8 +4,10 @@ use crate::auth::codex_oauth::{
     AuthStatus, CodexOAuthError, CodexOAuthState, DeviceCodeResponse, ManagedAccount,
 };
 use crate::error::{app_err, AppResult};
-use crate::models::{AppState, CodexAppStatus, ProfileDetail, ProfileSummary, Settings};
-use crate::services::{AppContext, DatabaseBackupInfo, ProfileConnectionResult};
+use crate::models::{
+    AppState, CodexAppStatus, DeepSeekBalanceInfo, ProfileDetail, ProfileSummary, Settings,
+};
+use crate::services::{AppContext, DatabaseBackupInfo, DeepSeekBalance, ProfileConnectionResult};
 
 #[tauri::command]
 pub fn get_state(state: State<'_, AppContext>) -> AppResult<AppState> {
@@ -83,6 +85,14 @@ pub async fn test_profile_connection(
 }
 
 #[tauri::command]
+pub async fn get_deepseek_balance(
+    id: String,
+    state: State<'_, AppContext>,
+) -> AppResult<DeepSeekBalance> {
+    state.get_deepseek_balance(&id).await
+}
+
+#[tauri::command]
 pub fn export_database(state: State<'_, AppContext>) -> AppResult<String> {
     Ok(state.export_database()?.display().to_string())
 }
@@ -137,6 +147,24 @@ pub fn set_profile_icon(
     state: State<'_, AppContext>,
 ) -> AppResult<()> {
     state.set_profile_icon(&id, icon.as_deref())
+}
+
+#[tauri::command]
+pub fn set_profile_show_balance(
+    id: String,
+    enabled: bool,
+    state: State<'_, AppContext>,
+) -> AppResult<()> {
+    state.set_profile_show_balance(&id, enabled)
+}
+
+#[tauri::command]
+pub fn set_profile_balance(
+    id: String,
+    info: DeepSeekBalanceInfo,
+    state: State<'_, AppContext>,
+) -> AppResult<()> {
+    state.set_profile_balance(&id, &info)
 }
 
 #[tauri::command]

@@ -95,45 +95,6 @@ pub fn apply_to_document(document: &mut DocumentMut, payload: &ProfilePayload) -
     Ok(())
 }
 
-pub fn matches_profile(document: &DocumentMut, payload: &ProfilePayload) -> AppResult<bool> {
-    let current = capture_from_document(document)?;
-    if current.provider_id != payload.provider_id {
-        return Ok(false);
-    }
-
-    let mut current_values = BTreeMap::new();
-    for (key, raw) in &current.model_values {
-        current_values.insert(key.clone(), parse_value(raw)?.to_string());
-    }
-    let mut payload_values = BTreeMap::new();
-    for (key, raw) in &payload.model_values {
-        payload_values.insert(key.clone(), parse_value(raw)?.to_string());
-    }
-    if current_values != payload_values {
-        return Ok(false);
-    }
-
-    Ok(normalize_provider(&current.provider_body)? == normalize_provider(&payload.provider_body)?)
-}
-
-/// 宽松匹配：预设的模型键必须是 live 配置的子集且值一致，
-/// 允许 live 配置在使用过程中累计额外的模型键（如 model_catalog_json）。
-pub fn subset_match(document: &DocumentMut, payload: &ProfilePayload) -> AppResult<bool> {
-    let current = capture_from_document(document)?;
-    if current.provider_id != payload.provider_id {
-        return Ok(false);
-    }
-    for (key, raw) in &payload.model_values {
-        let Some(live_raw) = current.model_values.get(key) else {
-            return Ok(false);
-        };
-        if parse_value(live_raw)?.to_string() != parse_value(raw)?.to_string() {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
-
 fn is_model_key(key: &str) -> bool {
     key == "model" || (key.starts_with("model_") && key != "model_providers")
 }
@@ -142,20 +103,6 @@ fn parse_value(raw: &str) -> AppResult<Value> {
     raw.trim()
         .parse::<Value>()
         .map_err(|_| app_err!("配置预设中的模型值无效"))
-}
-
-fn normalize_provider(body: &Option<String>) -> AppResult<BTreeMap<String, String>> {
-    let Some(body) = body else {
-        return Ok(BTreeMap::new());
-    };
-    let document: DocumentMut = body
-        .parse()
-        .map_err(|_| app_err!("配置预设中的 provider 数据无效"))?;
-    Ok(document
-        .as_table()
-        .iter()
-        .map(|(key, item)| (key.to_string(), item.to_string()))
-        .collect())
 }
 
 pub fn update_provider_body(
@@ -276,7 +223,6 @@ name = "Old"
         assert!(text.contains("[mcp_servers.test]"));
         assert!(text.contains("[model_providers.Old]"));
         assert_eq!(text.matches("experimental_bearer_token").count(), 1);
-        assert!(matches_profile(&document, &payload).unwrap());
     }
 
     #[test]

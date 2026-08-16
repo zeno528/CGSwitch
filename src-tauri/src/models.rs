@@ -26,7 +26,7 @@ impl ProfileKind {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProfilePayload {
     #[serde(default)]
     pub model_values: BTreeMap<String, String>,
@@ -49,6 +49,29 @@ pub struct ProfilePayload {
     /// 模型提供方的管理后台网址（卡片显示跳转按钮）。
     #[serde(default)]
     pub admin_url: Option<String>,
+    /// 预设级开关：是否在卡片显示并自动刷新 DeepSeek 余额（默认开）。
+    #[serde(default = "default_true")]
+    pub show_balance: bool,
+}
+
+impl Default for ProfilePayload {
+    fn default() -> Self {
+        Self {
+            model_values: BTreeMap::new(),
+            provider_id: None,
+            provider_body: None,
+            builtin: None,
+            raw_config: None,
+            raw_catalog: None,
+            raw_auth: None,
+            admin_url: None,
+            show_balance: true,
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -63,9 +86,18 @@ pub struct ProfileSummary {
     /// 预设是否已配置有效 API 密钥（占位符视为未配置）
     pub has_key: bool,
     pub admin_url: Option<String>,
+    pub show_balance: bool,
     pub icon: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeepSeekBalanceInfo {
+    pub currency: String,
+    pub total_balance: String,
+    pub granted_balance: String,
+    pub topped_up_balance: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -86,6 +118,7 @@ pub struct ProfileDetail {
     pub raw_catalog: Option<String>,
     pub raw_auth: Option<String>,
     pub admin_url: Option<String>,
+    pub show_balance: bool,
     pub updated_at: String,
 }
 
@@ -149,4 +182,6 @@ pub struct AppState {
     pub codex: CodexAppStatus,
     pub settings: Settings,
     pub paths: Vec<PathInfo>,
+    /// 预设级余额缓存（上次成功查询结果），保证卡片静默显示、切换不闪烁。
+    pub balance_cache: std::collections::BTreeMap<String, DeepSeekBalanceInfo>,
 }

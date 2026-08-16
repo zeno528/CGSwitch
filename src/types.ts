@@ -8,6 +8,8 @@ export interface ProfileSummary {
   reasoning_effort: string | null;
   has_key: boolean;
   admin_url: string | null;
+  /** 预设级开关：是否在卡片显示并自动刷新 DeepSeek 余额。 */
+  show_balance: boolean;
   icon: string | null;
   created_at: string;
   updated_at: string;
@@ -33,6 +35,7 @@ export interface ProfileDetail {
   /** 预设自己保存的 auth.json 原文。 */
   raw_auth: string | null;
   admin_url: string | null;
+  show_balance: boolean;
   updated_at: string;
 }
 
@@ -41,6 +44,19 @@ export interface ProfileConnectionResult {
   latency_ms: number | null;
   status: number | null;
   error: string | null;
+}
+
+export interface DeepSeekBalanceInfo {
+  currency: string;
+  total_balance: string;
+  granted_balance: string;
+  topped_up_balance: string;
+}
+
+export interface DeepSeekBalance {
+  is_available: boolean;
+  balance_infos: DeepSeekBalanceInfo[];
+  latency_ms: number | null;
 }
 
 export interface DatabaseBackupInfo {
@@ -96,6 +112,8 @@ export interface AppState {
   codex: CodexAppStatus;
   settings: Settings;
   paths: PathInfo[];
+  /** 预设级余额缓存（上次成功查询结果），保证卡片静默显示不闪烁。 */
+  balance_cache: Record<string, DeepSeekBalanceInfo>;
 }
 
 export type RestartStage = "idle" | "stopping" | "waiting" | "launching" | "success" | "error";
