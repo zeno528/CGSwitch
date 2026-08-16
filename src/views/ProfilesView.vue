@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   NButton,
   NEmpty,
@@ -59,6 +59,22 @@ const stageText = computed(() => {
     error: "重启失败",
   };
   return values[restartStage.value];
+});
+
+let restartCollapseTimer: ReturnType<typeof setTimeout> | undefined;
+
+watch(restartStage, (stage) => {
+  if (restartCollapseTimer !== undefined) {
+    clearTimeout(restartCollapseTimer);
+    restartCollapseTimer = undefined;
+  }
+  if (stage === "success") {
+    // 进度跑完停留片刻让用户看到“重启成功”，再自动收缩回空闲
+    restartCollapseTimer = setTimeout(() => {
+      restartStage.value = "idle";
+      restartCollapseTimer = undefined;
+    }, 1200);
+  }
 });
 
 function openCapture() {
@@ -176,6 +192,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unlisten?.();
+  if (restartCollapseTimer !== undefined) clearTimeout(restartCollapseTimer);
 });
 </script>
 
