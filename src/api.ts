@@ -4,6 +4,7 @@ import type {
   AppState,
   AuthStatus,
   CodexAppStatus,
+  DatabaseBackupInfo,
   DeviceCodeResponse,
   ManagedAccount,
   ProfileDetail,
@@ -135,6 +136,8 @@ let webSettings: Settings = {
   minimize_to_tray: false,
 };
 
+let webBackups: DatabaseBackupInfo[] = [];
+
 function webState(): AppState {
   return {
     profiles: [...webProfiles],
@@ -214,6 +217,23 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       await new Promise((resolve) => setTimeout(resolve, 300));
       return { ok: true, latency_ms: 87, status: 200, error: null } as T;
     }
+    case "export_database": {
+      const name = `switchgpt-export-${Date.now()}.db`;
+      webBackups.unshift({ name, size_bytes: 20480 });
+      return `C:\\Users\\<user>\\.switchgpt\\backups\\database\\${name}` as T;
+    }
+    case "export_database_to":
+      return String(args?.path ?? "") as T;
+    case "import_database":
+      return undefined as T;
+    case "list_database_backups":
+      return [...webBackups] as T;
+    case "restore_database":
+      return undefined as T;
+    case "delete_database_backup": {
+      webBackups = webBackups.filter((backup) => backup.name !== args?.name);
+      return undefined as T;
+    }
     case "rename_profile": {
       const profile = webProfiles.find((item) => item.id === args?.id);
       if (profile) profile.name = String(args?.name ?? profile.name);
@@ -275,6 +295,12 @@ export const api = {
   getBuiltinCatalog: (kind: string) => call<string | null>("get_builtin_catalog", { kind }),
   testProfileConnection: (id: string) =>
     call<ProfileConnectionResult>("test_profile_connection", { id }),
+  exportDatabase: () => call<string>("export_database"),
+  exportDatabaseTo: (path: string) => call<string>("export_database_to", { path }),
+  importDatabase: (path: string) => call<void>("import_database", { path }),
+  listDatabaseBackups: () => call<DatabaseBackupInfo[]>("list_database_backups"),
+  restoreDatabase: (name: string) => call<void>("restore_database", { name }),
+  deleteDatabaseBackup: (name: string) => call<void>("delete_database_backup", { name }),
   renameProfile: (id: string, name: string) => call<void>("rename_profile", { id, name }),
   setProfileIcon: (id: string, icon: string | null) => call<void>("set_profile_icon", { id, icon }),
   getProfile: (id: string) => call<ProfileDetail>("get_profile", { id }),

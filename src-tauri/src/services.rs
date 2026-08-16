@@ -1,4 +1,5 @@
-use std::{path::Path, sync::Mutex};
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use tauri::{AppHandle, Emitter};
 
@@ -25,6 +26,13 @@ pub struct ProfileConnectionResult {
     pub latency_ms: Option<u128>,
     pub status: Option<u16>,
     pub error: Option<String>,
+}
+
+/// 数据库备份文件信息
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DatabaseBackupInfo {
+    pub name: String,
+    pub size_bytes: u64,
 }
 
 fn parse_provider_detail(body: &str) -> AppResult<ProviderDetail> {
@@ -305,6 +313,113 @@ impl AppContext {
                 })
             }
         }
+    }
+
+    pub fn export_database(&self) -> AppResult<PathBuf> {
+        let directory = &self.paths.database_backup;
+        std::fs::create_dir_all(directory)
+            .map_err(|error| app_err!("无法创建备份目录: {error}"))?;
+        let name = format!("switchgpt-export-{}.db", now_ms());
+        let target = directory.join(&name);
+        self.database.export_database(&target)?;
+        prune_database_backups(directory, 20);
+        self.database.record_event(
+            None,
+            "export",
+            "success",
+            Some("database exported"),
+            &now_ms().to_string(),
+        )?;
+        Ok(target)
+    }
+
+    /// 导出到用户选择的路径（保存对话框指定）。
+    pub fn export_database_to(&self, path: &str) -> AppResult<PathBuf> {
+        let target = PathBuf::from(path);
+        if target.extension().and_then(|ext| ext.to_str()) != Some("db") {
+            return Err(app_err!("备份文件扩展名必须是 .db"));
+        }
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| app_err!("无法创建导出目录: {error}"))?;
+        }
+        if target.exists() {
+            std::fs::remove_file(&target)
+                .map_err(|error| app_err!("无法覆盖已有备份文件: {error}"))?;
+        }
+        self.database.export_database(&target)?;
+        Ok(target)
+    }
+
+    /// 从用户选择的备份文件导入并恢复。
+    pub fn import_database(&self, path: &str) -> AppResult<()> {
+        let source = PathBuf::from(path);
+        let canonical = source
+            .canonicalize()
+            .map_err(|_| app_err!("备份文件不存在：{path}"))?;
+        let live = self
+            .paths
+            .database
+            .canonicalize()
+            .unwrap_or_else(|_| self.paths.database.clone());
+        if canonical == live {
+            return Err(app_err!("不能导入当前正在使用的数据库文件"));
+        }
+        self.database.restore_from_backup(&canonical)?;
+        self.database.record_event(
+            None,
+            "import",
+            "success",
+            Some("database imported"),
+            &now_ms().to_string(),
+        )?;
+        Ok(())
+    }
+
+    pub fn list_database_backups(&self) -> AppResult<Vec<DatabaseBackupInfo>> {
+        let directory = &self.paths.database_backup;
+        let mut backups = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(directory) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if !(name.starts_with("switchgpt-export-") && name.ends_with(".db")) {
+                    continue;
+                }
+                let size_bytes = entry.metadata().map(|metadata| metadata.len()).unwrap_or(0);
+                backups.push(DatabaseBackupInfo { name, size_bytes });
+            }
+        }
+        backups.sort_by(|left, right| right.name.cmp(&left.name));
+        Ok(backups)
+    }
+
+    pub fn restore_database(&self, name: &str) -> AppResult<()> {
+        let path = self.database_backup_path(name)?;
+        self.database.restore_from_backup(&path)?;
+        self.database.record_event(
+            None,
+            "restore",
+            "success",
+            Some("database restored"),
+            &now_ms().to_string(),
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_database_backup(&self, name: &str) -> AppResult<()> {
+        let path = self.database_backup_path(name)?;
+        std::fs::remove_file(&path).map_err(|error| app_err!("删除备份失败: {error}"))?;
+        Ok(())
+    }
+
+    fn database_backup_path(&self, name: &str) -> AppResult<PathBuf> {
+        let valid = name.starts_with("switchgpt-export-")
+            && name.ends_with(".db")
+            && Path::new(name).file_name().and_then(|file| file.to_str()) == Some(name);
+        if !valid {
+            return Err(app_err!("无效的备份文件名"));
+        }
+        Ok(self.paths.database_backup.join(name))
     }
 
     pub fn rename_profile(&self, id: &str, name: &str) -> AppResult<()> {
@@ -785,6 +900,26 @@ fn validated_icon(icon: Option<&str>) -> AppResult<Option<String>> {
             Ok(value.to_string())
         })
         .transpose()
+}
+
+fn prune_database_backups(directory: &Path, keep: usize) {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return;
+    };
+    let mut backups: Vec<PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("switchgpt-export-") && name.ends_with(".db"))
+        })
+        .collect();
+    backups.sort();
+    while backups.len() > keep {
+        let oldest = backups.remove(0);
+        let _ = std::fs::remove_file(oldest);
+    }
 }
 
 fn emit(app: &AppHandle, stage: &str, message: Option<&str>) {
@@ -1335,6 +1470,69 @@ experimental_bearer_token = "old-key"
             state.active_profile_id.as_deref(),
             Some(profile.id.as_str())
         );
+    }
+
+    #[test]
+    fn export_and_restore_database_round_trip() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(paths.codex_config(), "model = \"glm-5.3\"\n").unwrap();
+
+        let context = AppContext::new(paths.clone()).unwrap();
+        let profile = context.capture_profile("A").unwrap();
+
+        let exported = context.export_database().unwrap();
+        assert!(exported.exists());
+        let name = exported.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(context
+            .list_database_backups()
+            .unwrap()
+            .iter()
+            .any(|backup| backup.name == name));
+
+        // 把当前库改乱，再从备份恢复
+        context.database.delete_profile(&profile.id).unwrap();
+        assert!(context.database.profiles().unwrap().is_empty());
+        context.restore_database(&name).unwrap();
+        assert_eq!(context.database.profiles().unwrap().len(), 1);
+
+        // 非法文件名拒绝
+        assert!(context.restore_database("../evil.db").is_err());
+        assert!(context.delete_database_backup("..\\evil.db").is_err());
+        assert!(context
+            .restore_database("switchgpt-export-nothere.db")
+            .is_err());
+    }
+
+    #[test]
+    fn export_to_path_and_import_round_trip() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(paths.codex_config(), "model = \"glm-5.3\"\n").unwrap();
+
+        let context = AppContext::new(paths.clone()).unwrap();
+        let profile = context.capture_profile("A").unwrap();
+
+        let target = home.path().join("custom-backup.db");
+        let exported = context
+            .export_database_to(target.to_str().unwrap())
+            .unwrap();
+        assert!(exported.exists());
+
+        context.database.delete_profile(&profile.id).unwrap();
+        assert!(context.database.profiles().unwrap().is_empty());
+        context.import_database(target.to_str().unwrap()).unwrap();
+        assert_eq!(context.database.profiles().unwrap().len(), 1);
+
+        // 非法扩展名与导入当前库都拒绝
+        assert!(context.export_database_to("backup.txt").is_err());
+        assert!(context
+            .import_database(paths.database.to_str().unwrap())
+            .is_err());
     }
 
     #[test]

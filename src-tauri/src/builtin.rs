@@ -133,11 +133,11 @@ mod tests {
     #[test]
     fn embedded_catalogs_keep_original_size_and_line_endings() {
         assert_eq!(DEEPSEEK_MODELS.len(), 76215);
-        assert_eq!(count(&DEEPSEEK_MODELS, b"\r\n"), 137);
+        assert_eq!(count(DEEPSEEK_MODELS, b"\r\n"), 137);
         assert_eq!(ZHIPU_MODELS.len(), 2543);
-        assert_eq!(count(&ZHIPU_MODELS, b"\r\n"), 72);
+        assert_eq!(count(ZHIPU_MODELS, b"\r\n"), 72);
         assert_eq!(MINIMAX_CATALOG.len(), 953);
-        assert_eq!(count(&MINIMAX_CATALOG, b"\r\n"), 25);
+        assert_eq!(count(MINIMAX_CATALOG, b"\r\n"), 25);
     }
 
     #[test]

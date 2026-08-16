@@ -31,6 +31,11 @@ export interface ProfileConnectionResult {
   error: string | null;
 }
 
+export interface DatabaseBackupInfo {
+  name: string;
+  size_bytes: number;
+}
+
 export interface DeviceCodeResponse {
   device_code: string;
   user_code: string;

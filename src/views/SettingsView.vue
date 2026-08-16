@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import {
   NButton,
   NDivider,
@@ -10,27 +11,147 @@ import {
   NList,
   NListItem,
   NSwitch,
+  useDialog,
   useMessage,
 } from "naive-ui";
-import { api } from "../api";
+import { api, isTauri } from "../api";
 import ChatGPTAccount from "../components/ChatGPTAccount.vue";
 import SegmentedControl from "../components/SegmentedControl.vue";
-import type { AppState, PathInfo, Settings } from "../types";
+import type { AppState, DatabaseBackupInfo, PathInfo, Settings } from "../types";
 
 const props = defineProps<{ state: AppState }>();
 const emit = defineEmits<{ refresh: []; saved: [settings: Settings]; previewTheme: [theme: Settings["theme"]] }>();
 const message = useMessage();
+const dialog = useDialog();
 
 const form = reactive<Settings>({ ...props.state.settings });
 const saving = ref(false);
 const savingGeneral = ref(false);
 const openingPath = ref<string | null>(null);
-const section = ref<"general" | "codex" | "account" | "about">("general");
+const section = ref<"general" | "codex" | "account" | "about" | "advanced">("general");
+const backups = ref<DatabaseBackupInfo[]>([]);
+const exporting = ref(false);
+const importing = ref(false);
 const themeOptions: { label: string; value: Settings["theme"] }[] = [
   { label: "浅色", value: "light" },
   { label: "深色", value: "dark" },
   { label: "跟随系统", value: "system" },
 ];
+
+async function loadBackups() {
+  try {
+    backups.value = await api.listDatabaseBackups();
+  } catch {
+    backups.value = [];
+  }
+}
+
+async function exportBackupToFile() {
+  if (exporting.value) return;
+  try {
+    let target: string | null = null;
+    if (isTauri) {
+      const picked = await saveDialog({
+        title: "导出数据库备份",
+        defaultPath: `switchgpt-export-${Date.now()}.db`,
+        filters: [{ name: "SQLite 数据库", extensions: ["db"] }],
+      });
+      target = typeof picked === "string" ? picked : null;
+    }
+    if (!target && isTauri) return;
+    exporting.value = true;
+    const path = isTauri
+      ? await api.exportDatabaseTo(target!)
+      : await api.exportDatabase();
+    message.success(`数据库已导出：${path}`);
+    await loadBackups();
+  } catch (error) {
+    message.error(String(error));
+  } finally {
+    exporting.value = false;
+  }
+}
+
+async function importBackupFromFile() {
+  if (importing.value) return;
+  try {
+    let picked: string | null = null;
+    if (isTauri) {
+      const result = await openDialog({
+        title: "选择数据库备份",
+        multiple: false,
+        filters: [{ name: "SQLite 数据库", extensions: ["db"] }],
+      });
+      picked = typeof result === "string" ? result : null;
+    }
+    if (!picked && isTauri) return;
+    importing.value = true;
+    await api.importDatabase(picked ?? "mock-backup.db");
+    message.success("数据库已导入并恢复");
+    emit("refresh");
+    await loadBackups();
+  } catch (error) {
+    message.error(String(error));
+  } finally {
+    importing.value = false;
+  }
+}
+
+function restoreBackup(backup: DatabaseBackupInfo) {
+  dialog.warning({
+    title: "恢复数据库备份",
+    content: `确定用「${backup.name}」覆盖当前所有档案数据吗？恢复后无法撤销。`,
+    positiveText: "恢复",
+    negativeText: "取消",
+    positiveButtonProps: { type: "error" },
+    onPositiveClick: async () => {
+      try {
+        await api.restoreDatabase(backup.name);
+        message.success("数据库已恢复");
+        emit("refresh");
+        await loadBackups();
+      } catch (error) {
+        message.error(String(error));
+      }
+    },
+  });
+}
+
+function deleteBackup(backup: DatabaseBackupInfo) {
+  dialog.warning({
+    title: "删除数据库备份",
+    content: `确定删除「${backup.name}」吗？删除后不可恢复。`,
+    positiveText: "删除",
+    negativeText: "取消",
+    positiveButtonProps: { type: "error" },
+    onPositiveClick: async () => {
+      try {
+        await api.deleteDatabaseBackup(backup.name);
+        message.success("备份已删除");
+        await loadBackups();
+      } catch (error) {
+        message.error(String(error));
+      }
+    },
+  });
+}
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function openBackupFolder() {
+  const item = props.state.paths.find((path) => path.label === "数据库备份");
+  if (!item) {
+    message.warning("找不到备份目录");
+    return;
+  }
+  api.openPath(item.path).catch((error) => message.error(String(error)));
+}
+
+onMounted(loadBackups);
 
 async function save() {
   if (saving.value) return;
@@ -114,6 +235,7 @@ async function openPath(item: PathInfo) {
         { value: 'general', label: '通用' },
         { value: 'codex', label: '应用' },
         { value: 'account', label: '账号' },
+        { value: 'advanced', label: '高级' },
         { value: 'about', label: '关于' },
       ]"
     />
@@ -197,6 +319,37 @@ async function openPath(item: PathInfo) {
           />
         </div>
       </div>
+    </div>
+
+    <div v-else-if="section === 'advanced'" class="apple-group mt-4 p-5 sm:p-6">
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <div class="text-sm font-semibold">数据备份</div>
+          <div class="muted mt-0.5 text-xs">导入/导出档案数据库</div>
+        </div>
+        <div class="flex gap-2">
+          <n-button size="small" secondary :loading="importing" @click="importBackupFromFile">导入备份</n-button>
+          <n-button size="small" secondary :loading="exporting" @click="exportBackupToFile">导出备份</n-button>
+          <n-button size="small" secondary @click="openBackupFolder">打开备份文件夹</n-button>
+        </div>
+      </div>
+      <div v-if="backups.length" class="mt-3 space-y-2">
+        <div
+          v-for="backup in backups"
+          :key="backup.name"
+          class="flex items-center justify-between gap-3 rounded-lg border border-[var(--panel-border)] px-3 py-2"
+        >
+          <div class="min-w-0">
+            <div class="mono truncate text-xs font-medium">{{ backup.name }}</div>
+            <div class="muted text-xs">{{ formatSize(backup.size_bytes) }}</div>
+          </div>
+          <div class="flex shrink-0 gap-1.5">
+            <n-button size="tiny" secondary type="primary" @click="restoreBackup(backup)">恢复</n-button>
+            <n-button size="tiny" quaternary type="error" @click="deleteBackup(backup)">删除</n-button>
+          </div>
+        </div>
+      </div>
+      <p v-else class="muted mt-3 text-xs">还没有导出过备份。</p>
     </div>
 
     <div v-else-if="section === 'codex'" class="apple-group mt-4 p-5 sm:p-6">

@@ -1,6 +1,7 @@
+use std::path::Path;
 use std::sync::Mutex;
 
-use rusqlite::{params, Connection, OptionalExtension, Row};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Row};
 use rusqlite_migration::{Migrations, M};
 use serde::{Deserialize, Serialize};
 
@@ -283,11 +284,110 @@ impl Database {
             .map_err(|error| app_err!("无法读取最近应用记录: {error}"))
     }
 
+    /// 把当前数据库导出为一致性快照文件（VACUUM INTO）。
+    pub fn export_database(&self, target: &Path) -> AppResult<()> {
+        let connection = self.lock()?;
+        connection
+            .execute(
+                "VACUUM INTO ?1",
+                params![target.to_string_lossy().to_string()],
+            )
+            .map_err(|error| app_err!("数据库导出失败: {error}"))?;
+        Ok(())
+    }
+
+    /// 从备份文件把数据恢复进当前数据库（清空现有数据后复制）。
+    pub fn restore_from_backup(&self, backup: &Path) -> AppResult<()> {
+        let source = Connection::open_with_flags(backup, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|error| app_err!("无法打开备份文件: {error}"))?;
+        let has_profiles: i64 = source
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='profiles'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|error| app_err!("备份文件不是有效的 SwitchGPT 数据库: {error}"))?;
+        if has_profiles == 0 {
+            return Err(app_err!("备份文件不是有效的 SwitchGPT 数据库"));
+        }
+
+        let mut connection = self.lock()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| app_err!("无法开启恢复事务: {error}"))?;
+        transaction
+            .execute("DELETE FROM switch_events", [])
+            .and_then(|_| transaction.execute("DELETE FROM profiles", []))
+            .and_then(|_| transaction.execute("DELETE FROM settings", []))
+            .map_err(|error| app_err!("恢复前清理数据失败: {error}"))?;
+
+        copy_table(
+            &source,
+            &transaction,
+            "settings",
+            "SELECT key, value FROM settings",
+            "INSERT INTO settings(key, value) VALUES(?1, ?2)",
+        )?;
+        copy_table(
+            &source,
+            &transaction,
+            "profiles",
+            "SELECT id, name, payload_json, icon, created_at, updated_at FROM profiles",
+            "INSERT INTO profiles(id, name, payload_json, icon, created_at, updated_at)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
+        )?;
+        copy_table(
+            &source,
+            &transaction,
+            "switch_events",
+            "SELECT id, profile_id, action, status, message, created_at FROM switch_events",
+            "INSERT INTO switch_events(id, profile_id, action, status, message, created_at)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
+        )?;
+
+        transaction
+            .commit()
+            .map_err(|error| app_err!("恢复事务提交失败: {error}"))?;
+        Ok(())
+    }
+
     fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, Connection>> {
         self.connection
             .lock()
             .map_err(|_| app_err!("数据库连接锁已损坏，请重启 SwitchGPT"))
     }
+}
+
+fn copy_table(
+    source: &Connection,
+    destination: &rusqlite::Transaction<'_>,
+    table: &str,
+    select_sql: &str,
+    insert_sql: &str,
+) -> AppResult<()> {
+    let mut statement = source
+        .prepare(select_sql)
+        .map_err(|error| app_err!("读取备份表 {table} 失败: {error}"))?;
+    let column_count = statement.column_count();
+    let mut rows = statement
+        .query([])
+        .map_err(|error| app_err!("读取备份表 {table} 失败: {error}"))?;
+    while let Some(row) = rows
+        .next()
+        .map_err(|error| app_err!("读取备份表 {table} 失败: {error}"))?
+    {
+        let mut values: Vec<rusqlite::types::Value> = Vec::with_capacity(column_count);
+        for index in 0..column_count {
+            values.push(
+                row.get::<_, rusqlite::types::Value>(index)
+                    .map_err(|error| app_err!("读取备份表 {table} 失败: {error}"))?,
+            );
+        }
+        destination
+            .execute(insert_sql, rusqlite::params_from_iter(values))
+            .map_err(|error| app_err!("恢复表 {table} 失败: {error}"))?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

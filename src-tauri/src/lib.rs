@@ -27,6 +27,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(context)
         .manage(oauth_state)
         .invoke_handler(tauri::generate_handler![
@@ -36,6 +37,12 @@ pub fn run() {
             commands::add_builtin_profile,
             commands::get_builtin_catalog,
             commands::test_profile_connection,
+            commands::export_database,
+            commands::export_database_to,
+            commands::import_database,
+            commands::list_database_backups,
+            commands::restore_database,
+            commands::delete_database_backup,
             commands::rename_profile,
             commands::set_profile_icon,
             commands::get_profile,

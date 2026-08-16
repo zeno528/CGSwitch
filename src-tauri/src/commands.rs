@@ -5,7 +5,7 @@ use crate::auth::codex_oauth::{
 };
 use crate::error::{app_err, AppResult};
 use crate::models::{AppState, CodexAppStatus, ProfileDetail, ProfileSummary, Settings};
-use crate::services::{AppContext, ProfileConnectionResult};
+use crate::services::{AppContext, DatabaseBackupInfo, ProfileConnectionResult};
 
 #[tauri::command]
 pub fn get_state(state: State<'_, AppContext>) -> AppResult<AppState> {
@@ -46,6 +46,36 @@ pub async fn test_profile_connection(
     state: State<'_, AppContext>,
 ) -> AppResult<ProfileConnectionResult> {
     state.test_profile_connection(&id).await
+}
+
+#[tauri::command]
+pub fn export_database(state: State<'_, AppContext>) -> AppResult<String> {
+    Ok(state.export_database()?.display().to_string())
+}
+
+#[tauri::command]
+pub fn export_database_to(path: String, state: State<'_, AppContext>) -> AppResult<String> {
+    Ok(state.export_database_to(&path)?.display().to_string())
+}
+
+#[tauri::command]
+pub fn import_database(path: String, state: State<'_, AppContext>) -> AppResult<()> {
+    state.import_database(&path)
+}
+
+#[tauri::command]
+pub fn list_database_backups(state: State<'_, AppContext>) -> AppResult<Vec<DatabaseBackupInfo>> {
+    state.list_database_backups()
+}
+
+#[tauri::command]
+pub fn restore_database(name: String, state: State<'_, AppContext>) -> AppResult<()> {
+    state.restore_database(&name)
+}
+
+#[tauri::command]
+pub fn delete_database_backup(name: String, state: State<'_, AppContext>) -> AppResult<()> {
+    state.delete_database_backup(&name)
 }
 
 #[tauri::command]
