@@ -548,7 +548,7 @@ async function save() {
       </button>
     </div>
 
-    <div class="-mx-8 flex min-h-0 flex-1 flex-col overflow-auto px-8 pb-4 [scrollbar-gutter:stable]">
+    <div class="-mx-8 flex min-h-0 flex-1 flex-col overflow-auto pl-[var(--gap-main)] pr-[calc(var(--gap-main)-var(--scrollbar-size))] pb-4 [scrollbar-gutter:stable]">
       <p v-if="loadError" class="muted mt-4 text-sm">{{ loadError }}</p>
 
       <div v-if="creating" class="apple-group mt-[var(--gap-page)] shrink-0 p-[var(--gap-card)]">

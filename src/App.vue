@@ -141,6 +141,13 @@ watch(
 onMounted(async () => {
   media.addEventListener("change", mediaListener);
   updateSidebarIndicator();
+  const main = document.querySelector("main");
+  if (main) {
+    document.documentElement.style.setProperty(
+      "--scrollbar-size",
+      `${main.offsetWidth - main.clientWidth}px`,
+    );
+  }
   await refresh();
   syncCodexPolling();
 });
@@ -208,7 +215,7 @@ useWindowActivation({
               </div>
             </aside>
 
-            <main class="min-w-0 flex-1 overflow-auto bg-[var(--app-bg)] px-8 pt-4 pb-7">
+            <main class="min-w-0 flex-1 overflow-auto bg-[var(--app-bg)] pt-4 pb-7">
               <template v-if="state">
                 <ProfilesView v-if="view === 'profiles'" :key="profilesNavReset" :state="state" @refresh="refresh" />
                 <SettingsView v-else :state="state" @preview-theme="previewTheme" @refresh="refresh" @saved="saveSettings" @home="goProfiles" />
