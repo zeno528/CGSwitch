@@ -515,6 +515,8 @@ async function save() {
       }
       message.success("供应商已更新");
     }
+    // 新建供应商：back 前先通知父级刷新列表，让首页立即显示新卡片（编辑路径由 closeEdit 刷新）
+    if (creating.value) emit("changed");
     emit("back");
   } catch (error) {
     message.error(String(error));

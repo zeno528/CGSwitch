@@ -695,9 +695,21 @@ impl AppContext {
         atomic_write(&self.balance_cache_path(), text.as_bytes())
     }
 
-    /// 完整复制供应商（配置、图标等），新供应商名加“副本”后缀，同名时追加序号。
+    /// 完整复制供应商（配置、关联文件、图标、账号绑定），新供应商名加“副本”后缀，同名时追加序号。
     pub fn duplicate_profile(&self, id: &str) -> AppResult<ProfileSummary> {
-        let stored = self.database.profile(id)?;
+        // 使用中的供应商：先把 live 的 config/models.json 改动同步回快照，副本取到最新状态
+        let active = self.is_active_profile(id)?;
+        if active {
+            if let Some(document) = self.live_document() {
+                let _ = self.sync_active_profile_document(&document);
+            }
+        }
+        let mut stored = self.database.profile(id)?;
+        // 使用中的第三方供应商：快照没单独保存 auth 时连当前 live auth.json 一起复制，
+        // 保证副本应用后凭据与源一致；官方订阅的 auth 由账号动态生成，不复制。
+        if active && stored.kind == ProfileKind::ThirdParty && stored.payload.raw_auth.is_none() {
+            stored.payload.raw_auth = read_optional_text(&self.paths.codex_home.join("auth.json"));
+        }
         let profiles = self.database.profiles()?;
         let base: String = stored.name.trim().chars().take(47).collect();
         let mut candidate = format!("{base} 副本");
@@ -715,6 +727,14 @@ impl AppContext {
             .insert_profile(&candidate, &stored.payload, &timestamp)?;
         self.database
             .set_profile_icon(&summary.id, stored.icon.as_deref(), &timestamp)?;
+        // 官方供应商的订阅账号绑定一并复制（第三方恒为 None 不会进这个分支）
+        if stored.account_id.is_some() {
+            self.database.set_profile_account(
+                &summary.id,
+                stored.account_id.as_deref(),
+                &timestamp,
+            )?;
+        }
         self.database.record_event(
             Some(&summary.id),
             "duplicate",
@@ -1924,7 +1944,7 @@ experimental_bearer_token = "old-key"
             .add_builtin_profile("minimax", None, Some("mm-key"), None, None)
             .unwrap();
         let error = context.get_deepseek_balance(&minimax.id).await.unwrap_err();
-        assert!(error.0.contains("不是 DeepSeek 供应商"));
+        assert!(error.0.contains("该供应商不是 DeepSeek"));
 
         // DeepSeek 但只有占位符密钥（未配置真实密钥）拒绝
         let keyless = context
@@ -2788,5 +2808,76 @@ base_url = "https://api.example"
         std::thread::sleep(std::time::Duration::from_millis(2));
         let dup2 = context.duplicate_profile(&profile.id).unwrap();
         assert_eq!(dup2.name, "GLM 副本 2");
+    }
+
+    #[test]
+    fn duplicate_profile_copies_live_auth_and_account_binding() {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        std::fs::write(
+            paths.codex_config(),
+            r#"
+model = "glm-5.3"
+model_provider = "ZAI"
+
+[model_providers.ZAI]
+name = "ZAI"
+base_url = "https://api.example"
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            paths.codex_home.join("auth.json"),
+            r#"{"OPENAI_API_KEY":"sk-live"}"#,
+        )
+        .unwrap();
+        let context = AppContext::new(paths).unwrap();
+        // 捕获的第三方供应商是使用中、快照无 auth；复制时应带上当前 live auth.json
+        let profile = context.capture_profile("GLM").unwrap();
+        assert!(context
+            .database
+            .profile(&profile.id)
+            .unwrap()
+            .payload
+            .raw_auth
+            .is_none());
+        let dup = context.duplicate_profile(&profile.id).unwrap();
+        assert_eq!(
+            context
+                .database
+                .profile(&dup.id)
+                .unwrap()
+                .payload
+                .raw_auth
+                .as_deref(),
+            Some(r#"{"OPENAI_API_KEY":"sk-live"}"#)
+        );
+
+        // 官方供应商：订阅账号绑定一并复制
+        context
+            .database
+            .upsert_account(&crate::database::StoredAccount {
+                id: "acc-1".into(),
+                email: Some("a@example.com".into()),
+                id_token: None,
+                refresh_token: "rt".into(),
+                authenticated_at: 1,
+            })
+            .unwrap();
+        let official = context
+            .add_builtin_profile("chatgpt", None, None, None, Some("acc-1"))
+            .unwrap();
+        let dup2 = context.duplicate_profile(&official.id).unwrap();
+        assert_eq!(
+            context
+                .database
+                .profile(&dup2.id)
+                .unwrap()
+                .account_id
+                .as_deref(),
+            Some("acc-1")
+        );
     }
 }
