@@ -5,7 +5,7 @@
 //!    access_token / refresh_token / id_token；
 //! 3. 账号持久化（只存 refresh_token 与账号标识），access_token 内存缓存、到期前自动刷新。
 //!
-//! 认证一次后账号常驻，后续添加 ChatGPT 预设无需重复认证。
+//! 认证一次后账号常驻，后续添加 ChatGPT 供应商无需重复认证。
 
 use std::collections::HashMap;
 use std::sync::Arc;

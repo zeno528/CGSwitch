@@ -81,7 +81,7 @@ fn provider_api_key(body: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// 预设已保存的真实 API 密钥（占位符视为未配置）。
+/// 供应商已保存的真实 API 密钥（占位符视为未配置）。
 fn stored_provider_api_key(payload: &ProfilePayload) -> Option<String> {
     payload
         .provider_body
@@ -157,7 +157,7 @@ impl AppContext {
     }
 
     pub fn get_state(&self) -> AppResult<AppState> {
-        // 刷新/窗口激活等显式时机：外部改过 live 就把激活预设快照同步回数据库（有差异才写）
+        // 刷新/窗口激活等显式时机：外部改过 live 就把激活供应商快照同步回数据库（有差异才写）
         let live = self.live_document();
         if let Some(document) = live.as_ref() {
             let _ = self.sync_active_profile_document(document);
@@ -165,7 +165,7 @@ impl AppContext {
         let settings = self.settings()?;
         let profiles = self.database.profiles()?;
         // 激活状态只来自手动应用/捕获（显式状态或应用事件），不做 live 配置推断，
-        // 避免“添加预设”被误判成“正在使用”。
+        // 避免“添加供应商”被误判成“正在使用”。
         let active_profile_id = match self.active_profile_state()? {
             Some(id) if profiles.iter().any(|profile| profile.id == id) => Some(id),
             _ => match self.database.latest_applied_profile()? {
@@ -185,11 +185,11 @@ impl AppContext {
                 .iter()
                 .map(|profile| {
                     let mut stored = profile.clone();
-                    // 激活中的预设：标签读取当前配置文件状态；其余预设读取数据库最新字段
+                    // 激活中的供应商：标签读取当前配置文件状态；其余供应商读取数据库最新字段
                     if Some(&stored.id) == active_profile_id.as_ref() {
                         if let Some(live) = &live_payload {
                             let mut live = live.clone();
-                            // 预设元数据（管理后台网址/余额开关）不在 live 配置里，覆盖时保留
+                            // 供应商元数据（管理后台网址/余额开关）不在 live 配置里，覆盖时保留
                             live.admin_url = stored.payload.admin_url.clone();
                             live.show_balance = stored.payload.show_balance;
                             stored.payload = live;
@@ -237,7 +237,7 @@ impl AppContext {
             .map(|text| text.trim_end().to_string());
         let timestamp = now_ms().to_string();
         let summary = self.database.insert_profile(&name, &payload, &timestamp)?;
-        // 捕获即建立“当前 live = 该预设”的显式关联：先把旧激活预设的使用中累计改动
+        // 捕获即建立“当前 live = 该供应商”的显式关联：先把旧激活供应商的使用中累计改动
         // 同步回其快照，再把捕获结果设为使用中（捕获到的是什么就用什么，不比对内容）
         if let Some(document) = self.live_document() {
             self.autosync_active_profile(&summary.id, &document)?;
@@ -278,7 +278,7 @@ impl AppContext {
             let body = payload
                 .provider_body
                 .as_deref()
-                .ok_or_else(|| app_err!("内置预设缺少供应商配置"))?;
+                .ok_or_else(|| app_err!("内置供应商缺少配置"))?;
             payload.provider_body =
                 Some(codex_config::update_provider_body(body, base_url, api_key)?);
         }
@@ -305,7 +305,7 @@ impl AppContext {
         Ok(profile_summary(&stored))
     }
 
-    /// 自定义预设：用户填写的三件套入库，config 必填，模型目录/认证文件有内容才存。
+    /// 自定义供应商：用户填写的三件套入库，config 必填，模型目录/认证文件有内容才存。
     pub fn add_custom_profile(
         &self,
         name: &str,
@@ -386,12 +386,12 @@ impl AppContext {
         let stored = self.database.profile(id)?;
         let payload = &stored.payload;
         if payload.provider_id.is_none() {
-            return Err(app_err!("该预设没有供应商配置，无法测试连通性"));
+            return Err(app_err!("该供应商缺少配置，无法测试连通性"));
         }
         let body = payload
             .provider_body
             .as_deref()
-            .ok_or_else(|| app_err!("该预设缺少供应商配置数据"))?;
+            .ok_or_else(|| app_err!("该供应商缺少配置数据"))?;
         let detail = parse_provider_detail(body)?;
         let base_url = match base_url_override {
             Some(value) => {
@@ -404,7 +404,7 @@ impl AppContext {
             None => detail
                 .base_url
                 .filter(|value| !value.trim().is_empty())
-                .ok_or_else(|| app_err!("该预设没有配置调用地址"))?,
+                .ok_or_else(|| app_err!("该供应商没有配置调用地址"))?,
         };
         let api_key = match api_key_override {
             Some(value) => {
@@ -415,7 +415,7 @@ impl AppContext {
                 value.to_string()
             }
             None => stored_provider_api_key(payload)
-                .ok_or_else(|| app_err!("该预设没有配置 API 密钥，请先填写后再测试"))?,
+                .ok_or_else(|| app_err!("该供应商没有配置 API 密钥，请先填写后再测试"))?,
         };
 
         let models_url = format!("{}/models", base_url.trim_end_matches('/'));
@@ -464,20 +464,20 @@ impl AppContext {
         }
     }
 
-    /// 按预设查询 DeepSeek 余额：使用该预设自己保存的 API 密钥，以配置为单位查询。
+    /// 按供应商查询 DeepSeek 余额：使用该供应商自己保存的 API 密钥，以配置为单位查询。
     pub async fn get_deepseek_balance(&self, id: &str) -> AppResult<DeepSeekBalance> {
         let stored = self.database.profile(id)?;
         let payload = &stored.payload;
         if payload.provider_id.as_deref() != Some("deepseek") {
-            return Err(app_err!("该预设不是 DeepSeek 供应商，无法查询余额"));
+            return Err(app_err!("该供应商不是 DeepSeek，无法查询余额"));
         }
         let body = payload
             .provider_body
             .as_deref()
-            .ok_or_else(|| app_err!("该预设缺少供应商配置数据"))?;
+            .ok_or_else(|| app_err!("该供应商缺少配置数据"))?;
         let detail = parse_provider_detail(body)?;
         let api_key = stored_provider_api_key(payload)
-            .ok_or_else(|| app_err!("该预设没有配置 API 密钥，无法查询余额"))?;
+            .ok_or_else(|| app_err!("该供应商没有配置 API 密钥，无法查询余额"))?;
         let base = detail
             .base_url
             .as_deref()
@@ -656,7 +656,7 @@ impl AppContext {
             .set_profile_icon(id, icon.as_deref(), &now_ms().to_string())
     }
 
-    /// 预设级开关：是否在卡片显示并自动刷新 DeepSeek 余额。
+    /// 供应商级开关：是否在卡片显示并自动刷新 DeepSeek 余额。
     pub fn set_profile_show_balance(&self, id: &str, enabled: bool) -> AppResult<()> {
         let stored = self.database.profile(id)?;
         let mut payload = stored.payload;
@@ -666,7 +666,7 @@ impl AppContext {
             .map(|_| ())
     }
 
-    /// 预设级余额缓存：上次成功查询结果写入 ~/.cgswitch/balance-cache.json，
+    /// 供应商级余额缓存：上次成功查询结果写入 ~/.cgswitch/balance-cache.json，
     /// 保证卡片首次渲染/切换视图时数字就在，不出现“消失→出现”的闪烁。
     pub fn set_profile_balance(
         &self,
@@ -695,7 +695,7 @@ impl AppContext {
         atomic_write(&self.balance_cache_path(), text.as_bytes())
     }
 
-    /// 完整复制预设（配置、图标等），新预设名加“副本”后缀，同名时追加序号。
+    /// 完整复制供应商（配置、图标等），新供应商名加“副本”后缀，同名时追加序号。
     pub fn duplicate_profile(&self, id: &str) -> AppResult<ProfileSummary> {
         let stored = self.database.profile(id)?;
         let profiles = self.database.profiles()?;
@@ -727,7 +727,7 @@ impl AppContext {
     }
 
     pub fn get_profile(&self, id: &str) -> AppResult<ProfileDetail> {
-        // 打开激活预设的编辑页：先把外部改动同步回数据库快照
+        // 打开激活供应商的编辑页：先把外部改动同步回数据库快照
         if self.is_active_profile(id)? {
             if let Some(document) = self.live_document() {
                 let _ = self.sync_active_profile_document(&document);
@@ -768,7 +768,7 @@ impl AppContext {
         let raw_config = live_config.or_else(|| payload.raw_config.clone());
         let config_fragment = match raw_config.as_deref() {
             Some(raw) => match payload.builtin.as_deref() {
-                // 内置预设：占位符替换为已存密钥，展示应用时的真实配置
+                // 内置供应商：占位符替换为已存密钥，展示应用时的真实配置
                 Some(kind) => {
                     let template = builtin::template(kind)?;
                     String::from_utf8_lossy(
@@ -822,8 +822,8 @@ impl AppContext {
         })
     }
 
-    /// 保存预设自身的完整配置原文：内置预设存 raw_config（应用时整文件回填）；
-    /// 普通预设解析回结构化字段（继续走合并回填）。models.json 统一存 raw_catalog。
+    /// 保存供应商自身的完整配置原文：内置供应商存 raw_config（应用时整文件回填）；
+    /// 普通供应商解析回结构化字段（继续走合并回填）。models.json 统一存 raw_catalog。
     pub fn update_profile_config(
         &self,
         id: &str,
@@ -867,7 +867,7 @@ impl AppContext {
                 .map_err(|error| app_err!("auth.json 不是有效 JSON: {error}"))?;
         }
 
-        // 所见即所得：编辑器文本是唯一事实源，内置/普通预设都重新解析结构化字段
+        // 所见即所得：编辑器文本是唯一事实源，内置/普通供应商都重新解析结构化字段
         let parsed = codex_config::capture_from_document(&document)?;
         payload.model_values = parsed.model_values;
         payload.provider_body = parsed.provider_body;
@@ -918,13 +918,13 @@ impl AppContext {
             let body = payload
                 .provider_body
                 .as_deref()
-                .ok_or_else(|| app_err!("该预设缺少供应商配置数据"))?;
+                .ok_or_else(|| app_err!("该供应商缺少配置数据"))?;
             if base_url.is_some() || api_key.is_some() {
                 payload.provider_body =
                     Some(codex_config::update_provider_body(body, base_url, api_key)?);
             }
         } else if base_url.is_some() || api_key.is_some() {
-            return Err(app_err!("该预设没有供应商配置，无法修改调用地址或密钥"));
+            return Err(app_err!("该供应商缺少配置，无法修改调用地址或密钥"));
         }
         let write_back = (base_url.is_some() || api_key.is_some())
             && payload.provider_id.is_some()
@@ -978,14 +978,14 @@ impl AppContext {
             .map_err(|error| app_err!("无法读取 {}: {error}", config_path.display()))?;
         let mut document = codex_config::parse_document(&original)?;
 
-        // 切换前把当前 live 配置回写进正在生效的预设，使预设跟随使用中的累计更新
+        // 切换前把当前 live 配置回写进正在生效的供应商，使供应商跟随使用中的累计更新
         self.autosync_active_profile(id, &document)?;
 
         let payload = self.database.profile(id)?.payload;
         if payload.builtin.is_some() {
             self.apply_builtin_profile(id, &payload, "apply")?;
         } else if let Some(raw) = &payload.raw_config {
-            // 完整快照预设：直接回填完整原文（含 MCP、插件、注释等全部内容）
+            // 完整快照供应商：直接回填完整原文（含 MCP、插件、注释等全部内容）
             backup_file(&config_path, &self.paths.config_backup, "config")?;
             atomic_write(&config_path, raw.as_bytes())?;
             self.write_raw_catalog(&payload)?;
@@ -1013,7 +1013,7 @@ impl AppContext {
                 &now_ms().to_string(),
             )?;
         }
-        // 显式记录当前激活预设，避免依赖应用日志反推
+        // 显式记录当前激活供应商，避免依赖应用日志反推
         self.database.set_active_profile(Some(id))?;
         Ok(())
     }
@@ -1043,12 +1043,12 @@ impl AppContext {
         Ok(())
     }
 
-    /// 是否为官方订阅预设（无 API 供应商，凭据走 ChatGPT 订阅）。
+    /// 是否为官方订阅供应商（无 API 供应商，凭据走 ChatGPT 订阅）。
     pub fn is_subscription_profile(&self, id: &str) -> AppResult<bool> {
         Ok(self.database.profile(id)?.kind == ProfileKind::Official)
     }
 
-    /// 官方预设绑定的订阅账号；未绑定返回 None（由调用方回退默认账号）。
+    /// 官方供应商绑定的订阅账号；未绑定返回 None（由调用方回退默认账号）。
     pub fn bound_account_id(&self, id: &str) -> AppResult<Option<String>> {
         Ok(self.database.profile(id)?.account_id.clone())
     }
@@ -1057,21 +1057,21 @@ impl AppContext {
         Ok(self.database.app_state()?.0)
     }
 
-    /// 该预设是否为当前使用中（以显式激活状态为准，不做配置比对）。
+    /// 该供应商是否为当前使用中（以显式激活状态为准，不做配置比对）。
     pub fn is_active_profile(&self, id: &str) -> AppResult<bool> {
         Ok(self.active_profile_state()?.as_deref() == Some(id))
     }
 
-    /// 官方预设是否保存了自己的 auth.json 覆盖（有则应用时不再用账号现生成）。
+    /// 官方供应商是否保存了自己的 auth.json 覆盖（有则应用时不再用账号现生成）。
     pub fn has_auth_override(&self, id: &str) -> AppResult<bool> {
         Ok(self.database.profile(id)?.payload.raw_auth.is_some())
     }
 
-    /// 官方预设绑定订阅账号；第三方预设直接拒绝。None 表示跟随默认账号。
+    /// 官方供应商绑定订阅账号；第三方供应商直接拒绝。None 表示跟随默认账号。
     pub fn set_profile_account(&self, id: &str, account_id: Option<&str>) -> AppResult<()> {
         let stored = self.database.profile(id)?;
         if stored.kind != ProfileKind::Official {
-            return Err(app_err!("第三方预设不支持绑定订阅账号"));
+            return Err(app_err!("第三方供应商不支持绑定订阅账号"));
         }
         if let Some(account_id) = account_id {
             if !self
@@ -1087,8 +1087,8 @@ impl AppContext {
             .set_profile_account(id, account_id, &now_ms().to_string())
     }
 
-    /// 内置官方预设：整文件替换为模板原文（仅替换密钥占位符），
-    /// 并写入本预设自带的关联文件（deepseek/智谱各自独立的 models.json、minimax 的 custom-catalog.json），
+    /// 内置官方供应商：整文件替换为模板原文（仅替换密钥占位符），
+    /// 并写入本供应商自带的关联文件（deepseek/智谱各自独立的 models.json、minimax 的 custom-catalog.json），
     /// 写生产文件前都先备份旧文件。
     fn apply_builtin_profile(
         &self,
@@ -1099,17 +1099,17 @@ impl AppContext {
         let kind = payload
             .builtin
             .as_deref()
-            .ok_or_else(|| app_err!("预设缺少内置类型"))?;
+            .ok_or_else(|| app_err!("供应商缺少内置类型"))?;
         let template = builtin::template(kind)?;
         let api_key = payload.provider_body.as_deref().and_then(provider_api_key);
-        // 带密钥占位符的内置预设：应用前必须已配置真实密钥，避免把占位符写进 live 配置
+        // 带密钥占位符的内置供应商：应用前必须已配置真实密钥，避免把占位符写进 live 配置
         if template.placeholder.is_some()
             && api_key
                 .as_deref()
                 .is_none_or(|key| key.trim().is_empty() || is_builtin_placeholder(payload, key))
         {
             return Err(app_err!(
-                "该预设尚未配置 API 密钥，请先在编辑页填写 API 密钥后再应用"
+                "该供应商尚未配置 API 密钥，请先在编辑页填写 API 密钥后再应用"
             ));
         }
         let rendered = match &payload.raw_config {
@@ -1145,7 +1145,7 @@ impl AppContext {
         Ok(())
     }
 
-    /// 把预设自己编辑保存的 models.json 原文写入 model_catalog_json 指向的位置。
+    /// 把供应商自己编辑保存的 models.json 原文写入 model_catalog_json 指向的位置。
     fn write_raw_catalog(&self, payload: &ProfilePayload) -> AppResult<()> {
         let Some(raw) = payload.raw_catalog.as_deref() else {
             return Ok(());
@@ -1169,7 +1169,7 @@ impl AppContext {
         Ok(())
     }
 
-    /// 把预设自己编辑保存的 auth.json 原文写入 ~/.codex/auth.json。
+    /// 把供应商自己编辑保存的 auth.json 原文写入 ~/.codex/auth.json。
     fn write_raw_auth(&self, payload: &ProfilePayload) -> AppResult<()> {
         let Some(raw) = payload.raw_auth.as_deref() else {
             return Ok(());
@@ -1202,7 +1202,7 @@ impl AppContext {
         }
     }
 
-    /// 把 live 文档同步进当前激活预设的快照：无激活预设或内容无差异时不做任何写库。
+    /// 把 live 文档同步进当前激活供应商的快照：无激活供应商或内容无差异时不做任何写库。
     /// 供 get_state（刷新/窗口激活）与 get_profile（打开编辑页）按需调用。
     fn sync_active_profile_document(&self, document: &toml_edit::DocumentMut) -> AppResult<bool> {
         let Some(active_id) = self.active_profile_state()? else {
@@ -1221,7 +1221,7 @@ impl AppContext {
             return Ok(false);
         };
         live.builtin = profile.payload.builtin.clone();
-        // 预设元数据（管理后台网址/余额开关）不属于 live 文档，同步时保留
+        // 供应商元数据（管理后台网址/余额开关）不属于 live 文档，同步时保留
         live.admin_url = profile.payload.admin_url.clone();
         live.show_balance = profile.payload.show_balance;
         // 使用中模型目录按 live 文件回写；档案自己保存的 auth 覆盖保持不变
@@ -1233,7 +1233,7 @@ impl AppContext {
             .and_then(|file| read_optional_text(&file))
             .or_else(|| profile.payload.raw_catalog.clone());
         live.raw_auth = profile.payload.raw_auth.clone();
-        // 快照跟随当前 live 完整文本，保证预设是完整状态（所见即所得，不掩码密钥）
+        // 快照跟随当前 live 完整文本，保证供应商是完整状态（所见即所得，不掩码密钥）
         live.raw_config = Some(document.to_string());
         if live == profile.payload {
             return Ok(false);
@@ -1259,7 +1259,7 @@ impl AppContext {
         target_id: &str,
         document: &toml_edit::DocumentMut,
     ) -> AppResult<()> {
-        // 只回写手动应用过的预设，不做 live 配置推断
+        // 只回写手动应用过的供应商，不做 live 配置推断
         let Some(active_id) = self.active_profile_state()? else {
             return Ok(());
         };
@@ -1400,7 +1400,7 @@ impl AppContext {
 fn validated_name(name: &str) -> AppResult<String> {
     let name = name.trim();
     if name.is_empty() || name.len() > 50 {
-        return Err(app_err!("配置预设名称长度必须在 1 到 50 个字符之间"));
+        return Err(app_err!("供应商名称长度必须在 1 到 50 个字符之间"));
     }
     Ok(name.to_string())
 }
@@ -1801,7 +1801,7 @@ experimental_bearer_token = "old-key"
 
         let context = AppContext::new(paths).unwrap();
         context.capture_profile("First").unwrap();
-        // 预设 id 取毫秒时间戳，同毫秒内二次捕获会撞 id；真实 UI 不可能，测试里隔开
+        // 供应商 id 取毫秒时间戳，同毫秒内二次捕获会撞 id；真实 UI 不可能，测试里隔开
         std::thread::sleep(std::time::Duration::from_millis(2));
         let second = context.capture_profile("Second").unwrap();
 
@@ -2106,7 +2106,7 @@ experimental_bearer_token = "secret"
             .set_profile_show_balance(&profile.id, false)
             .unwrap();
 
-        // 外部改 live 后触发同步，预设级开关不能被重置回默认值
+        // 外部改 live 后触发同步，供应商级开关不能被重置回默认值
         std::fs::write(
             context.paths.codex_config(),
             "model = \"glm-5.4\"\nmodel_provider = \"ZAI\"\nmodel_reasoning_effort = \"low\"\n\n[model_providers.ZAI]\nname = \"ZAI\"\nbase_url = \"https://new.example\"\nexperimental_bearer_token = \"secret\"\n",
@@ -2132,7 +2132,7 @@ experimental_bearer_token = "secret"
         std::fs::write(paths.codex_config(), "model = \"glm-5.3\"\n").unwrap();
 
         let context = AppContext::new(paths).unwrap();
-        // 添加预设是纯入库动作，绝不激活（只有手动应用/捕获才建立使用中）
+        // 添加供应商是纯入库动作，绝不激活（只有手动应用/捕获才建立使用中）
         context
             .add_builtin_profile("deepseek", None, Some("sk-test"), None, None)
             .unwrap();
@@ -2232,7 +2232,7 @@ experimental_bearer_token = "secret"
             .unwrap();
         assert_eq!(config, expected);
         assert!(!String::from_utf8_lossy(&config).contains("<你的 DeepSeek API Key>"));
-        // 关联文件按本预设字节写入，旧文件已备份
+        // 关联文件按本供应商字节写入，旧文件已备份
         let models = std::fs::read(context.paths.codex_home.join("models.json")).unwrap();
         assert_eq!(models, crate::builtin::DEEPSEEK_MODELS);
         let backup = std::fs::read_dir(context.paths.codex_files_backup.clone())

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// 预设类型：官方订阅（ChatGPT）或第三方供应商（Codex 协议）。
+/// 供应商类型：官方订阅（ChatGPT）或第三方供应商（Codex 协议）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProfileKind {
@@ -34,22 +34,22 @@ pub struct ProfilePayload {
     pub provider_id: Option<String>,
     #[serde(default)]
     pub provider_body: Option<String>,
-    /// 内置官方预设类型（deepseek/minimax/zhipu/chatgpt）；普通捕获的预设为 None。
+    /// 内置官方供应商类型（deepseek/minimax/zhipu/chatgpt）；普通捕获的供应商为 None。
     #[serde(default)]
     pub builtin: Option<String>,
-    /// 预设自己保存的完整 config 原文（内置预设可全量编辑；普通预设无该字段）。
+    /// 供应商自己保存的完整 config 原文（内置供应商可全量编辑；普通供应商无该字段）。
     #[serde(default)]
     pub raw_config: Option<String>,
-    /// 预设自己保存的 models.json 原文（编辑后随预设应用写入 ~/.codex）。
+    /// 供应商自己保存的 models.json 原文（编辑后随供应商应用写入 ~/.codex）。
     #[serde(default)]
     pub raw_catalog: Option<String>,
-    /// 预设自己保存的 auth.json 原文（编辑后随预设应用写入 ~/.codex/auth.json）。
+    /// 供应商自己保存的 auth.json 原文（编辑后随供应商应用写入 ~/.codex/auth.json）。
     #[serde(default)]
     pub raw_auth: Option<String>,
     /// 模型提供方的管理后台网址（卡片显示跳转按钮）。
     #[serde(default)]
     pub admin_url: Option<String>,
-    /// 预设级开关：是否在卡片显示并自动刷新 DeepSeek 余额（默认开）。
+    /// 供应商级开关：是否在卡片显示并自动刷新 DeepSeek 余额（默认开）。
     #[serde(default = "default_true")]
     pub show_balance: bool,
 }
@@ -83,7 +83,7 @@ pub struct ProfileSummary {
     pub model: Option<String>,
     pub provider: Option<String>,
     pub reasoning_effort: Option<String>,
-    /// 预设是否已配置有效 API 密钥（占位符视为未配置）
+    /// 供应商是否已配置有效 API 密钥（占位符视为未配置）
     pub has_key: bool,
     pub admin_url: Option<String>,
     pub show_balance: bool,
@@ -182,6 +182,6 @@ pub struct AppState {
     pub codex: CodexAppStatus,
     pub settings: Settings,
     pub paths: Vec<PathInfo>,
-    /// 预设级余额缓存（上次成功查询结果），保证卡片静默显示、切换不闪烁。
+    /// 供应商级余额缓存（上次成功查询结果），保证卡片静默显示、切换不闪烁。
     pub balance_cache: std::collections::BTreeMap<String, DeepSeekBalanceInfo>,
 }

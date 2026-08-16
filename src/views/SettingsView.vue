@@ -112,7 +112,7 @@ async function importBackupFromFile() {
 function restoreBackup(backup: DatabaseBackupInfo) {
   dialog.warning({
     title: "恢复数据库备份",
-    content: `确定用「${backup.name}」覆盖当前所有预设数据吗？恢复后无法撤销。`,
+    content: `确定用「${backup.name}」覆盖当前所有供应商数据吗？恢复后无法撤销。`,
     positiveText: "恢复",
     negativeText: "取消",
     positiveButtonProps: { type: "error" },
@@ -433,7 +433,7 @@ async function openPath(item: PathInfo) {
       <div class="flex items-center justify-between gap-4">
         <div>
           <div class="text-sm font-semibold">数据备份</div>
-          <div class="muted mt-0.5 text-xs">导入/导出预设数据库</div>
+          <div class="muted mt-0.5 text-xs">导入/导出供应商数据库</div>
         </div>
         <div class="flex gap-2">
           <n-button size="small" secondary :loading="importing" @click="importBackupFromFile">导入备份</n-button>

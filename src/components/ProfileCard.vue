@@ -91,7 +91,7 @@ onMounted(() => {
 // 看 APP 时刷新余额（窗口激活即拉取，不轮询）
 useWindowActivation({ onActive: () => void fetchBalance() });
 
-// 预设级开关从关到开（编辑页保存后返回）时补拉一次余额
+// 供应商级开关从关到开（编辑页保存后返回）时补拉一次余额
 watch(
   () => props.profile.show_balance,
   (enabled) => {
@@ -113,7 +113,7 @@ const connectionDimmed = computed(() => {
 });
 
 const connectionTitle = computed(() => {
-  if (!props.profile.provider) return "该预设没有供应商配置，无法测试";
+  if (!props.profile.provider) return "该供应商缺少配置，无法测试";
   if (!props.profile.has_key) return "缺少 API 密钥，点击查看提示";
   return "测试连通性";
 });
@@ -215,8 +215,8 @@ async function testConnection() {
       <button
         type="button"
         class="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition-colors hover:bg-[#007aff]/10 hover:text-[#007aff] dark:text-zinc-500"
-        title="复制预设"
-        aria-label="复制预设"
+        title="复制供应商"
+        aria-label="复制供应商"
         @click="emit('duplicate')"
       >
         <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -226,7 +226,7 @@ async function testConnection() {
       </button>
       <button
         type="button"
-        class="grid h-8 w-8 place-items-center rounded-lg transition-colors hover:bg-[#007aff]/10 disabled:pointer-events-none disabled:opacity-40"
+        class="grid h-8 w-8 place-items-center rounded-lg transition-colors enabled:hover:bg-[#007aff]/10 disabled:cursor-not-allowed disabled:opacity-40"
         :class="connectionDimmed ? 'text-zinc-400' : 'text-[#007aff]'"
         :disabled="!profile.provider || busy || testing"
         :title="connectionTitle"
@@ -242,7 +242,7 @@ async function testConnection() {
       </button>
       <button
         type="button"
-        class="grid h-8 w-8 place-items-center rounded-lg text-[#ff3b30]/60 transition-colors hover:bg-[#ff3b30]/10 hover:text-[#ff3b30] disabled:pointer-events-none disabled:opacity-40"
+        class="grid h-8 w-8 place-items-center rounded-lg text-[#ff3b30]/60 transition-colors enabled:hover:bg-[#ff3b30]/10 enabled:hover:text-[#ff3b30] disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="busy || active"
         title="删除"
         aria-label="删除"

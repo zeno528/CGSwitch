@@ -108,7 +108,7 @@ async function submitModal() {
       message.success("已捕获并设为使用中");
     } else if (modalProfile.value) {
       await api.renameProfile(modalProfile.value.id, profileName.value);
-      message.success("配置预设已重命名");
+      message.success("供应商已重命名");
     }
     modalVisible.value = false;
     emit("refresh");
@@ -138,7 +138,7 @@ async function applyProfile(profile: ProfileSummary) {
 
 async function removeProfile(profile: ProfileSummary) {
   dialog.error({
-    title: "删除配置预设",
+    title: "删除供应商",
     content: `确定删除“${profile.name}”吗？删除后不可恢复。`,
     positiveText: "删除",
     negativeText: "取消",
@@ -147,7 +147,7 @@ async function removeProfile(profile: ProfileSummary) {
     onPositiveClick: async () => {
       try {
         await api.deleteProfile(profile.id);
-        message.success("配置预设已删除");
+        message.success("供应商已删除");
         emit("refresh");
       } catch (error) {
         message.error(String(error));
@@ -277,7 +277,7 @@ onBeforeUnmount(() => {
               <path d="M12 5v14M5 12h14" />
             </svg>
           </template>
-          添加预设
+          添加供应商
         </n-button>
       </div>
     </header>
@@ -296,7 +296,7 @@ onBeforeUnmount(() => {
     </transition>
 
     <div class="mt-[var(--gap-page)]">
-      <n-empty v-if="state.profiles.length === 0" description="还没有配置预设。可以添加内置官方预设，或先把 ~/.codex/config.toml 调整到目标状态，再点击“捕获当前配置”。" class="apple-group py-14" />
+      <n-empty v-if="state.profiles.length === 0" description="还没有供应商配置。可以添加内置官方供应商，或先把 ~/.codex/config.toml 调整到目标状态，再点击“捕获当前配置”。" class="apple-group py-14" />
       <template v-else>
         <div class="apple-group divide-y divide-[var(--panel-border)]">
           <ProfileCard
@@ -319,10 +319,10 @@ onBeforeUnmount(() => {
       </template>
     </div>
 
-    <n-modal v-model:show="modalVisible" preset="card" class="max-w-[460px]" title="配置预设" @after-leave="blurActiveOnModalLeave">
+    <n-modal v-model:show="modalVisible" preset="card" class="max-w-[460px]" title="供应商配置" @after-leave="blurActiveOnModalLeave">
       <div class="space-y-4">
         <p class="muted text-sm">
-          {{ modalMode === "capture" ? "为当前 Codex 配置创建一个可回滚的预设。" : "输入新的配置预设名称。" }}
+          {{ modalMode === "capture" ? "为当前 Codex 配置创建一个可回滚的供应商配置。" : "输入新的供应商名称。" }}
         </p>
         <n-input v-model:value="profileName" maxlength="50" show-count placeholder="例如：ZAI GLM 高推理" @keyup.enter="submitModal" />
         <div class="flex justify-end gap-2">

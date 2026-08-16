@@ -119,7 +119,7 @@ const webDetails: Record<string, WebDetail> = {
 
 function webProfileDetail(id: string): ProfileDetail {
   const profile = webProfiles.find((item) => item.id === id);
-  if (!profile) throw new Error("配置预设不存在");
+  if (!profile) throw new Error("供应商配置不存在");
   const detail = webDetails[id];
   return {
     id: profile.id,
@@ -157,7 +157,7 @@ let webSettings: Settings = {
 };
 
 let webBackups: DatabaseBackupInfo[] = [];
-// 与后端一致：激活状态只由“应用/捕获”显式建立，添加预设不激活
+// 与后端一致：激活状态只由“应用/捕获”显式建立，添加供应商不激活
 let webActiveProfileId: string | null = null;
 const webBalanceCache: Record<string, DeepSeekBalanceInfo> = {};
 
@@ -188,7 +188,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       const now = new Date().toISOString();
       const profile: ProfileSummary = {
         id: `profile-${Date.now()}`,
-        name: String(args?.name ?? "新预设"),
+        name: String(args?.name ?? "新供应商"),
         account_id: null,
         model: "glm-5.3",
         provider: "ZAI",
@@ -201,13 +201,13 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
         updated_at: now,
       };
       webProfiles.unshift(profile);
-      // 捕获即建立“当前 live = 该预设”的显式关联
+      // 捕获即建立“当前 live = 该供应商”的显式关联
       webActiveProfileId = profile.id;
       return profile as T;
     }
     case "add_builtin_profile": {
       const preset = builtinPresetByKind(String(args?.kind ?? ""));
-      if (!preset) throw new Error("未知的内置预设类型");
+      if (!preset) throw new Error("未知的内置供应商类型");
       const rawKey = String(args?.apiKey ?? "");
       const apiKey = preset.provider ? rawKey : null;
       const rawBaseUrl = String(args?.baseUrl ?? "");
@@ -242,7 +242,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       const now = new Date().toISOString();
       const profile: ProfileSummary = {
         id: `profile-${Date.now()}`,
-        name: String(args?.name ?? "自定义预设"),
+        name: String(args?.name ?? "自定义供应商"),
         account_id: null,
         model: null,
         provider: null,
@@ -277,8 +277,8 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     }
     case "test_profile_connection": {
       const profile = webProfiles.find((item) => item.id === args?.id);
-      if (!profile) throw new Error("配置预设不存在");
-      if (!profile.provider) throw new Error("该预设没有供应商配置，无法测试连通性");
+      if (!profile) throw new Error("供应商配置不存在");
+      if (!profile.provider) throw new Error("该供应商缺少配置，无法测试连通性");
       const rawKey = args?.apiKey !== undefined ? String(args.apiKey) : "saved-key";
       if (!rawKey.trim()) throw new Error("请填写 API 密钥");
       const rawBase = args?.baseUrl !== undefined ? String(args.baseUrl) : "https://api.example.com";
@@ -288,9 +288,9 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     }
     case "get_deepseek_balance": {
       const profile = webProfiles.find((item) => item.id === args?.id);
-      if (!profile) throw new Error("配置预设不存在");
+      if (!profile) throw new Error("供应商配置不存在");
       if (profile.provider !== "deepseek") {
-        throw new Error("该预设不是 DeepSeek 供应商，无法查询余额");
+        throw new Error("该供应商不是 DeepSeek，无法查询余额");
       }
       await new Promise((resolve) => setTimeout(resolve, 400));
       return {
@@ -346,7 +346,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     }
     case "duplicate_profile": {
       const profile = webProfiles.find((item) => item.id === args?.id);
-      if (!profile) throw new Error("配置预设不存在");
+      if (!profile) throw new Error("供应商配置不存在");
       const now = new Date().toISOString();
       const copy: ProfileSummary = {
         ...profile,
@@ -363,7 +363,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       return webProfileDetail(String(args?.id)) as T;
     case "update_profile": {
       const profile = webProfiles.find((item) => item.id === args?.id);
-      if (!profile) throw new Error("配置预设不存在");
+      if (!profile) throw new Error("供应商配置不存在");
       profile.name = String(args?.name ?? profile.name);
       const detail = webDetails[profile.id];
       if (detail) {
@@ -375,7 +375,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     }
     case "update_profile_config": {
       const profile = webProfiles.find((item) => item.id === args?.id);
-      if (!profile) throw new Error("配置预设不存在");
+      if (!profile) throw new Error("供应商配置不存在");
       const detail = webDetails[profile.id];
       if (detail) {
         if (typeof args?.configText === "string") detail.raw_config = args.configText;

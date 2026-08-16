@@ -25,7 +25,7 @@ const selected = ref<string | null>(props.icon);
         <svg class="h-4 w-4 shrink-0 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M15 5.5 8.5 12l6.5 6.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <span class="apple-title">选择预设图标</span>
+        <span class="apple-title">选择供应商图标</span>
       </button>
     </div>
 

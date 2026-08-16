@@ -111,7 +111,7 @@ onMounted(refreshStatus);
 <template>
   <div>
     <div v-if="status?.authenticated" class="space-y-3">
-      <p class="muted text-sm">ChatGPT 官方订阅已认证，添加 ChatGPT 预设时无需再输入密钥。</p>
+      <p class="muted text-sm">ChatGPT 官方订阅已认证，添加 ChatGPT 供应商时无需再输入密钥。</p>
       <div
         v-for="account in status.accounts"
         :key="account.id"
@@ -159,7 +159,7 @@ onMounted(refreshStatus);
 
     <div v-else class="space-y-3">
       <p class="muted text-sm">
-        官方 ChatGPT 订阅使用浏览器登录认证，无需 API 密钥。认证一次后，所有 ChatGPT 预设共用该账号。
+        官方 ChatGPT 订阅使用浏览器登录认证，无需 API 密钥。认证一次后，所有 ChatGPT 供应商共用该账号。
       </p>
       <n-button type="primary" :loading="busy" @click="startLogin">登录 ChatGPT</n-button>
     </div>

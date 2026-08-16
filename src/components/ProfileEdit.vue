@@ -259,7 +259,7 @@ const canSave = computed(() => {
 function selectPreset(kind: string) {
   if (kind === "custom") {
     presetKind.value = kind;
-    name.value = "自定义预设";
+    name.value = "自定义供应商";
     baseUrl.value = "https://api.example.com/v1";
     apiKey.value = "";
     adminUrl.value = "";
@@ -388,7 +388,7 @@ onMounted(async () => {
     selectPreset("custom");
   } else {
     try {
-      if (!props.profile) throw new Error("缺少预设信息");
+      if (!props.profile) throw new Error("缺少供应商信息");
       detail.value = await api.getProfile(props.profile.id);
       name.value = detail.value.name;
       configText.value = detail.value.raw_config ?? detail.value.config_fragment;
@@ -421,7 +421,7 @@ async function saveIcon(icon: string | null) {
     if (creating.value) {
       selectedIcon.value = icon;
     } else {
-      if (!props.profile) throw new Error("缺少预设信息");
+      if (!props.profile) throw new Error("缺少供应商信息");
       await api.setProfileIcon(props.profile.id, icon);
       selectedIcon.value = icon;
       if (detail.value) detail.value.icon = icon;
@@ -465,7 +465,7 @@ async function save() {
     if (creating.value) {
       if (isCustom.value) {
         await api.addCustomProfile(
-          name.value.trim() || "自定义预设",
+          name.value.trim() || "自定义供应商",
           configText.value,
           baseUrl.value.trim() || undefined,
           apiKey.value.trim() || undefined,
@@ -473,7 +473,7 @@ async function save() {
           catalogText.value.trim() ? catalogText.value : null,
           authText.value.trim() ? authText.value : null,
         );
-        message.success("自定义预设已添加");
+        message.success("自定义供应商已添加");
       } else {
         const created = await api.addBuiltinProfile(
           presetKind.value,
@@ -490,10 +490,10 @@ async function save() {
             null,
           );
         }
-        message.success("内置预设已添加");
+        message.success("内置供应商已添加");
       }
     } else {
-      if (!props.profile) throw new Error("缺少预设信息");
+      if (!props.profile) throw new Error("缺少供应商信息");
       const hasProvider = Boolean(detail.value?.provider);
       await api.updateProfile(
         props.profile.id,
@@ -513,7 +513,7 @@ async function save() {
       if (isOfficial.value) {
         await api.setProfileAccount(props.profile.id, boundAccountId.value || null);
       }
-      message.success("配置预设已更新");
+      message.success("供应商已更新");
     }
     emit("back");
   } catch (error) {
@@ -544,7 +544,7 @@ async function save() {
         <svg class="h-4 w-4 shrink-0 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M15 5.5 8.5 12l6.5 6.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <span class="apple-title">{{ creating ? "新建预设" : "编辑预设" }}</span>
+        <span class="apple-title">{{ creating ? "新建供应商" : "编辑供应商" }}</span>
       </button>
     </div>
 
@@ -595,7 +595,7 @@ async function save() {
         </button>
         <div class="min-w-0 flex-1">
           <div class="field-label mb-1.5">名称</div>
-          <n-input v-model:value="name" :bordered="false" class="underline-input" maxlength="50" placeholder="预设名称" />
+          <n-input v-model:value="name" :bordered="false" class="underline-input" maxlength="50" placeholder="供应商名称" />
         </div>
       </div>
       <div v-if="showProviderFields" class="mt-4">
@@ -608,7 +608,7 @@ async function save() {
           <button
             v-if="!creating"
             type="button"
-            class="flex h-6 shrink-0 items-center gap-1 rounded-md border border-[var(--panel-border)] px-2 text-[11px] font-medium text-[#007aff] transition-colors hover:bg-[#007aff]/10 disabled:pointer-events-none disabled:opacity-40"
+            class="flex h-6 shrink-0 items-center gap-1 rounded-md border border-[var(--panel-border)] px-2 text-[11px] font-medium text-[#007aff] transition-colors enabled:hover:bg-[#007aff]/10 disabled:cursor-not-allowed disabled:opacity-40"
             :disabled="!apiKey.trim() || !baseUrl.trim()"
             @click="testConnection"
           >
@@ -694,14 +694,14 @@ async function save() {
           <ConfigTextEditor
             v-model="configText"
             language="toml"
-            :placeholder="creating ? '选择供应商后显示配置预览' : '编辑 config.toml 内容，保存后仅写入预设；应用时才生效。'"
+            :placeholder="creating ? '选择供应商后显示配置预览' : '编辑 config.toml 内容，保存后仅写入该供应商；应用时才生效。'"
           />
         </div>
         <div v-else-if="activeTab === 'auth'">
           <ConfigTextEditor
             v-model="authText"
             language="json"
-            placeholder="认证文件（~/.codex/auth.json）。保存后随预设生效；清空内容可移除预设自定义认证。"
+            placeholder="认证文件（~/.codex/auth.json）。保存后随该供应商生效；清空内容可移除该供应商的自定义认证。"
           />
         </div>
         <div v-else class="flex flex-col text-sm">
@@ -713,7 +713,7 @@ async function save() {
             <ConfigTextEditor
               v-model="catalogText"
               language="json"
-              placeholder="模型目录文件不存在或无法读取；保存后内容将随预设生效。"
+              placeholder="模型目录文件不存在或无法读取；保存后内容将随该供应商生效。"
             />
           </div>
         </div>

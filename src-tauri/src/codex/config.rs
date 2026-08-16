@@ -42,7 +42,7 @@ pub fn capture_from_document(document: &DocumentMut) -> AppResult<ProfilePayload
 
     if provider_id.is_some() && provider_body.is_none() {
         return Err(app_err!(
-            "当前 model_provider 在 model_providers 中不存在，未捕获预设"
+            "当前 model_provider 在 model_providers 中不存在，未捕获供应商配置"
         ));
     }
 
@@ -83,7 +83,7 @@ pub fn apply_to_document(document: &mut DocumentMut, payload: &ProfilePayload) -
 
         let parsed_body: DocumentMut = provider_body
             .parse()
-            .map_err(|_| app_err!("配置预设中的 provider 数据无效"))?;
+            .map_err(|_| app_err!("供应商配置中的 provider 数据无效"))?;
         let mut provider = Table::new();
         for (key, item) in parsed_body.as_table() {
             let item = item.clone();
@@ -102,7 +102,7 @@ fn is_model_key(key: &str) -> bool {
 fn parse_value(raw: &str) -> AppResult<Value> {
     raw.trim()
         .parse::<Value>()
-        .map_err(|_| app_err!("配置预设中的模型值无效"))
+        .map_err(|_| app_err!("供应商配置中的模型值无效"))
 }
 
 pub fn update_provider_body(
@@ -112,7 +112,7 @@ pub fn update_provider_body(
 ) -> AppResult<String> {
     let mut document: DocumentMut = body
         .parse()
-        .map_err(|_| app_err!("配置预设中的 provider 数据无效"))?;
+        .map_err(|_| app_err!("供应商配置中的 provider 数据无效"))?;
     if let Some(value) = base_url {
         set_table_value(&mut document, "base_url", value);
     }

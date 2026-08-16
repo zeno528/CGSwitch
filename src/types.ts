@@ -8,7 +8,7 @@ export interface ProfileSummary {
   reasoning_effort: string | null;
   has_key: boolean;
   admin_url: string | null;
-  /** 预设级开关：是否在卡片显示并自动刷新 DeepSeek 余额。 */
+  /** 供应商级开关：是否在卡片显示并自动刷新 DeepSeek 余额。 */
   show_balance: boolean;
   icon: string | null;
   created_at: string;
@@ -26,13 +26,13 @@ export interface ProfileDetail {
   api_key: string | null;
   model_values: Record<string, string>;
   config_fragment: string;
-  /** 预设自己保存的完整 config 原文（内置预设可全量编辑；普通预设为片段）。 */
+  /** 供应商自己保存的完整 config 原文（内置供应商可全量编辑；普通供应商为片段）。 */
   raw_config: string | null;
   auth_content: string | null;
   catalog_content: string | null;
-  /** 预设自己保存的 models.json 原文。 */
+  /** 供应商自己保存的 models.json 原文。 */
   raw_catalog: string | null;
-  /** 预设自己保存的 auth.json 原文。 */
+  /** 供应商自己保存的 auth.json 原文。 */
   raw_auth: string | null;
   admin_url: string | null;
   show_balance: boolean;
@@ -112,7 +112,7 @@ export interface AppState {
   codex: CodexAppStatus;
   settings: Settings;
   paths: PathInfo[];
-  /** 预设级余额缓存（上次成功查询结果），保证卡片静默显示不闪烁。 */
+  /** 供应商级余额缓存（上次成功查询结果），保证卡片静默显示不闪烁。 */
   balance_cache: Record<string, DeepSeekBalanceInfo>;
 }
 

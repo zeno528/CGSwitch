@@ -25,6 +25,7 @@ const profilesNavBtn = ref<HTMLElement | null>(null);
 const settingsNavBtn = ref<HTMLElement | null>(null);
 const sidebarNavRef = ref<HTMLElement | null>(null);
 const indicatorTop = ref(8);
+const indicatorLeft = ref(0);
 const state = ref<AppState | null>(null);
 const loadError = ref("");
 const systemDark = ref(window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -71,7 +72,10 @@ async function syncWindowTitleBarTheme(dark: boolean) {
 function updateSidebarIndicator() {
   const target = view.value === "profiles" ? profilesNavBtn.value : settingsNavBtn.value;
   const nav = sidebarNavRef.value;
-  if (target && nav) indicatorTop.value = target.getBoundingClientRect().top - nav.getBoundingClientRect().top + 8;
+  if (target && nav) {
+    indicatorTop.value = target.getBoundingClientRect().top - nav.getBoundingClientRect().top + 8;
+    indicatorLeft.value = target.offsetLeft + 4;
+  }
 }
 
 watch(view, updateSidebarIndicator);
@@ -79,9 +83,10 @@ watch(view, updateSidebarIndicator);
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value;
   if (sidebarCollapsed.value) sidebarFlyoutArmed.value = false;
+  window.setTimeout(updateSidebarIndicator, 360);
 }
 
-// 点击侧边栏“配置预设”始终回到首页列表（退出编辑等子视图）
+// 点击侧边栏“供应商配置”始终回到首页列表（退出编辑等子视图）
 function goProfiles() {
   profilesNavReset.value++;
   view.value = "profiles";
@@ -161,7 +166,7 @@ useWindowActivation({
       <n-message-provider>
         <n-layout class="h-full! rounded-none! bg-transparent!">
           <div class="flex h-screen">
-            <aside class="apple-sidebar relative h-full shrink-0" :class="isSidebarCollapsed ? ['w-[60px]', 'apple-sidebar--collapsed'] : 'w-[160px]'">
+            <aside class="apple-sidebar relative h-full shrink-0" :class="isSidebarCollapsed ? ['w-[60px]', 'apple-sidebar--collapsed'] : 'w-[144px]'">
               <div
                 class="apple-sidebar-brand mx-3 mt-3 flex items-center gap-3"
                 role="button"
@@ -179,14 +184,15 @@ useWindowActivation({
               </div>
 
               <nav ref="sidebarNavRef" class="relative mx-2 mt-6 space-y-1">
-                <span class="apple-sidebar-indicator" :style="{ top: `${indicatorTop}px` }" aria-hidden="true" />
-                <button ref="profilesNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="配置预设" @click="goProfiles" @mouseenter="sidebarFlyoutArmed = true">
-                  <svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                    <rect x="4.5" y="4.5" width="15" height="15" rx="3" />
-                    <path d="M8.5 9h7M8.5 12h7M8.5 15h4" stroke-linecap="round" />
+                <span class="apple-sidebar-indicator" :style="{ top: `${indicatorTop}px`, left: `${indicatorLeft}px` }" aria-hidden="true" />
+                <button ref="profilesNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="供应商配置" @click="goProfiles" @mouseenter="sidebarFlyoutArmed = true">
+                  <svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="2" y="3" width="20" height="7" rx="2" />
+                    <rect x="2" y="14" width="20" height="7" rx="2" />
+                    <path d="M6 6.5h.01M6 17.5h.01" />
                   </svg>
-                  <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">配置预设</span>
-                  <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">配置预设</span>
+                  <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">供应商配置</span>
+                  <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">供应商配置</span>
                 </button>
               </nav>
 

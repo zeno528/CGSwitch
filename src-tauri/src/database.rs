@@ -10,7 +10,7 @@ use crate::error::{app_err, AppResult};
 use crate::models::{ProfileKind, ProfilePayload, ProfileSummary};
 use crate::paths::AppPaths;
 
-/// profile id 进程内自增后缀：同一毫秒内创建多个预设也不会撞唯一约束。
+/// profile id 进程内自增后缀：同一毫秒内创建多个供应商也不会撞唯一约束。
 static PROFILE_ID_SEQ: AtomicU64 = AtomicU64::new(0);
 
 const SCHEMA_V1: &str = r#"
@@ -90,14 +90,14 @@ impl Database {
                 "SELECT id, name, payload_json, icon, kind, account_id, created_at, updated_at
                  FROM profiles ORDER BY created_at ASC, id ASC",
             )
-            .map_err(|error| app_err!("无法读取配置预设: {error}"))?;
+            .map_err(|error| app_err!("无法读取供应商配置: {error}"))?;
         let rows = statement
             .query_map([], profile_from_row)
-            .map_err(|error| app_err!("无法读取配置预设: {error}"))?;
+            .map_err(|error| app_err!("无法读取供应商配置: {error}"))?;
 
         let mut profiles = Vec::new();
         for row in rows {
-            profiles.push(row.map_err(|error| app_err!("配置预设数据无效: {error}"))?);
+            profiles.push(row.map_err(|error| app_err!("供应商配置数据无效: {error}"))?);
         }
         Ok(profiles)
     }
@@ -112,8 +112,8 @@ impl Database {
                 profile_from_row,
             )
             .optional()
-            .map_err(|error| app_err!("无法读取配置预设: {error}"))?
-            .ok_or_else(|| app_err!("配置预设不存在"))
+            .map_err(|error| app_err!("无法读取供应商配置: {error}"))?
+            .ok_or_else(|| app_err!("供应商配置不存在"))
     }
 
     pub fn insert_profile(
@@ -127,7 +127,7 @@ impl Database {
             PROFILE_ID_SEQ.fetch_add(1, Ordering::Relaxed)
         );
         let payload_json =
-            serde_json::to_string(payload).map_err(|_| app_err!("配置预设序列化失败"))?;
+            serde_json::to_string(payload).map_err(|_| app_err!("供应商配置序列化失败"))?;
         let kind = if payload.provider_id.is_none() {
             ProfileKind::Official
         } else {
@@ -140,7 +140,7 @@ impl Database {
                  VALUES(?1, ?2, ?3, ?4, ?5, ?5)",
                 params![id, name, payload_json, kind.as_db(), timestamp],
             )
-            .map_err(|error| app_err!("无法保存配置预设: {error}"))?;
+            .map_err(|error| app_err!("无法保存供应商配置: {error}"))?;
         Ok(summary(
             &id, name, payload, None, None, timestamp, timestamp,
         ))
@@ -153,9 +153,9 @@ impl Database {
                 "UPDATE profiles SET icon=?2, updated_at=?3 WHERE id=?1",
                 params![id, icon, timestamp],
             )
-            .map_err(|error| app_err!("无法更新配置预设图标: {error}"))?;
+            .map_err(|error| app_err!("无法更新供应商配置图标: {error}"))?;
         if changed == 0 {
-            return Err(app_err!("配置预设不存在"));
+            return Err(app_err!("供应商配置不存在"));
         }
         Ok(())
     }
@@ -172,9 +172,9 @@ impl Database {
                 "UPDATE profiles SET account_id=?2, updated_at=?3 WHERE id=?1",
                 params![id, account_id, timestamp],
             )
-            .map_err(|error| app_err!("无法更新配置预设: {error}"))?;
+            .map_err(|error| app_err!("无法更新供应商配置: {error}"))?;
         if changed == 0 {
-            return Err(app_err!("配置预设不存在"));
+            return Err(app_err!("供应商配置不存在"));
         }
         Ok(())
     }
@@ -187,7 +187,7 @@ impl Database {
         timestamp: &str,
     ) -> AppResult<StoredProfile> {
         let payload_json =
-            serde_json::to_string(payload).map_err(|_| app_err!("配置预设序列化失败"))?;
+            serde_json::to_string(payload).map_err(|_| app_err!("供应商配置序列化失败"))?;
         let connection = self.lock()?;
         connection
             .query_row(
@@ -197,8 +197,8 @@ impl Database {
                 profile_from_row,
             )
             .optional()
-            .map_err(|error| app_err!("无法更新配置预设: {error}"))?
-            .ok_or_else(|| app_err!("配置预设不存在"))
+            .map_err(|error| app_err!("无法更新供应商配置: {error}"))?
+            .ok_or_else(|| app_err!("供应商配置不存在"))
     }
 
     pub fn rename_profile(&self, id: &str, name: &str, timestamp: &str) -> AppResult<()> {
@@ -208,9 +208,9 @@ impl Database {
                 "UPDATE profiles SET name=?2, updated_at=?3 WHERE id=?1",
                 params![id, name, timestamp],
             )
-            .map_err(|error| app_err!("无法重命名配置预设: {error}"))?;
+            .map_err(|error| app_err!("无法重命名供应商配置: {error}"))?;
         if changed == 0 {
-            return Err(app_err!("配置预设不存在"));
+            return Err(app_err!("供应商配置不存在"));
         }
         Ok(())
     }
@@ -219,9 +219,9 @@ impl Database {
         let connection = self.lock()?;
         let changed = connection
             .execute("DELETE FROM profiles WHERE id=?1", params![id])
-            .map_err(|error| app_err!("无法删除配置预设: {error}"))?;
+            .map_err(|error| app_err!("无法删除供应商配置: {error}"))?;
         if changed == 0 {
-            return Err(app_err!("配置预设不存在"));
+            return Err(app_err!("供应商配置不存在"));
         }
         Ok(())
     }
@@ -336,7 +336,7 @@ impl Database {
         Ok(())
     }
 
-    /// 最近一次成功应用的预设 id（应用记录被删除时返回 None 由调用方回退匹配）。
+    /// 最近一次成功应用的供应商 id（应用记录被删除时返回 None 由调用方回退匹配）。
     pub fn latest_applied_profile(&self) -> AppResult<Option<String>> {
         let connection = self.lock()?;
         connection

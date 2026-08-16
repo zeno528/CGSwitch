@@ -107,7 +107,7 @@ pub fn template(kind: &str) -> AppResult<&'static BuiltinTemplate> {
     BUILTINS
         .iter()
         .find(|item| item.kind == kind)
-        .ok_or_else(|| app_err!("未知的内置预设类型：{kind}"))
+        .ok_or_else(|| app_err!("未知的内置供应商类型：{kind}"))
 }
 
 fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
