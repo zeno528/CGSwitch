@@ -1,6 +1,8 @@
 export interface ProfileSummary {
   id: string;
   name: string;
+  /** 官方档案绑定的订阅账号 id；第三方为 null。 */
+  account_id: string | null;
   model: string | null;
   provider: string | null;
   reasoning_effort: string | null;
@@ -14,6 +16,8 @@ export interface ProfileSummary {
 export interface ProfileDetail {
   id: string;
   name: string;
+  /** 官方档案绑定的订阅账号 id；第三方为 null。 */
+  account_id: string | null;
   icon: string | null;
   provider: string | null;
   base_url: string | null;

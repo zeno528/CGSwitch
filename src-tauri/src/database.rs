@@ -134,7 +134,7 @@ impl Database {
                 params![id, name, payload_json, kind.as_db(), timestamp],
             )
             .map_err(|error| app_err!("无法保存配置预设: {error}"))?;
-        Ok(summary(&id, name, payload, None, timestamp, timestamp))
+        Ok(summary(&id, name, payload, None, None, timestamp, timestamp))
     }
 
     pub fn set_profile_icon(&self, id: &str, icon: Option<&str>, timestamp: &str) -> AppResult<()> {
@@ -145,6 +145,25 @@ impl Database {
                 params![id, icon, timestamp],
             )
             .map_err(|error| app_err!("无法更新配置预设图标: {error}"))?;
+        if changed == 0 {
+            return Err(app_err!("配置预设不存在"));
+        }
+        Ok(())
+    }
+
+    pub fn set_profile_account(
+        &self,
+        id: &str,
+        account_id: Option<&str>,
+        timestamp: &str,
+    ) -> AppResult<()> {
+        let connection = self.lock()?;
+        let changed = connection
+            .execute(
+                "UPDATE profiles SET account_id=?2, updated_at=?3 WHERE id=?1",
+                params![id, account_id, timestamp],
+            )
+            .map_err(|error| app_err!("无法更新配置预设: {error}"))?;
         if changed == 0 {
             return Err(app_err!("配置预设不存在"));
         }
@@ -495,12 +514,14 @@ fn summary(
     name: &str,
     payload: &ProfilePayload,
     icon: Option<&str>,
+    account_id: Option<&str>,
     created_at: &str,
     updated_at: &str,
 ) -> ProfileSummary {
     ProfileSummary {
         id: id.into(),
         name: name.into(),
+        account_id: account_id.map(str::to_string),
         model: display_text(payload.model_values.get("model")),
         provider: payload.provider_id.clone(),
         reasoning_effort: display_text(payload.model_values.get("model_reasoning_effort")),
@@ -552,6 +573,7 @@ pub fn profile_summary(profile: &StoredProfile) -> ProfileSummary {
         &profile.name,
         &profile.payload,
         profile.icon.as_deref(),
+        profile.account_id.as_deref(),
         &profile.created_at,
         &profile.updated_at,
     )

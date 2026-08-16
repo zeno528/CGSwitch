@@ -55,6 +55,8 @@ pub struct ProfilePayload {
 pub struct ProfileSummary {
     pub id: String,
     pub name: String,
+    /// 官方档案绑定的订阅账号；第三方恒为 None。
+    pub account_id: Option<String>,
     pub model: Option<String>,
     pub provider: Option<String>,
     pub reasoning_effort: Option<String>,
@@ -70,6 +72,8 @@ pub struct ProfileSummary {
 pub struct ProfileDetail {
     pub id: String,
     pub name: String,
+    /// 官方档案绑定的订阅账号；第三方恒为 None。
+    pub account_id: Option<String>,
     pub icon: Option<String>,
     pub provider: Option<String>,
     pub base_url: Option<String>,

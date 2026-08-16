@@ -22,6 +22,7 @@ const webProfiles: ProfileSummary[] = [
   {
     id: "profile-zai-glm-high",
     name: "ZAI GLM 高推理",
+    account_id: null,
     model: "glm-5.3",
     provider: "ZAI",
     reasoning_effort: "high",
@@ -34,6 +35,7 @@ const webProfiles: ProfileSummary[] = [
   {
     id: "profile-zai-glm-fast",
     name: "ZAI GLM 快速",
+    account_id: null,
     model: "glm-5-turbo",
     provider: "ZAI",
     reasoning_effort: "low",
@@ -46,6 +48,7 @@ const webProfiles: ProfileSummary[] = [
   {
     id: "profile-official",
     name: "官方默认",
+    account_id: null,
     model: "gpt-5.6",
     provider: null,
     reasoning_effort: "medium",
@@ -116,6 +119,7 @@ function webProfileDetail(id: string): ProfileDetail {
   return {
     id: profile.id,
     name: profile.name,
+    account_id: profile.account_id,
     icon: profile.icon,
     provider: profile.provider,
     base_url: detail?.base_url ?? null,
@@ -175,6 +179,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       const profile: ProfileSummary = {
         id: `profile-${Date.now()}`,
         name: String(args?.name ?? "新预设"),
+        account_id: null,
         model: "glm-5.3",
         provider: "ZAI",
         reasoning_effort: "high",
@@ -194,16 +199,19 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       const apiKey = preset.provider ? rawKey : null;
       const rawBaseUrl = String(args?.baseUrl ?? "");
       const baseUrl = preset.provider ? rawBaseUrl || preset.base_url : null;
+      const rawAdminUrl = String(args?.adminUrl ?? "");
+      const adminUrl = rawAdminUrl || preset.admin_url;
       if (preset.provider && !rawKey.trim()) throw new Error("请先填写 API 密钥");
       const now = new Date().toISOString();
       const profile: ProfileSummary = {
         id: `profile-${Date.now()}`,
         name: preset.name,
+        account_id: preset.provider ? null : (typeof args?.accountId === "string" ? args.accountId : null),
         model: preset.model,
         provider: preset.provider,
         reasoning_effort: preset.model_values.model_reasoning_effort?.replace(/^"|"$/g, "") ?? null,
         has_key: Boolean(preset.provider),
-        admin_url: null,
+        admin_url: adminUrl,
         icon: preset.icon,
         created_at: now,
         updated_at: now,
@@ -217,6 +225,37 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       };
       return profile as T;
     }
+    case "add_custom_profile": {
+      const now = new Date().toISOString();
+      const profile: ProfileSummary = {
+        id: `profile-${Date.now()}`,
+        name: String(args?.name ?? "自定义预设"),
+        account_id: null,
+        model: null,
+        provider: null,
+        reasoning_effort: null,
+        has_key: Boolean(args?.apiKey),
+        admin_url:
+          typeof args?.adminUrl === "string" && args.adminUrl ? args.adminUrl : null,
+        icon: "custom",
+        created_at: now,
+        updated_at: now,
+      };
+      webProfiles.unshift(profile);
+      webDetails[profile.id] = {
+        base_url:
+          typeof args?.baseUrl === "string" && args.baseUrl ? args.baseUrl : null,
+        api_key:
+          typeof args?.apiKey === "string" && args.apiKey ? args.apiKey : null,
+        model_values: {},
+        config_fragment: String(args?.configText ?? ""),
+        raw_config: String(args?.configText ?? ""),
+        raw_catalog:
+          typeof args?.catalogText === "string" && args.catalogText ? args.catalogText : null,
+        raw_auth: typeof args?.authText === "string" && args.authText ? args.authText : null,
+      };
+      return profile as T;
+    }
     case "get_builtin_catalog": {
       const preset = builtinPresetByKind(String(args?.kind ?? ""));
       if (!preset?.model_values.model_catalog_json) return null as T;
@@ -226,6 +265,10 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       const profile = webProfiles.find((item) => item.id === args?.id);
       if (!profile) throw new Error("配置预设不存在");
       if (!profile.provider) throw new Error("该预设没有供应商配置，无法测试连通性");
+      const rawKey = args?.apiKey !== undefined ? String(args.apiKey) : "saved-key";
+      if (!rawKey.trim()) throw new Error("请填写 API 密钥");
+      const rawBase = args?.baseUrl !== undefined ? String(args.baseUrl) : "https://api.example.com";
+      if (!rawBase.trim()) throw new Error("请填写调用地址");
       await new Promise((resolve) => setTimeout(resolve, 300));
       return { ok: true, latency_ms: 87, status: 200, error: null } as T;
     }
@@ -313,6 +356,13 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       return undefined as T;
     case "auth_set_default_account":
       return undefined as T;
+    case "set_profile_account": {
+      const profile = webProfiles.find((item) => item.id === args?.id);
+      if (profile) {
+        profile.account_id = typeof args?.accountId === "string" ? args.accountId : null;
+      }
+      return undefined as T;
+    }
     case "open_url":
       return undefined as T;
     case "save_settings":
@@ -331,11 +381,34 @@ export const api = {
   getState: () => call<AppState>("get_state"),
   getCodexStatus: () => call<CodexAppStatus>("get_codex_status"),
   captureProfile: (name: string) => call<ProfileSummary>("capture_profile", { name }),
-  addBuiltinProfile: (kind: string, baseUrl?: string, apiKey?: string) =>
-    call<ProfileSummary>("add_builtin_profile", { kind, baseUrl, apiKey }),
+  addBuiltinProfile: (
+    kind: string,
+    baseUrl?: string,
+    apiKey?: string,
+    adminUrl?: string,
+    accountId?: string,
+  ) => call<ProfileSummary>("add_builtin_profile", { kind, baseUrl, apiKey, adminUrl, accountId }),
+  addCustomProfile: (
+    name: string,
+    configText: string,
+    baseUrl?: string,
+    apiKey?: string,
+    adminUrl?: string,
+    catalogText?: string | null,
+    authText?: string | null,
+  ) =>
+    call<ProfileSummary>("add_custom_profile", {
+      name,
+      configText,
+      baseUrl,
+      apiKey,
+      adminUrl,
+      catalogText,
+      authText,
+    }),
   getBuiltinCatalog: (kind: string) => call<string | null>("get_builtin_catalog", { kind }),
-  testProfileConnection: (id: string) =>
-    call<ProfileConnectionResult>("test_profile_connection", { id }),
+  testProfileConnection: (id: string, baseUrl?: string, apiKey?: string) =>
+    call<ProfileConnectionResult>("test_profile_connection", { id, baseUrl, apiKey }),
   exportDatabase: () => call<string>("export_database"),
   exportDatabaseTo: (path: string) => call<string>("export_database_to", { path }),
   importDatabase: (path: string) => call<void>("import_database", { path }),
@@ -344,6 +417,8 @@ export const api = {
   deleteDatabaseBackup: (name: string) => call<void>("delete_database_backup", { name }),
   renameProfile: (id: string, name: string) => call<void>("rename_profile", { id, name }),
   setProfileIcon: (id: string, icon: string | null) => call<void>("set_profile_icon", { id, icon }),
+  setProfileAccount: (id: string, accountId: string | null) =>
+    call<void>("set_profile_account", { id, accountId }),
   duplicateProfile: (id: string) => call<ProfileSummary>("duplicate_profile", { id }),
   getProfile: (id: string) => call<ProfileDetail>("get_profile", { id }),
   updateProfile: (id: string, name: string, baseUrl?: string, apiKey?: string, adminUrl?: string) =>

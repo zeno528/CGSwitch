@@ -30,7 +30,7 @@ pub struct BuiltinTemplate {
 pub const BUILTINS: [BuiltinTemplate; 4] = [
     BuiltinTemplate {
         kind: KIND_DEEPSEEK,
-        name: "DeepSeek 官方",
+        name: "DeepSeek",
         icon: "deepseek",
         config: DEEPSEEK_CONFIG,
         placeholder: Some("<你的 DeepSeek API Key>".as_bytes()),
@@ -39,7 +39,7 @@ pub const BUILTINS: [BuiltinTemplate; 4] = [
     },
     BuiltinTemplate {
         kind: KIND_MINIMAX,
-        name: "MiniMax 官方",
+        name: "MiniMax",
         icon: "minimax",
         config: MINIMAX_CONFIG,
         placeholder: Some("<MINIMAX_API_KEY>".as_bytes()),
@@ -48,7 +48,7 @@ pub const BUILTINS: [BuiltinTemplate; 4] = [
     },
     BuiltinTemplate {
         kind: KIND_ZHIPU,
-        name: "智谱官方",
+        name: "智谱",
         icon: "zhipu",
         config: ZHIPU_CONFIG,
         placeholder: Some("<Your API Key>".as_bytes()),
@@ -57,7 +57,7 @@ pub const BUILTINS: [BuiltinTemplate; 4] = [
     },
     BuiltinTemplate {
         kind: KIND_CHATGPT,
-        name: "ChatGPT 官方",
+        name: "ChatGPT",
         icon: "openai-chatgpt",
         config: CHATGPT_CONFIG,
         placeholder: None,

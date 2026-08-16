@@ -225,6 +225,8 @@ impl AppContext {
         kind: &str,
         base_url: Option<&str>,
         api_key: Option<&str>,
+        admin_url: Option<&str>,
+        account_id: Option<&str>,
     ) -> AppResult<ProfileSummary> {
         let template = builtin::template(kind)?;
         let base_url = base_url.map(str::trim).filter(|value| !value.is_empty());
@@ -239,6 +241,9 @@ impl AppContext {
         let mut payload =
             codex_config::capture_from_document(&codex_config::parse_document(text)?)?;
         payload.builtin = Some(template.kind.to_string());
+        if let Some(admin_url) = admin_url.map(str::trim).filter(|value| !value.is_empty()) {
+            payload.admin_url = Some(admin_url.to_string());
+        }
         if base_url.is_some() || api_key.is_some() {
             let body = payload
                 .provider_body
@@ -253,11 +258,76 @@ impl AppContext {
             .insert_profile(template.name, &payload, &timestamp)?;
         self.database
             .set_profile_icon(&summary.id, Some(template.icon), &timestamp)?;
+        // 官方订阅档案创建时可直接绑定账号；第三方忽略绑定参数
+        if payload.provider_id.is_none() {
+            if let Some(account_id) = account_id {
+                self.set_profile_account(&summary.id, Some(account_id))?;
+            }
+        }
         self.database.record_event(
             Some(&summary.id),
             "add_builtin",
             "success",
             Some("added built-in profile"),
+            &timestamp,
+        )?;
+        let stored = self.database.profile(&summary.id)?;
+        Ok(profile_summary(&stored))
+    }
+
+    /// 自定义预设：用户填写的三件套入库，config 必填，模型目录/认证文件有内容才存。
+    pub fn add_custom_profile(
+        &self,
+        name: &str,
+        config_text: &str,
+        base_url: Option<&str>,
+        api_key: Option<&str>,
+        admin_url: Option<&str>,
+        catalog_text: Option<&str>,
+        auth_text: Option<&str>,
+    ) -> AppResult<ProfileSummary> {
+        let name = validated_name(name)?;
+        if config_text.trim().is_empty() {
+            return Err(app_err!("请填写 config.toml 内容"));
+        }
+        let document = codex_config::parse_document(config_text)?;
+        let mut payload = codex_config::capture_from_document(&document)?;
+        let base_url = base_url.map(str::trim).filter(|value| !value.is_empty());
+        let api_key = api_key.map(str::trim).filter(|key| !key.is_empty());
+        if let Some(admin_url) = admin_url.map(str::trim).filter(|value| !value.is_empty()) {
+            payload.admin_url = Some(admin_url.to_string());
+        }
+        if base_url.is_some() || api_key.is_some() {
+            let body = payload.provider_body.as_deref().ok_or_else(|| {
+                app_err!("配置中缺少 model_providers 段落，无法写入调用地址/密钥")
+            })?;
+            payload.provider_body =
+                Some(codex_config::update_provider_body(body, base_url, api_key)?);
+        }
+        payload.raw_config = Some(config_text.trim_end().to_string());
+        if let Some(text) = catalog_text {
+            let text = text.trim();
+            if !text.is_empty() {
+                serde_json::from_str::<serde_json::Value>(text)
+                    .map_err(|error| app_err!("models.json 不是有效 JSON: {error}"))?;
+                payload.raw_catalog = Some(text.to_string());
+            }
+        }
+        if let Some(text) = auth_text {
+            let text = text.trim();
+            if !text.is_empty() {
+                serde_json::from_str::<serde_json::Value>(text)
+                    .map_err(|error| app_err!("auth.json 不是有效 JSON: {error}"))?;
+                payload.raw_auth = Some(text.to_string());
+            }
+        }
+        let timestamp = now_ms().to_string();
+        let summary = self.database.insert_profile(&name, &payload, &timestamp)?;
+        self.database.record_event(
+            Some(&summary.id),
+            "add_custom",
+            "success",
+            Some("added custom profile"),
             &timestamp,
         )?;
         let stored = self.database.profile(&summary.id)?;
@@ -275,7 +345,14 @@ impl AppContext {
 
     /// 验证供应商密钥连通性：请求 OpenAI 兼容的 GET {base}/models（带 Bearer 密钥），
     /// 2xx 视为可用，401/403 视为密钥无效，返回延迟 / HTTP 状态 / 错误信息。
-    pub async fn test_profile_connection(&self, id: &str) -> AppResult<ProfileConnectionResult> {
+    /// 表单传入的地址/密钥实时生效（传了就用传的，空的直接报错）；
+    /// 不传才回退已保存值（卡片上的测试按钮走这条）。
+    pub async fn test_profile_connection(
+        &self,
+        id: &str,
+        base_url_override: Option<&str>,
+        api_key_override: Option<&str>,
+    ) -> AppResult<ProfileConnectionResult> {
         let stored = self.database.profile(id)?;
         let payload = &stored.payload;
         if payload.provider_id.is_none() {
@@ -286,14 +363,32 @@ impl AppContext {
             .as_deref()
             .ok_or_else(|| app_err!("该预设缺少供应商配置数据"))?;
         let detail = parse_provider_detail(body)?;
-        let base_url = detail
-            .base_url
-            .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| app_err!("该预设没有配置调用地址"))?;
-        let api_key = detail
-            .api_key
-            .filter(|key| !key.trim().is_empty() && !is_builtin_placeholder(payload, key))
-            .ok_or_else(|| app_err!("该预设没有配置 API 密钥，请先填写后再测试"))?;
+        let base_url = match base_url_override {
+            Some(value) => {
+                let value = value.trim();
+                if value.is_empty() {
+                    return Err(app_err!("请填写调用地址"));
+                }
+                value.to_string()
+            }
+            None => detail
+                .base_url
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| app_err!("该预设没有配置调用地址"))?,
+        };
+        let api_key = match api_key_override {
+            Some(value) => {
+                let value = value.trim();
+                if value.is_empty() {
+                    return Err(app_err!("请填写 API 密钥"));
+                }
+                value.to_string()
+            }
+            None => detail
+                .api_key
+                .filter(|key| !key.trim().is_empty() && !is_builtin_placeholder(payload, key))
+                .ok_or_else(|| app_err!("该预设没有配置 API 密钥，请先填写后再测试"))?,
+        };
 
         let models_url = format!("{}/models", base_url.trim_end_matches('/'));
         let client = reqwest::Client::builder()
@@ -576,6 +671,7 @@ impl AppContext {
         Ok(ProfileDetail {
             id: stored.id.clone(),
             name: stored.name.clone(),
+            account_id: stored.account_id.clone(),
             icon: stored.icon.clone(),
             provider: payload.provider_id.clone(),
             base_url: provider.as_ref().and_then(|detail| detail.base_url.clone()),
@@ -850,6 +946,26 @@ impl AppContext {
     /// 官方预设是否保存了自己的 auth.json 覆盖（有则应用时不再用账号现生成）。
     pub fn has_auth_override(&self, id: &str) -> AppResult<bool> {
         Ok(self.database.profile(id)?.payload.raw_auth.is_some())
+    }
+
+    /// 官方预设绑定订阅账号；第三方预设直接拒绝。None 表示跟随默认账号。
+    pub fn set_profile_account(&self, id: &str, account_id: Option<&str>) -> AppResult<()> {
+        let stored = self.database.profile(id)?;
+        if stored.kind != ProfileKind::Official {
+            return Err(app_err!("第三方预设不支持绑定订阅账号"));
+        }
+        if let Some(account_id) = account_id {
+            if !self
+                .database
+                .accounts()?
+                .iter()
+                .any(|account| account.id == account_id)
+            {
+                return Err(app_err!("订阅账号不存在"));
+            }
+        }
+        self.database
+            .set_profile_account(id, account_id, &now_ms().to_string())
     }
 
     /// 内置官方预设：整文件替换为模板原文（仅替换密钥占位符），
@@ -1571,10 +1687,10 @@ experimental_bearer_token = "old-key"
 
         let context = AppContext::new(paths).unwrap();
         let profile = context
-            .add_builtin_profile("deepseek", Some("https://custom.example"), Some("sk-test"))
+            .add_builtin_profile("deepseek", Some("https://custom.example"), Some("sk-test"), None)
             .unwrap();
 
-        assert_eq!(profile.name, "DeepSeek 官方");
+        assert_eq!(profile.name, "DeepSeek");
         assert_eq!(profile.model.as_deref(), Some("deepseek-v4-flash"));
         assert_eq!(profile.provider.as_deref(), Some("deepseek"));
         assert_eq!(profile.reasoning_effort.as_deref(), Some("high"));
@@ -1612,9 +1728,9 @@ experimental_bearer_token = "old-key"
 
         // 同名模板允许重复添加，名字相同，靠 ID 区分
         let duplicate = context
-            .add_builtin_profile("deepseek", None, Some("sk-test"))
+            .add_builtin_profile("deepseek", None, Some("sk-test"), None)
             .unwrap();
-        assert_eq!(duplicate.name, "DeepSeek 官方");
+        assert_eq!(duplicate.name, "DeepSeek");
         assert_ne!(duplicate.id, profile.id);
     }
 
@@ -1628,7 +1744,7 @@ experimental_bearer_token = "old-key"
 
         let context = AppContext::new(paths).unwrap();
         let error = context
-            .add_builtin_profile("deepseek", None, None)
+            .add_builtin_profile("deepseek", None, None, None)
             .unwrap_err();
         assert!(error.0.contains("请先填写 API 密钥"));
         assert!(context.database.profiles().unwrap().is_empty());
@@ -1820,7 +1936,7 @@ experimental_bearer_token = "old-key"
 
         let context = AppContext::new(paths).unwrap();
         let profile = context
-            .add_builtin_profile("deepseek", None, Some("sk-test"))
+            .add_builtin_profile("deepseek", None, Some("sk-test"), None)
             .unwrap();
         context.apply_profile(&profile.id).unwrap();
 
@@ -1855,7 +1971,7 @@ experimental_bearer_token = "old-key"
 
         let context = AppContext::new(paths).unwrap();
         let profile = context
-            .add_builtin_profile("deepseek", None, Some("sk-old"))
+            .add_builtin_profile("deepseek", None, Some("sk-old"), None)
             .unwrap();
         context.apply_profile(&profile.id).unwrap();
         assert_eq!(
@@ -1897,11 +2013,11 @@ experimental_bearer_token = "old-key"
 
         let context = AppContext::new(paths).unwrap();
         let deepseek = context
-            .add_builtin_profile("deepseek", None, Some("sk-d"))
+            .add_builtin_profile("deepseek", None, Some("sk-d"), None)
             .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(2));
         let zhipu = context
-            .add_builtin_profile("zhipu", None, Some("sk-z"))
+            .add_builtin_profile("zhipu", None, Some("sk-z"), None)
             .unwrap();
 
         context.apply_profile(&deepseek.id).unwrap();
@@ -1927,7 +2043,7 @@ experimental_bearer_token = "old-key"
 
         let context = AppContext::new(paths).unwrap();
         let profile = context
-            .add_builtin_profile("minimax", None, Some("mm-key"))
+            .add_builtin_profile("minimax", None, Some("mm-key"), None)
             .unwrap();
         context.apply_profile(&profile.id).unwrap();
 
@@ -1966,7 +2082,7 @@ experimental_bearer_token = "old-key"
         std::fs::write(paths.codex_home.join("auth.json"), b"{\"login\":\"kept\"}").unwrap();
 
         let context = AppContext::new(paths).unwrap();
-        let profile = context.add_builtin_profile("chatgpt", None, None).unwrap();
+        let profile = context.add_builtin_profile("chatgpt", None, None, None).unwrap();
         context.apply_profile(&profile.id).unwrap();
 
         assert_eq!(
@@ -2120,7 +2236,7 @@ name = "ZAI"
         let context = AppContext::new(paths).unwrap();
         std::fs::write(context.paths.codex_config(), "model = \"other\"\n").unwrap();
         let profile = context
-            .add_builtin_profile("zhipu", None, Some("sk-test"))
+            .add_builtin_profile("zhipu", None, Some("sk-test"), None)
             .unwrap();
 
         let edited = r#"

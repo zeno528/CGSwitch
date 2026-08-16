@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, ref, watch } from "vue";
-import { NButton, NInput, useMessage } from "naive-ui";
+import { NButton, NInput, NSelect, useMessage } from "naive-ui";
 import ProfileIconEdit from "./ProfileIconEdit.vue";
 import ProfileIconTile from "./ProfileIconTile.vue";
 import { api } from "../api";
-import { builtinPresets } from "../presets";
-import type { ProfileDetail, ProfileSummary } from "../types";
+import {
+  builtinPresets,
+  customAuthTemplate,
+  customCatalogTemplate,
+  customConfigTemplate,
+} from "../presets";
+import type { ManagedAccount, ProfileDetail, ProfileSummary } from "../types";
 
 // CodeMirror 编辑器按需加载：只在打开编辑弹窗时拉取，不影响应用启动
 const ConfigTextEditor = defineAsyncComponent(() => import("./ConfigTextEditor.vue"));
@@ -24,11 +29,14 @@ const message = useMessage();
 const detail = ref<ProfileDetail | null>(null);
 const loadError = ref("");
 const saving = ref(false);
+const testing = ref(false);
 const pickingIcon = ref(false);
 const name = ref(props.profile?.name ?? "");
 const baseUrl = ref("");
 const apiKey = ref("");
 const adminUrl = ref("");
+const authAccounts = ref<ManagedAccount[]>([]);
+const boundAccountId = ref<string | null>(null);
 const selectedIcon = ref<string | null>(props.profile?.icon ?? null);
 const activeTab = ref<"config" | "auth" | "models">("config");
 const presetKind = ref("");
@@ -54,6 +62,19 @@ const showProviderFields = computed(() =>
     ? Boolean(selectedPreset.value?.base_url)
     : Boolean(detail.value?.provider),
 );
+const isOfficial = computed(() =>
+  creating.value
+    ? presetKind.value === "chatgpt"
+    : detail.value?.provider === null,
+);
+const isCustom = computed(() => creating.value && presetKind.value === "custom");
+const accountOptions = computed(() => [
+  { label: "跟随默认账号", value: "" },
+  ...authAccounts.value.map((account) => ({
+    label: account.login,
+    value: account.id,
+  })),
+]);
 // 官方订阅与带密钥的第三方都有认证文件组件
 const hasAuthTab = computed(
   () =>
@@ -66,8 +87,12 @@ const tabs = computed(() => {
     const list: { id: "config" | "auth" | "models"; label: string }[] = [
       { id: "config", label: "config.toml" },
     ];
-    if (selectedPreset.value?.model_values.model_catalog_json)
+    if (isCustom.value) {
       list.push({ id: "models", label: "models.json" });
+      list.push({ id: "auth", label: "auth.json" });
+    } else if (selectedPreset.value?.model_values.model_catalog_json) {
+      list.push({ id: "models", label: "models.json" });
+    }
     return list;
   }
   const list: { id: "config" | "auth" | "models"; label: string }[] = [
@@ -114,12 +139,32 @@ const liveConfigFragment = computed(() => {
 
 const canSave = computed(() => {
   if (!creating.value) return true;
+  if (isCustom.value) return Boolean(configText.value.trim());
   const preset = selectedPreset.value;
   if (!preset) return false;
   return !preset.base_url || Boolean(apiKey.value.trim());
 });
 
 function selectPreset(kind: string) {
+  if (kind === "custom") {
+    presetKind.value = kind;
+    name.value = "自定义预设";
+    baseUrl.value = "https://api.example.com/v1";
+    apiKey.value = "";
+    adminUrl.value = "";
+    selectedIcon.value = "custom";
+    configText.value = customConfigTemplate;
+    catalogText.value = customCatalogTemplate;
+    authText.value = customAuthTemplate;
+    configInitial.value = customConfigTemplate;
+    catalogInitial.value = customCatalogTemplate;
+    authInitial.value = customAuthTemplate;
+    configTouched.value = false;
+    catalogTouched.value = false;
+    configBaselineSet = false;
+    activeTab.value = "config";
+    return;
+  }
   const preset = builtinPresets.find((item) => item.kind === kind);
   if (!preset) return;
   configTouched.value = false;
@@ -127,12 +172,65 @@ function selectPreset(kind: string) {
   presetKind.value = kind;
   name.value = preset.name;
   baseUrl.value = preset.base_url;
+  adminUrl.value = preset.admin_url ?? "";
   apiKey.value = "";
   selectedIcon.value = preset.icon;
   activeTab.value = "config";
+  if (kind === "chatgpt") loadAuthStatus();
+}
+
+async function loadAuthStatus() {
+  try {
+    const status = await api.authGetStatus();
+    authAccounts.value = status.accounts;
+  } catch {
+    authAccounts.value = [];
+  }
+}
+
+async function openAdminUrl() {
+  const url = adminUrl.value.trim();
+  if (!url) return;
+  try {
+    await api.openUrl(url);
+  } catch (error) {
+    message.error(String(error));
+  }
+}
+
+async function testConnection() {
+  if (testing.value || creating.value || !props.profile) return;
+  if (!baseUrl.value.trim()) {
+    message.warning("请填写调用地址");
+    return;
+  }
+  if (!apiKey.value.trim()) {
+    message.warning("请先填写 API 密钥");
+    return;
+  }
+  testing.value = true;
+  try {
+    const result = await api.testProfileConnection(
+      props.profile.id,
+      baseUrl.value.trim(),
+      apiKey.value.trim(),
+    );
+    if (result.ok) {
+      message.success(
+        `连接正常${result.latency_ms != null ? ` · ${result.latency_ms}ms` : ""}`,
+      );
+    } else {
+      message.error(`连接失败：${result.error ?? "未知错误"}`);
+    }
+  } catch (error) {
+    message.error(`测试失败：${String(error)}`);
+  } finally {
+    testing.value = false;
+  }
 }
 
 watch(presetKind, async (kind) => {
+  if (isCustom.value) return;
   if (!creating.value || !kind) {
     catalogText.value = "";
     catalogTouched.value = false;
@@ -164,28 +262,37 @@ watch(liveConfigFragment, (fragment) => {
 });
 
 watch(configText, (text) => {
-  if (creating.value && text !== liveConfigFragment.value) configTouched.value = true;
+  if (creating.value && text !== liveConfigFragment.value) {
+    configTouched.value = true;
+  }
 });
 
 onMounted(async () => {
-  if (creating.value) return;
-  try {
-    if (!props.profile) throw new Error("缺少预设信息");
-    detail.value = await api.getProfile(props.profile.id);
-    name.value = detail.value.name;
-    baseUrl.value = detail.value.base_url ?? "";
-    apiKey.value = detail.value.api_key ?? "";
-    adminUrl.value = detail.value.admin_url ?? "";
-    selectedIcon.value = detail.value.icon;
-    configText.value = detail.value.raw_config ?? detail.value.config_fragment;
-    catalogText.value = detail.value.raw_catalog ?? detail.value.catalog_content ?? "";
-    authText.value = detail.value.raw_auth ?? detail.value.auth_content ?? "";
-    configInitial.value = configText.value;
-    catalogInitial.value = catalogText.value;
-    authInitial.value = authText.value;
-  } catch (error) {
-    loadError.value = String(error);
+  if (creating.value) {
+    selectPreset("custom");
+  } else {
+    try {
+      if (!props.profile) throw new Error("缺少预设信息");
+      detail.value = await api.getProfile(props.profile.id);
+      name.value = detail.value.name;
+      baseUrl.value = detail.value.base_url ?? "";
+      apiKey.value = detail.value.api_key ?? "";
+      adminUrl.value = detail.value.admin_url ?? "";
+      selectedIcon.value = detail.value.icon;
+      if (detail.value.provider === null) {
+        boundAccountId.value = detail.value.account_id ?? "";
+      }
+      configText.value = detail.value.raw_config ?? detail.value.config_fragment;
+      catalogText.value = detail.value.raw_catalog ?? detail.value.catalog_content ?? "";
+      authText.value = detail.value.raw_auth ?? detail.value.auth_content ?? "";
+      configInitial.value = configText.value;
+      catalogInitial.value = catalogText.value;
+      authInitial.value = authText.value;
+    } catch (error) {
+      loadError.value = String(error);
+    }
   }
+  await loadAuthStatus();
 });
 
 async function saveIcon(icon: string | null) {
@@ -212,6 +319,10 @@ async function saveIcon(icon: string | null) {
 async function save() {
   if (saving.value) return;
   if (creating.value) {
+    if (isCustom.value && !configText.value.trim()) {
+      message.error("请填写 config.toml 内容");
+      return;
+    }
     if (!selectedPreset.value) {
       message.error("请先选择供应商");
       return;
@@ -224,20 +335,35 @@ async function save() {
   saving.value = true;
   try {
     if (creating.value) {
-      const created = await api.addBuiltinProfile(
-        presetKind.value,
-        baseUrl.value.trim() || undefined,
-        apiKey.value.trim() || undefined,
-      );
-      if (configTouched.value || catalogTouched.value) {
-        await api.updateProfileConfig(
-          created.id,
+      if (isCustom.value) {
+        await api.addCustomProfile(
+          name.value.trim() || "自定义预设",
           configText.value,
-          selectedPreset.value?.model_values.model_catalog_json ? catalogText.value || null : null,
-          null,
+          baseUrl.value.trim() || undefined,
+          apiKey.value.trim() || undefined,
+          adminUrl.value.trim() || undefined,
+          catalogText.value.trim() ? catalogText.value : null,
+          authText.value.trim() ? authText.value : null,
         );
+        message.success("自定义预设已添加");
+      } else {
+        const created = await api.addBuiltinProfile(
+          presetKind.value,
+          baseUrl.value.trim() || undefined,
+          apiKey.value.trim() || undefined,
+          adminUrl.value.trim() || undefined,
+          isOfficial.value ? boundAccountId.value || undefined : undefined,
+        );
+        if (configTouched.value || catalogTouched.value) {
+          await api.updateProfileConfig(
+            created.id,
+            configText.value,
+            selectedPreset.value?.model_values.model_catalog_json ? catalogText.value || null : null,
+            null,
+          );
+        }
+        message.success("内置预设已添加");
       }
-      message.success("内置预设已添加");
     } else {
       if (!props.profile) throw new Error("缺少预设信息");
       const hasProvider = Boolean(detail.value?.provider);
@@ -256,6 +382,9 @@ async function save() {
           : null,
         hasAuthTab.value && authDirty.value ? authText.value : null,
       );
+      if (isOfficial.value) {
+        await api.setProfileAccount(props.profile.id, boundAccountId.value || null);
+      }
       message.success("配置预设已更新");
     }
     emit("changed");
@@ -343,15 +472,55 @@ async function save() {
         </div>
       </div>
       <div v-if="showProviderFields" class="mt-4">
-        <div class="field-label mb-1.5">调用地址</div>
+        <div class="field-label mb-1.5">请求地址</div>
         <n-input v-model:value="baseUrl" placeholder="https://api.example.com/v1" />
       </div>
       <div v-if="showProviderFields" class="mt-4">
-        <div class="field-label mb-1.5">密钥</div>
+        <div class="mb-1.5 flex items-center justify-between gap-2">
+          <span class="field-label">API 密钥</span>
+          <button
+            v-if="!creating"
+            type="button"
+            class="flex h-6 shrink-0 items-center gap-1 rounded-md border border-[var(--panel-border)] px-2 text-[11px] font-medium text-[#007aff] transition-colors hover:bg-[#007aff]/10 disabled:pointer-events-none disabled:opacity-40"
+            :disabled="!apiKey.trim() || !baseUrl.trim()"
+            @click="testConnection"
+          >
+            <svg v-if="testing" class="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="2.5" />
+              <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+            </svg>
+            <svg v-else class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 12h3l2-7 4 14 2-7h3" />
+            </svg>
+            测试连通
+          </button>
+        </div>
         <n-input v-model:value="apiKey" type="password" show-password-on="click" placeholder="请输入 API 密钥" />
       </div>
-      <div v-if="!creating" class="mt-4">
-        <div class="field-label mb-1.5">官网地址</div>
+      <div v-if="isOfficial" class="mt-4">
+        <div class="field-subtitle mb-1.5">订阅账号</div>
+        <n-select
+          v-model:value="boundAccountId"
+          :options="accountOptions"
+          placeholder="跟随默认账号"
+        />
+      </div>
+      <div v-if="!creating || selectedPreset?.base_url" class="mt-4">
+        <div class="mb-1.5 flex items-center gap-1">
+          <span class="field-label">官网地址</span>
+          <button
+            type="button"
+            class="grid h-4 w-4 cursor-pointer place-items-center rounded-full text-[#007aff] transition-colors hover:bg-[#007aff]/10 disabled:cursor-default disabled:opacity-40"
+            title="打开官网"
+            aria-label="打开官网"
+            :disabled="!adminUrl.trim()"
+            @click="openAdminUrl"
+          >
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zM19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7z" />
+            </svg>
+          </button>
+        </div>
         <n-input v-model:value="adminUrl" placeholder="https://console.example.com（可选）" />
       </div>
     </div>

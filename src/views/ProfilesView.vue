@@ -13,7 +13,7 @@ import {
 import ProfileEdit from "../components/ProfileEdit.vue";
 import ProfileCard from "../components/ProfileCard.vue";
 import { api } from "../api";
-import type { AppState, ProfileSummary, RestartStage } from "../types";
+import type { AppState, ManagedAccount, ProfileSummary, RestartStage } from "../types";
 
 const props = defineProps<{ state: AppState }>();
 const emit = defineEmits<{ refresh: [] }>();
@@ -31,6 +31,7 @@ const creatingProfile = ref(false);
 const modalProfile = ref<ProfileSummary | null>(null);
 const subscriptionAuthed = ref(false);
 const subscriptionAccount = ref<string | null>(null);
+const authAccounts = ref<ManagedAccount[]>([]);
 
 let unlisten: (() => void) | null = null;
 
@@ -188,12 +189,19 @@ onMounted(async () => {
   try {
     const status = await api.authGetStatus();
     subscriptionAuthed.value = status.authenticated;
+    authAccounts.value = status.accounts;
     subscriptionAccount.value =
       status.accounts.find((account) => account.id === status.default_account_id)?.login ?? null;
   } catch {
     subscriptionAuthed.value = false;
   }
 });
+
+function boundAccountLogin(profile: ProfileSummary): string | null {
+  return (
+    authAccounts.value.find((account) => account.id === profile.account_id)?.login ?? null
+  );
+}
 
 onBeforeUnmount(() => {
   unlisten?.();
@@ -248,9 +256,23 @@ onBeforeUnmount(() => {
             <path d="M21 3v6h-6" />
           </svg>
         </button>
-        <n-button secondary :disabled="busy" :loading="restartStage !== 'idle' && restartStage !== 'success' && restartStage !== 'error'" @click="restart(false)">重启 Codex</n-button>
-        <n-button secondary :disabled="busy" @click="openCapture">捕获当前配置</n-button>
-        <n-button type="primary" :disabled="busy" @click="creatingProfile = true">添加预设</n-button>
+        <n-button quaternary :disabled="busy" :loading="restartStage !== 'idle' && restartStage !== 'success' && restartStage !== 'error'" @click="restart(false)">重启 Codex</n-button>
+        <n-button secondary :disabled="busy" title="捕获当前配置" aria-label="捕获当前配置" @click="openCapture">
+          <template #icon>
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          </template>
+        </n-button>
+        <n-button type="primary" :disabled="busy" @click="creatingProfile = true">
+          <template #icon>
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </template>
+          添加预设
+        </n-button>
       </div>
     </header>
 
@@ -279,6 +301,7 @@ onBeforeUnmount(() => {
             :busy="busy"
             :subscription-authed="subscriptionAuthed"
             :subscription-account="subscriptionAccount"
+            :bound-account="boundAccountLogin(profile)"
             @apply="applyProfile(profile)"
             @rename="openRename(profile)"
             @edit="editingProfile = profile"

@@ -27,9 +27,17 @@ pub fn add_builtin_profile(
     kind: String,
     base_url: Option<String>,
     api_key: Option<String>,
+    admin_url: Option<String>,
+    account_id: Option<String>,
     state: State<'_, AppContext>,
 ) -> AppResult<ProfileSummary> {
-    state.add_builtin_profile(&kind, base_url.as_deref(), api_key.as_deref())
+    state.add_builtin_profile(
+        &kind,
+        base_url.as_deref(),
+        api_key.as_deref(),
+        admin_url.as_deref(),
+        account_id.as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -41,11 +49,37 @@ pub fn get_builtin_catalog(
 }
 
 #[tauri::command]
+pub fn add_custom_profile(
+    name: String,
+    config_text: String,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_url: Option<String>,
+    catalog_text: Option<String>,
+    auth_text: Option<String>,
+    state: State<'_, AppContext>,
+) -> AppResult<ProfileSummary> {
+    state.add_custom_profile(
+        &name,
+        &config_text,
+        base_url.as_deref(),
+        api_key.as_deref(),
+        admin_url.as_deref(),
+        catalog_text.as_deref(),
+        auth_text.as_deref(),
+    )
+}
+
+#[tauri::command]
 pub async fn test_profile_connection(
     id: String,
+    base_url: Option<String>,
+    api_key: Option<String>,
     state: State<'_, AppContext>,
 ) -> AppResult<ProfileConnectionResult> {
-    state.test_profile_connection(&id).await
+    state
+        .test_profile_connection(&id, base_url.as_deref(), api_key.as_deref())
+        .await
 }
 
 #[tauri::command]
@@ -103,6 +137,15 @@ pub fn set_profile_icon(
     state: State<'_, AppContext>,
 ) -> AppResult<()> {
     state.set_profile_icon(&id, icon.as_deref())
+}
+
+#[tauri::command]
+pub fn set_profile_account(
+    id: String,
+    account_id: Option<String>,
+    state: State<'_, AppContext>,
+) -> AppResult<()> {
+    state.set_profile_account(&id, account_id.as_deref())
 }
 
 #[tauri::command]

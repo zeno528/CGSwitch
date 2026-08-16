@@ -4,18 +4,56 @@ export interface BuiltinPreset {
   provider: string | null;
   icon: string;
   base_url: string;
+  admin_url: string | null;
   model: string;
   model_values: Record<string, string>;
   fragment: string;
 }
 
+export const customConfigTemplate = `model = "your-model"
+model_provider = "your-provider"
+model_reasoning_effort = "medium"
+model_catalog_json = "~/.codex/models.json"
+
+[model_providers.your-provider]
+name = "your-provider"
+base_url = "https://api.example.com/v1"
+wire_api = "responses"
+experimental_bearer_token = "<你的 API Key>"`;
+
+export const customCatalogTemplate = `{
+  "models": [
+    {
+      "id": "your-model",
+      "name": "Your Model"
+    }
+  ]
+}`;
+
+export const customAuthTemplate = `{
+  "auth_mode": "api_key",
+  "OPENAI_API_KEY": "your-api-key"
+}`;
+
 export const builtinPresets: BuiltinPreset[] = [
   {
+    kind: "custom",
+    name: "自定义",
+    provider: null,
+    icon: "custom",
+    base_url: "https://api.example.com/v1",
+    admin_url: null,
+    model: "自定义",
+    model_values: { model_catalog_json: '"~/.codex/models.json"' },
+    fragment: customConfigTemplate,
+  },
+  {
     kind: "deepseek",
-    name: "DeepSeek 官方",
+    name: "DeepSeek",
     provider: "deepseek",
     icon: "deepseek",
     base_url: "https://api.deepseek.com/",
+    admin_url: "https://platform.deepseek.com/api_keys",
     model: "deepseek-v4-flash",
     model_values: {
       model: '"deepseek-v4-flash"',
@@ -39,10 +77,11 @@ export const builtinPresets: BuiltinPreset[] = [
   },
   {
     kind: "minimax",
-    name: "MiniMax 官方",
+    name: "MiniMax",
     provider: "minimax",
     icon: "minimax",
     base_url: "https://api.minimaxi.com/v1",
+    admin_url: "https://platform.minimaxi.com/user-center/basic-information/interface-key",
     model: "MiniMax-M3",
     model_values: {
       model: '"MiniMax-M3"',
@@ -64,10 +103,11 @@ export const builtinPresets: BuiltinPreset[] = [
   },
   {
     kind: "zhipu",
-    name: "智谱官方",
+    name: "智谱",
     provider: "ZAI",
     icon: "zhipu",
     base_url: "https://open.bigmodel.cn/api/v1",
+    admin_url: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
     model: "glm-5.3",
     model_values: {
       model: '"glm-5.3"',
@@ -89,10 +129,11 @@ export const builtinPresets: BuiltinPreset[] = [
   },
   {
     kind: "chatgpt",
-    name: "ChatGPT 官方",
+    name: "ChatGPT",
     provider: null,
     icon: "openai-chatgpt",
     base_url: "",
+    admin_url: null,
     model: "gpt-5.6",
     model_values: {
       model: '"gpt-5.6"',

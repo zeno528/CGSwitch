@@ -7,7 +7,7 @@ const files = import.meta.glob<string>("./assets/providers/*.svg", {
 });
 
 const LABELS: Record<string, string> = {
-  "openai-chatgpt": "ChatGPT 官方",
+  "openai-chatgpt": "ChatGPT",
   zhipu: "智谱",
   deepseek: "DeepSeek",
   minimax: "MiniMax",
