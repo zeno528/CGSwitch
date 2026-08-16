@@ -1450,6 +1450,14 @@ experimental_bearer_token = "secret-token"
 
         let context = AppContext::new(paths).unwrap();
         let profile = context.capture_profile("ZAI").unwrap();
+
+        // 未使用：只读库快照，不回读 live 的模型目录与认证文件
+        let inactive = context.get_profile(&profile.id).unwrap();
+        assert_eq!(inactive.catalog_content, None);
+        assert_eq!(inactive.auth_content, None);
+
+        // 使用中：live 文件是唯一事实源
+        context.apply_profile(&profile.id).unwrap();
         let detail = context.get_profile(&profile.id).unwrap();
 
         assert!(detail.config_fragment.contains("experimental_bearer_token"));
@@ -1488,6 +1496,7 @@ experimental_bearer_token = "old-key"
 
         let context = AppContext::new(paths).unwrap();
         let profile = context.capture_profile("ZAI").unwrap();
+        context.apply_profile(&profile.id).unwrap();
         context
             .update_profile(
                 &profile.id,
@@ -1864,13 +1873,13 @@ experimental_bearer_token = "old-key"
             )
             .unwrap();
 
-        let config = std::fs::read(context.paths.codex_config()).unwrap();
-        let expected = crate::builtin::template("deepseek")
-            .unwrap()
-            .render_config(Some("sk-real"))
+        // 使用中改密钥：只就地更新供应商段落，模板其余内容保持不变
+        let config = String::from_utf8(std::fs::read(context.paths.codex_config()).unwrap())
             .unwrap();
-        assert_eq!(config, expected);
-        assert!(!String::from_utf8_lossy(&config).contains("<你的 DeepSeek API Key>"));
+        assert!(config.contains("model = \"deepseek-v4-flash\""));
+        assert!(config.contains("experimental_bearer_token = \"sk-real\""));
+        assert!(!config.contains("sk-old"));
+        assert!(!config.contains("<你的 DeepSeek API Key>"));
 
         let detail = context.get_profile(&profile.id).unwrap();
         assert_eq!(detail.api_key.as_deref(), Some("sk-real"));
