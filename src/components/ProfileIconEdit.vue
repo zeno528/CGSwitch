@@ -15,7 +15,7 @@ const selected = ref<string | null>(props.icon);
 
 <template>
   <section class="mx-auto flex h-[calc(100vh-2.75rem)] w-full max-w-none flex-col">
-    <div class="-mx-8 flex items-center bg-[var(--app-bg)] px-8 py-2">
+    <div class="apple-page-bar">
       <button
         type="button"
         class="apple-page-header apple-back-button"

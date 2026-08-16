@@ -252,7 +252,7 @@ async function openPath(item: PathInfo) {
 
 <template>
   <section class="mx-auto w-full max-w-none">
-    <div class="sticky top-[-16px] z-10 -mx-8 -mt-4 bg-[var(--app-bg)] px-8 py-2">
+    <div class="apple-page-bar sticky top-[-16px] z-10">
       <button
         type="button"
         class="apple-page-header apple-back-button"
