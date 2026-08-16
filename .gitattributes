@@ -13,3 +13,6 @@
 *.png binary
 *.ico binary
 *.icns binary
+
+# 内置官方模板必须保持原字节（含 CRLF），禁止 Git 换行归一化
+src-tauri/assets/builtin/* -text -eol

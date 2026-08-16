@@ -143,7 +143,7 @@ impl Database {
     pub fn profiles(&self) -> AppResult<Vec<StoredProfile>> {
         let connection = self.lock()?;
         let mut statement = connection
-            .prepare("SELECT id, name, payload_json, icon, created_at, updated_at FROM profiles ORDER BY updated_at DESC")
+            .prepare("SELECT id, name, payload_json, icon, created_at, updated_at FROM profiles ORDER BY created_at ASC, id ASC")
             .map_err(|error| app_err!("无法读取配置档案: {error}"))?;
         let rows = statement
             .query_map([], profile_from_row)

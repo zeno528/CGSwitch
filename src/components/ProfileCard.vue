@@ -70,18 +70,18 @@ async function testConnection() {
 </script>
 
 <template>
-  <article class="flex flex-col gap-4 px-5 py-4 transition-colors sm:flex-row sm:items-center sm:justify-between" :class="active ? 'bg-[linear-gradient(90deg,var(--selection-bg),transparent_65%)]' : 'hover:bg-black/3 dark:hover:bg-white/4'" title="双击编辑" @dblclick="emit('edit')">
+  <article class="flex flex-col gap-4 px-5 py-4 transition-colors sm:flex-row sm:items-center sm:justify-between" :class="active ? 'bg-[linear-gradient(90deg,var(--selection-bg),transparent_80%)]' : 'hover:bg-black/3 dark:hover:bg-white/4'" title="双击编辑" @dblclick="emit('edit')">
     <div class="flex min-w-0 flex-1 items-center gap-3">
       <ProfileIconTile :name="profile.name" :icon="profile.icon" />
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2">
-          <h3 class="cursor-pointer truncate font-semibold transition-colors hover:text-[#007aff]" title="点击重命名" @click="emit('rename')">{{ profile.name }}</h3>
+          <h3 class="cursor-pointer truncate text-[15px] font-semibold tracking-tight transition-colors hover:text-[#007aff]" title="点击重命名" @click="emit('rename')">{{ profile.name }}</h3>
           <n-tag v-if="active" type="success" size="small">当前生效</n-tag>
         </div>
-        <div class="muted mt-1 flex flex-wrap gap-1.5 text-xs">
-          <span class="rounded-full border border-current/15 bg-black/4 px-2.5 py-0.5 dark:bg-white/8">{{ profile.model ?? "未设置" }}</span>
-          <span class="rounded-full border border-current/15 bg-black/4 px-2.5 py-0.5 dark:bg-white/8">{{ profile.provider ?? "官方" }}</span>
-          <span class="rounded-full border border-current/15 bg-black/4 px-2.5 py-0.5 dark:bg-white/8">{{ profile.reasoning_effort ?? "默认" }}</span>
+        <div class="muted mt-1 flex flex-wrap gap-1 text-[11px]">
+          <span class="rounded-full border border-current/15 bg-black/4 px-2 py-0.5 dark:bg-white/8">{{ profile.model ?? "未设置" }}</span>
+          <span class="rounded-full border border-current/15 bg-black/4 px-2 py-0.5 dark:bg-white/8">{{ profile.provider ?? "官方" }}</span>
+          <span class="rounded-full border border-current/15 bg-black/4 px-2 py-0.5 dark:bg-white/8">{{ profile.reasoning_effort ?? "默认" }}</span>
         </div>
       </div>
     </div>

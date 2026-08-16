@@ -185,7 +185,18 @@ onBeforeUnmount(() => {
         <h1 class="apple-title">配置档案</h1>
       </div>
       <div class="flex gap-2">
-        <n-button @click="emit('refresh')">刷新</n-button>
+        <button
+          type="button"
+          class="grid h-8 w-8 place-items-center rounded-lg text-[#007aff] transition-colors hover:bg-[#007aff]/10"
+          title="刷新"
+          aria-label="刷新"
+          @click="emit('refresh')"
+        >
+          <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <path d="M21 3v6h-6" />
+          </svg>
+        </button>
         <n-button secondary :disabled="busy" @click="openCapture">捕获当前配置</n-button>
         <n-button type="primary" :disabled="busy" @click="creatingProfile = true">添加档案</n-button>
         <n-button secondary :disabled="busy" :loading="restartStage !== 'idle' && restartStage !== 'success' && restartStage !== 'error'" @click="restart(false)">重启 Codex</n-button>
@@ -239,7 +250,7 @@ onBeforeUnmount(() => {
 
     <div class="mt-8">
       <div class="flex items-center justify-between">
-        <h2 class="text-[15px] font-semibold tracking-tight">我的档案</h2>
+        <h2 class="apple-title">我的档案</h2>
       </div>
       <n-empty v-if="state.profiles.length === 0" description="还没有配置档案。可以添加内置官方档案，或先把 ~/.codex/config.toml 调整到目标状态，再点击“捕获当前配置”。" class="apple-group mt-3 py-14" />
       <template v-else>
