@@ -2069,7 +2069,12 @@ base_url = "https://api.example"
         let detail_a = context.get_profile(&profile_a.id).unwrap();
         let catalog = r#"{"models":[{"id":"edited"}]}"#;
         context
-            .update_profile_config(&profile_a.id, &detail_a.config_fragment, Some(catalog), None)
+            .update_profile_config(
+                &profile_a.id,
+                &detail_a.config_fragment,
+                Some(catalog),
+                None,
+            )
             .unwrap();
 
         context.apply_profile(&profile_b.id).unwrap();

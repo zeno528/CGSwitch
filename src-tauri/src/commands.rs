@@ -128,7 +128,12 @@ pub fn update_profile_config(
     auth_text: Option<String>,
     state: State<'_, AppContext>,
 ) -> AppResult<ProfileDetail> {
-    state.update_profile_config(&id, &config_text, catalog_text.as_deref(), auth_text.as_deref())
+    state.update_profile_config(
+        &id,
+        &config_text,
+        catalog_text.as_deref(),
+        auth_text.as_deref(),
+    )
 }
 
 #[tauri::command]
