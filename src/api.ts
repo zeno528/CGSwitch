@@ -59,10 +59,10 @@ const webProfiles: ProfileSummary[] = [
 
 const webPaths = [
   { label: "数据库", path: "C:\\Users\\<user>\\.cgswitch\\cgswitch.db" },
+  { label: "设置文件", path: "C:\\Users\\<user>\\.cgswitch\\settings.json" },
   { label: "Codex 配置", path: "C:\\Users\\<user>\\.codex\\config.toml" },
   { label: "配置备份", path: "C:\\Users\\<user>\\.cgswitch\\backups\\config" },
   { label: "数据库备份", path: "C:\\Users\\<user>\\.cgswitch\\backups\\database" },
-  { label: "日志", path: "C:\\Users\\<user>\\.cgswitch\\logs" },
 ];
 
 interface WebDetail {
@@ -111,7 +111,7 @@ const webDetails: Record<string, WebDetail> = {
 
 function webProfileDetail(id: string): ProfileDetail {
   const profile = webProfiles.find((item) => item.id === id);
-  if (!profile) throw new Error("配置档案不存在");
+  if (!profile) throw new Error("配置预设不存在");
   const detail = webDetails[id];
   return {
     id: profile.id,
@@ -174,7 +174,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       const now = new Date().toISOString();
       const profile: ProfileSummary = {
         id: `profile-${Date.now()}`,
-        name: String(args?.name ?? "新档案"),
+        name: String(args?.name ?? "新预设"),
         model: "glm-5.3",
         provider: "ZAI",
         reasoning_effort: "high",
@@ -189,7 +189,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     }
     case "add_builtin_profile": {
       const preset = builtinPresetByKind(String(args?.kind ?? ""));
-      if (!preset) throw new Error("未知的内置档案类型");
+      if (!preset) throw new Error("未知的内置预设类型");
       const rawKey = String(args?.apiKey ?? "");
       const apiKey = preset.provider ? rawKey : null;
       const rawBaseUrl = String(args?.baseUrl ?? "");
@@ -224,8 +224,8 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     }
     case "test_profile_connection": {
       const profile = webProfiles.find((item) => item.id === args?.id);
-      if (!profile) throw new Error("配置档案不存在");
-      if (!profile.provider) throw new Error("该档案没有供应商配置，无法测试连通性");
+      if (!profile) throw new Error("配置预设不存在");
+      if (!profile.provider) throw new Error("该预设没有供应商配置，无法测试连通性");
       await new Promise((resolve) => setTimeout(resolve, 300));
       return { ok: true, latency_ms: 87, status: 200, error: null } as T;
     }
@@ -258,7 +258,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     }
     case "duplicate_profile": {
       const profile = webProfiles.find((item) => item.id === args?.id);
-      if (!profile) throw new Error("配置档案不存在");
+      if (!profile) throw new Error("配置预设不存在");
       const now = new Date().toISOString();
       const copy: ProfileSummary = {
         ...profile,
@@ -275,7 +275,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       return webProfileDetail(String(args?.id)) as T;
     case "update_profile": {
       const profile = webProfiles.find((item) => item.id === args?.id);
-      if (!profile) throw new Error("配置档案不存在");
+      if (!profile) throw new Error("配置预设不存在");
       profile.name = String(args?.name ?? profile.name);
       const detail = webDetails[profile.id];
       if (detail) {
@@ -287,7 +287,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     }
     case "update_profile_config": {
       const profile = webProfiles.find((item) => item.id === args?.id);
-      if (!profile) throw new Error("配置档案不存在");
+      if (!profile) throw new Error("配置预设不存在");
       const detail = webDetails[profile.id];
       if (detail) {
         if (typeof args?.configText === "string") detail.raw_config = args.configText;

@@ -59,8 +59,15 @@ pub fn export_database_to(path: String, state: State<'_, AppContext>) -> AppResu
 }
 
 #[tauri::command]
-pub fn import_database(path: String, state: State<'_, AppContext>) -> AppResult<()> {
-    state.import_database(&path)
+pub async fn import_database(
+    path: String,
+    state: State<'_, AppContext>,
+    oauth: State<'_, CodexOAuthState>,
+) -> AppResult<()> {
+    state.import_database(&path)?;
+    // 数据库整体替换后，内存中的订阅账号同步重载
+    oauth.0.read().await.reload_from_database()?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -69,8 +76,14 @@ pub fn list_database_backups(state: State<'_, AppContext>) -> AppResult<Vec<Data
 }
 
 #[tauri::command]
-pub fn restore_database(name: String, state: State<'_, AppContext>) -> AppResult<()> {
-    state.restore_database(&name)
+pub async fn restore_database(
+    name: String,
+    state: State<'_, AppContext>,
+    oauth: State<'_, CodexOAuthState>,
+) -> AppResult<()> {
+    state.restore_database(&name)?;
+    oauth.0.read().await.reload_from_database()?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -148,13 +161,20 @@ pub async fn apply_profile(
     oauth: State<'_, CodexOAuthState>,
 ) -> Result<(), String> {
     state.apply_profile(&id).map_err(|error| error.to_string())?;
-    // 订阅档案：已有认证账号时自动写入订阅凭据，Codex 直接用订阅额度跑
-    if state
+    // 订阅预设：有档案级 auth 覆盖时直接用它，否则优先绑定账号、未绑定用默认账号
+    let is_subscription = state
         .is_subscription_profile(&id)
-        .map_err(|error| error.to_string())?
-    {
+        .map_err(|error| error.to_string())?;
+    let has_auth_override = state
+        .has_auth_override(&id)
+        .map_err(|error| error.to_string())?;
+    if is_subscription && !has_auth_override {
         let manager = oauth.0.read().await;
-        if let Some(account_id) = manager.default_account_id().await {
+        let account_id = state
+            .bound_account_id(&id)
+            .map_err(|error| error.to_string())?
+            .or(manager.default_account_id().await);
+        if let Some(account_id) = account_id {
             let content = manager
                 .codex_auth_json(&account_id)
                 .await

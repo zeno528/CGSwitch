@@ -22,6 +22,7 @@ const sidebarCollapsed = ref(false);
 const sidebarFlyoutArmed = ref(true);
 const profilesNavBtn = ref<HTMLElement | null>(null);
 const settingsNavBtn = ref<HTMLElement | null>(null);
+const sidebarNavRef = ref<HTMLElement | null>(null);
 const indicatorTop = ref(8);
 const state = ref<AppState | null>(null);
 const loadError = ref("");
@@ -68,7 +69,8 @@ async function syncWindowTitleBarTheme(dark: boolean) {
 
 function updateSidebarIndicator() {
   const target = view.value === "profiles" ? profilesNavBtn.value : settingsNavBtn.value;
-  if (target) indicatorTop.value = target.offsetTop + 8;
+  const nav = sidebarNavRef.value;
+  if (target && nav) indicatorTop.value = target.getBoundingClientRect().top - nav.getBoundingClientRect().top + 8;
 }
 
 watch(view, updateSidebarIndicator);
@@ -78,7 +80,7 @@ function toggleSidebar() {
   if (sidebarCollapsed.value) sidebarFlyoutArmed.value = false;
 }
 
-// 点击侧边栏“配置档案”始终回到首页列表（退出编辑等子视图）
+// 点击侧边栏“配置预设”始终回到首页列表（退出编辑等子视图）
 function goProfiles() {
   profilesNavReset.value++;
   view.value = "profiles";
@@ -172,15 +174,15 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <nav class="relative mx-2 mt-6 space-y-1">
+              <nav ref="sidebarNavRef" class="relative mx-2 mt-6 space-y-1">
                 <span class="apple-sidebar-indicator" :style="{ top: `${indicatorTop}px` }" aria-hidden="true" />
-                <button ref="profilesNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="配置档案" @click="goProfiles" @mouseenter="sidebarFlyoutArmed = true">
+                <button ref="profilesNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="配置预设" @click="goProfiles" @mouseenter="sidebarFlyoutArmed = true">
                   <svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                     <rect x="4.5" y="4.5" width="15" height="15" rx="3" />
                     <path d="M8.5 9h7M8.5 12h7M8.5 15h4" stroke-linecap="round" />
                   </svg>
-                  <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">配置档案</span>
-                  <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">配置档案</span>
+                  <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">配置预设</span>
+                  <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">配置预设</span>
                 </button>
               </nav>
 
@@ -196,10 +198,10 @@ onBeforeUnmount(() => {
               </div>
             </aside>
 
-            <main class="min-w-0 flex-1 overflow-auto bg-[var(--app-bg)] px-8 py-7">
+            <main class="min-w-0 flex-1 overflow-auto bg-[var(--app-bg)] px-8 pt-4 pb-7">
               <template v-if="state">
                 <ProfilesView v-if="view === 'profiles'" :key="profilesNavReset" :state="state" @refresh="refresh" />
-                <SettingsView v-else :state="state" @preview-theme="previewTheme" @refresh="refresh" @saved="saveSettings" />
+                <SettingsView v-else :state="state" @preview-theme="previewTheme" @refresh="refresh" @saved="saveSettings" @home="goProfiles" />
               </template>
               <div v-else class="startup-skeleton" aria-busy="true">
                 <div class="startup-skeleton__title" />

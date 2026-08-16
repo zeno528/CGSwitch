@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, reactive, ref, watch } from "vue";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import {
   NButton,
@@ -16,11 +16,10 @@ import {
 } from "naive-ui";
 import { api, isTauri } from "../api";
 import ChatGPTAccount from "../components/ChatGPTAccount.vue";
-import SegmentedControl from "../components/SegmentedControl.vue";
 import type { AppState, DatabaseBackupInfo, PathInfo, Settings } from "../types";
 
 const props = defineProps<{ state: AppState }>();
-const emit = defineEmits<{ refresh: []; saved: [settings: Settings]; previewTheme: [theme: Settings["theme"]] }>();
+const emit = defineEmits<{ refresh: []; saved: [settings: Settings]; previewTheme: [theme: Settings["theme"]]; home: [] }>();
 const message = useMessage();
 const dialog = useDialog();
 
@@ -29,6 +28,9 @@ const saving = ref(false);
 const savingGeneral = ref(false);
 const openingPath = ref<string | null>(null);
 const section = ref<"general" | "codex" | "account" | "about" | "advanced">("general");
+const tabBar = ref<HTMLElement | null>(null);
+const indicatorLeft = ref("0px");
+const indicatorWidth = ref("0px");
 const backups = ref<DatabaseBackupInfo[]>([]);
 const exporting = ref(false);
 const importing = ref(false);
@@ -43,6 +45,16 @@ async function loadBackups() {
     backups.value = await api.listDatabaseBackups();
   } catch {
     backups.value = [];
+  }
+}
+
+async function loadSettings() {
+  try {
+    const settings = await api.getSettings();
+    Object.assign(form, settings);
+    emit("refresh");
+  } catch (error) {
+    message.error(String(error));
   }
 }
 
@@ -100,7 +112,7 @@ async function importBackupFromFile() {
 function restoreBackup(backup: DatabaseBackupInfo) {
   dialog.warning({
     title: "恢复数据库备份",
-    content: `确定用「${backup.name}」覆盖当前所有档案数据吗？恢复后无法撤销。`,
+    content: `确定用「${backup.name}」覆盖当前所有预设数据吗？恢复后无法撤销。`,
     positiveText: "恢复",
     negativeText: "取消",
     positiveButtonProps: { type: "error" },
@@ -151,7 +163,21 @@ function openBackupFolder() {
   api.openPath(item.path).catch((error) => message.error(String(error)));
 }
 
-onMounted(loadBackups);
+function updateTabIndicator() {
+  const bar = tabBar.value;
+  if (!bar) return;
+  const button = bar.querySelector<HTMLElement>(`[data-section="${section.value}"]`);
+  if (!button) return;
+  indicatorLeft.value = `${button.offsetLeft}px`;
+  indicatorWidth.value = `${button.offsetWidth}px`;
+}
+
+watch(section, updateTabIndicator);
+onMounted(async () => {
+  await loadSettings();
+  loadBackups();
+  updateTabIndicator();
+});
 
 async function save() {
   if (saving.value) return;
@@ -226,24 +252,104 @@ async function openPath(item: PathInfo) {
 
 <template>
   <section class="mx-auto w-full max-w-none">
-    <div class="apple-page-header">
-      <h1 class="apple-title">设置</h1>
+    <div class="sticky top-[-16px] z-10 -mx-8 -mt-4 bg-[var(--app-bg)] px-8 py-2">
+      <button
+        type="button"
+        class="apple-page-header apple-back-button"
+        aria-label="返回首页"
+        @click="emit('home')"
+      >
+        <svg class="h-4 w-4 shrink-0 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M15 5.5 8.5 12l6.5 6.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="apple-title">设置</span>
+      </button>
     </div>
 
-    <SegmentedControl
-      v-model="section"
-      class="mt-6"
-      :options="[
-        { value: 'general', label: '通用' },
-        { value: 'codex', label: '应用' },
-        { value: 'account', label: '账号' },
-        { value: 'advanced', label: '高级' },
-        { value: 'about', label: '关于' },
-      ]"
-    />
+    <div ref="tabBar" class="relative mt-[var(--gap-page)] flex items-center gap-1 border-b border-[var(--panel-border)]" aria-label="设置分区">
+      <span
+        class="settings-tab-indicator absolute -bottom-px h-0.5 rounded-full bg-[#007aff]"
+        :style="{ left: indicatorLeft, width: indicatorWidth }"
+        aria-hidden="true"
+      />
+      <button
+        type="button"
+        data-section="general"
+        class="relative flex h-10 items-center gap-1.5 rounded-md px-3 text-sm transition-colors"
+        :class="section === 'general' ? 'font-semibold text-[#007aff]' : 'font-medium text-[var(--text-secondary)] hover:text-[#007aff]'"
+        :aria-current="section === 'general' ? 'page' : undefined"
+        @click="section = 'general'"
+      >
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3" />
+          <circle cx="14" cy="4" r="2" />
+          <circle cx="8" cy="12" r="2" />
+          <circle cx="16" cy="20" r="2" />
+        </svg>
+        <span>通用</span>
+      </button>
+      <button
+        type="button"
+        data-section="codex"
+        class="relative flex h-10 items-center gap-1.5 rounded-md px-3 text-sm transition-colors"
+        :class="section === 'codex' ? 'font-semibold text-[#007aff]' : 'font-medium text-[var(--text-secondary)] hover:text-[#007aff]'"
+        :aria-current="section === 'codex' ? 'page' : undefined"
+        @click="section = 'codex'"
+      >
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m5 8 4 4-4 4" />
+          <path d="M11 16h8" />
+        </svg>
+        <span>应用</span>
+      </button>
+      <button
+        type="button"
+        data-section="account"
+        class="relative flex h-10 items-center gap-1.5 rounded-md px-3 text-sm transition-colors"
+        :class="section === 'account' ? 'font-semibold text-[#007aff]' : 'font-medium text-[var(--text-secondary)] hover:text-[#007aff]'"
+        :aria-current="section === 'account' ? 'page' : undefined"
+        @click="section = 'account'"
+      >
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+        </svg>
+        <span>账号</span>
+      </button>
+      <button
+        type="button"
+        data-section="advanced"
+        class="relative flex h-10 items-center gap-1.5 rounded-md px-3 text-sm transition-colors"
+        :class="section === 'advanced' ? 'font-semibold text-[#007aff]' : 'font-medium text-[var(--text-secondary)] hover:text-[#007aff]'"
+        :aria-current="section === 'advanced' ? 'page' : undefined"
+        @click="section = 'advanced'"
+      >
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <ellipse cx="12" cy="5.5" rx="7.5" ry="3" />
+          <path d="M4.5 5.5v13c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3v-13" />
+          <path d="M4.5 12c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3" />
+        </svg>
+        <span>高级</span>
+      </button>
+      <button
+        type="button"
+        data-section="about"
+        class="relative flex h-10 items-center gap-1.5 rounded-md px-3 text-sm transition-colors"
+        :class="section === 'about' ? 'font-semibold text-[#007aff]' : 'font-medium text-[var(--text-secondary)] hover:text-[#007aff]'"
+        :aria-current="section === 'about' ? 'page' : undefined"
+        @click="section = 'about'"
+      >
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 11.2v4.6" />
+          <path d="M12 7.8h.01" />
+        </svg>
+        <span>关于</span>
+      </button>
+    </div>
 
-    <div v-if="section === 'general'" class="apple-group mt-4 p-5 sm:p-6">
-      <div class="field-label mb-2">主题</div>
+    <div v-if="section === 'general'" class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
+      <div class="field-subtitle mb-2">主题</div>
       <div class="apple-group inline-flex gap-1 p-1">
         <button
           v-for="option in themeOptions"
@@ -323,11 +429,11 @@ async function openPath(item: PathInfo) {
       </div>
     </div>
 
-    <div v-else-if="section === 'advanced'" class="apple-group mt-4 p-5 sm:p-6">
+    <div v-else-if="section === 'advanced'" class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
       <div class="flex items-center justify-between gap-4">
         <div>
           <div class="text-sm font-semibold">数据备份</div>
-          <div class="muted mt-0.5 text-xs">导入/导出档案数据库</div>
+          <div class="muted mt-0.5 text-xs">导入/导出预设数据库</div>
         </div>
         <div class="flex gap-2">
           <n-button size="small" secondary :loading="importing" @click="importBackupFromFile">导入备份</n-button>
@@ -354,7 +460,7 @@ async function openPath(item: PathInfo) {
       <p v-else class="muted mt-3 text-xs">还没有导出过备份。</p>
     </div>
 
-    <div v-else-if="section === 'codex'" class="apple-group mt-4 p-5 sm:p-6">
+    <div v-else-if="section === 'codex'" class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
       <n-form label-placement="top">
         <n-form-item label="Codex / ChatGPT 应用路径覆盖">
           <n-input v-model:value="form.codex_app_path" clearable placeholder="留空使用自动识别" />
@@ -374,14 +480,14 @@ async function openPath(item: PathInfo) {
       </n-form>
     </div>
 
-    <div v-else-if="section === 'account'" class="apple-group mt-4 p-5 sm:p-6">
+    <div v-else-if="section === 'account'" class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
       <h2 class="text-[15px] font-semibold tracking-tight">ChatGPT 账号</h2>
       <div class="mt-4">
         <ChatGPTAccount />
       </div>
     </div>
 
-    <div v-else class="apple-group mt-4 p-5 sm:p-6">
+    <div v-else class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
       <h2 class="text-[15px] font-semibold tracking-tight">数据与路径</h2>
       <p class="muted mt-2 text-sm">所有本机数据固定保存在用户 Home 目录，不会进入 Git。</p>
       <n-divider />

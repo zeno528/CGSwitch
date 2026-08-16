@@ -39,7 +39,7 @@ const connectionDimmed = computed(() => {
 });
 
 const connectionTitle = computed(() => {
-  if (!props.profile.provider) return "该档案没有供应商配置，无法测试";
+  if (!props.profile.provider) return "该预设没有供应商配置，无法测试";
   if (!props.profile.has_key) return "缺少 API 密钥，点击查看提示";
   return "测试连通性";
 });
@@ -123,8 +123,8 @@ async function testConnection() {
       <button
         type="button"
         class="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition-colors hover:bg-[#007aff]/10 hover:text-[#007aff] dark:text-zinc-500"
-        title="复制档案"
-        aria-label="复制档案"
+        title="复制预设"
+        aria-label="复制预设"
         @click="emit('duplicate')"
       >
         <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

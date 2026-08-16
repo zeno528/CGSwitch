@@ -5,10 +5,9 @@
 //!    access_token / refresh_token / id_token；
 //! 3. 账号持久化（只存 refresh_token 与账号标识），access_token 内存缓存、到期前自动刷新。
 //!
-//! 认证一次后账号常驻，后续添加 ChatGPT 档案无需重复认证。
+//! 认证一次后账号常驻，后续添加 ChatGPT 预设无需重复认证。
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -17,8 +16,8 @@ use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 
+use crate::database::{Database, StoredAccount};
 use crate::error::AppResult;
-use crate::fsutil::atomic_write;
 
 /// OpenAI OAuth 客户端 ID（与官方 Codex CLI 相同）
 const CODEX_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -158,25 +157,25 @@ struct PendingDeviceCode {
 }
 
 /// 持久化的账号数据（只存 refresh_token，access_token 不落盘）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 struct CodexAccountData {
     account_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     email: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     id_token: Option<String>,
     refresh_token: String,
     authenticated_at: i64,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct CodexOAuthStore {
-    #[serde(default)]
-    version: u32,
-    #[serde(default)]
-    accounts: HashMap<String, CodexAccountData>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    default_account_id: Option<String>,
+impl From<StoredAccount> for CodexAccountData {
+    fn from(account: StoredAccount) -> Self {
+        Self {
+            account_id: account.id,
+            email: account.email,
+            id_token: account.id_token,
+            refresh_token: account.refresh_token,
+            authenticated_at: account.authenticated_at,
+        }
+    }
 }
 
 /// 多账号认证管理器
@@ -187,11 +186,11 @@ pub struct CodexOAuthManager {
     access_tokens: Arc<RwLock<HashMap<String, CachedAccessToken>>>,
     refresh_locks: Arc<RwLock<HashMap<String, Arc<Mutex<()>>>>>,
     pending_device_codes: Arc<RwLock<HashMap<String, PendingDeviceCode>>>,
-    storage_path: PathBuf,
+    database: Arc<Database>,
 }
 
 impl CodexOAuthManager {
-    pub fn new(storage_path: PathBuf) -> Self {
+    pub fn new(database: Arc<Database>) -> Self {
         let client = reqwest::Client::builder()
             .user_agent(CODEX_USER_AGENT)
             .build()
@@ -203,12 +202,17 @@ impl CodexOAuthManager {
             access_tokens: Arc::new(RwLock::new(HashMap::new())),
             refresh_locks: Arc::new(RwLock::new(HashMap::new())),
             pending_device_codes: Arc::new(RwLock::new(HashMap::new())),
-            storage_path,
+            database,
         };
-        if let Err(error) = manager.load_from_disk() {
+        if let Err(error) = manager.load_accounts() {
             eprintln!("[auth] 加载认证账号失败: {error}");
         }
         manager
+    }
+
+    /// 数据库恢复/导入后，重新从 SQLite 加载账号（不再触发旧 JSON 导入）。
+    pub fn reload_from_database(&self) -> AppResult<()> {
+        self.load_accounts()
     }
 
     // ==================== 设备码流程 ====================
@@ -433,9 +437,9 @@ impl CodexOAuthManager {
         let new_refresh = new_tokens.refresh_token.clone();
         let new_id_token = new_tokens.id_token.clone();
         if new_refresh.is_some() || new_id_token.is_some() {
-            let mut changed = false;
             let mut accounts = self.accounts.write().await;
             if let Some(account) = accounts.get_mut(account_id) {
+                let mut changed = false;
                 if let Some(token) = new_refresh {
                     if account.refresh_token != token {
                         account.refresh_token = token;
@@ -448,10 +452,9 @@ impl CodexOAuthManager {
                         changed = true;
                     }
                 }
-            }
-            drop(accounts);
-            if changed {
-                self.save_to_disk().await?;
+                if changed {
+                    self.save_account(account)?;
+                }
             }
         }
 
@@ -530,7 +533,7 @@ impl CodexOAuthManager {
             }
             *default = Some(account_id.to_string());
         }
-        self.save_to_disk().await
+        self.save_default_account(Some(account_id))
     }
 
     pub async fn remove_account(&self, account_id: &str) -> Result<(), CodexOAuthError> {
@@ -540,6 +543,9 @@ impl CodexOAuthManager {
                 return Err(CodexOAuthError::AccountNotFound(account_id.to_string()));
             }
         }
+        self.database
+            .delete_account(account_id)
+            .map_err(|error| CodexOAuthError::IoError(error.to_string()))?;
         self.access_tokens.write().await.remove(account_id);
         self.refresh_locks.write().await.remove(account_id);
         {
@@ -549,7 +555,8 @@ impl CodexOAuthManager {
                 *default = fallback_default_account_id(&accounts);
             }
         }
-        self.save_to_disk().await
+        let default = self.default_account_id.read().await.clone();
+        self.save_default_account(default.as_deref())
     }
 
     pub async fn is_authenticated(&self) -> bool {
@@ -572,6 +579,7 @@ impl CodexOAuthManager {
             refresh_token,
             authenticated_at: now_secs(),
         };
+        self.save_account(&data)?;
         {
             let mut accounts = self.accounts.write().await;
             accounts.insert(account_id.clone(), data);
@@ -580,7 +588,7 @@ impl CodexOAuthManager {
             let mut default = self.default_account_id.write().await;
             *default = Some(account_id.clone());
         }
-        self.save_to_disk().await?;
+        self.save_default_account(Some(account_id.as_str()))?;
         Ok(ManagedAccount {
             id: account_id.clone(),
             login: display_login(
@@ -621,38 +629,40 @@ impl CodexOAuthManager {
         )
     }
 
-    async fn save_to_disk(&self) -> Result<(), CodexOAuthError> {
-        let accounts = self.accounts.read().await.clone();
-        let default_account_id = self.resolve_default_account_id().await;
-        let store = CodexOAuthStore {
-            version: 1,
-            accounts,
-            default_account_id,
-        };
-        let content = serde_json::to_string_pretty(&store)
-            .map_err(|error| CodexOAuthError::ParseError(error.to_string()))?;
-        atomic_write(&self.storage_path, content.as_bytes())
+    fn save_account(&self, account: &CodexAccountData) -> Result<(), CodexOAuthError> {
+        self.database
+            .upsert_account(&StoredAccount {
+                id: account.account_id.clone(),
+                email: account.email.clone(),
+                id_token: account.id_token.clone(),
+                refresh_token: account.refresh_token.clone(),
+                authenticated_at: account.authenticated_at,
+            })
             .map_err(|error| CodexOAuthError::IoError(error.to_string()))
     }
 
-    fn load_from_disk(&self) -> AppResult<()> {
-        if !self.storage_path.exists() {
-            return Ok(());
+    fn save_default_account(&self, id: Option<&str>) -> Result<(), CodexOAuthError> {
+        self.database
+            .set_default_account(id)
+            .map_err(|error| CodexOAuthError::IoError(error.to_string()))
+    }
+
+    fn load_accounts(&self) -> AppResult<()> {
+        let stored = self.database.accounts()?;
+        let accounts: HashMap<String, CodexAccountData> = stored
+            .into_iter()
+            .map(|account| (account.id.clone(), account.into()))
+            .collect();
+        let default = self
+            .database
+            .app_state()?
+            .1
+            .or_else(|| fallback_default_account_id(&accounts));
+        if let Ok(mut slot) = self.accounts.try_write() {
+            *slot = accounts;
         }
-        let content = std::fs::read_to_string(&self.storage_path)
-            .map_err(|error| crate::error::err(format!("无法读取认证账号: {error}")))?;
-        let store: CodexOAuthStore = serde_json::from_str(&content)
-            .map_err(|error| crate::error::err(format!("认证账号数据无效: {error}")))?;
-        if let Ok(mut accounts) = self.accounts.try_write() {
-            *accounts = store.accounts;
-        }
-        if let Ok(mut default) = self.default_account_id.try_write() {
-            *default = store.default_account_id;
-            if default.is_none() {
-                if let Ok(accounts) = self.accounts.try_read() {
-                    *default = fallback_default_account_id(&accounts);
-                }
-            }
+        if let Ok(mut slot) = self.default_account_id.try_write() {
+            *slot = default;
         }
         Ok(())
     }
@@ -779,8 +789,9 @@ fn now_secs() -> i64 {
 mod tests {
     use super::*;
 
-    fn store_path(dir: &std::path::Path) -> PathBuf {
-        dir.join("codex_oauth_auth.json")
+    fn setup(dir: &std::path::Path) -> Arc<Database> {
+        let paths = crate::paths::from_home(dir).unwrap();
+        Arc::new(Database::open(&paths).unwrap())
     }
 
     #[test]
@@ -832,11 +843,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn manager_saves_and_loads_accounts() {
+    async fn manager_persists_accounts_to_sqlite() {
         let dir = tempfile::tempdir().unwrap();
-        let path = store_path(dir.path());
+        let database = setup(dir.path());
         {
-            let manager = CodexOAuthManager::new(path.clone());
+            let manager = CodexOAuthManager::new(database.clone());
             manager
                 .add_account_internal(
                     "acc-123".to_string(),
@@ -847,7 +858,7 @@ mod tests {
                 .await
                 .unwrap();
         }
-        let manager = CodexOAuthManager::new(path);
+        let manager = CodexOAuthManager::new(database);
         let status = manager.get_status().await;
         assert_eq!(status.accounts.len(), 1);
         assert_eq!(status.accounts[0].id, "acc-123");
@@ -858,7 +869,7 @@ mod tests {
     #[tokio::test]
     async fn manager_remove_account_updates_default() {
         let dir = tempfile::tempdir().unwrap();
-        let manager = CodexOAuthManager::new(store_path(dir.path()));
+        let manager = CodexOAuthManager::new(setup(dir.path()));
         manager
             .add_account_internal(
                 "acc-123".to_string(),
@@ -887,7 +898,7 @@ mod tests {
     #[tokio::test]
     async fn codex_auth_json_matches_official_chatgpt_shape() {
         let dir = tempfile::tempdir().unwrap();
-        let manager = CodexOAuthManager::new(store_path(dir.path()));
+        let manager = CodexOAuthManager::new(setup(dir.path()));
         manager
             .add_account_internal(
                 "acc-1".to_string(),

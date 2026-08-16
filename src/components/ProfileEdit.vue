@@ -32,8 +32,10 @@ const adminUrl = ref("");
 const selectedIcon = ref<string | null>(props.profile?.icon ?? null);
 const activeTab = ref<"config" | "auth" | "models">("config");
 const presetKind = ref("");
-const createCatalog = ref("");
 const configText = ref("");
+const configTouched = ref(false);
+const catalogTouched = ref(false);
+let configBaselineSet = false;
 const catalogText = ref("");
 const authText = ref("");
 const configInitial = ref("");
@@ -52,30 +54,37 @@ const showProviderFields = computed(() =>
     ? Boolean(selectedPreset.value?.base_url)
     : Boolean(detail.value?.provider),
 );
+// 官方订阅与带密钥的第三方都有认证文件组件
+const hasAuthTab = computed(
+  () =>
+    !creating.value &&
+    (detail.value?.provider === null || Boolean(detail.value?.api_key)),
+);
 
 const tabs = computed(() => {
   if (creating.value) {
     const list: { id: "config" | "auth" | "models"; label: string }[] = [
-      { id: "config", label: "config" },
+      { id: "config", label: "config.toml" },
     ];
     if (selectedPreset.value?.model_values.model_catalog_json)
       list.push({ id: "models", label: "models.json" });
     return list;
   }
   const list: { id: "config" | "auth" | "models"; label: string }[] = [
-    { id: "config", label: "config" },
+    { id: "config", label: "config.toml" },
   ];
-  if (detail.value?.api_key) list.push({ id: "auth", label: "auth" });
+  if (hasAuthTab.value) list.push({ id: "auth", label: "auth.json" });
   if (detail.value?.model_values.model_catalog_json)
     list.push({ id: "models", label: "models.json" });
   return list;
 });
 
-const catalogPath = computed(() =>
-  creating.value
-    ? selectedPreset.value?.model_values.model_catalog_json?.replace(/^"|"$/g, "") ?? ""
-    : detail.value?.model_values.model_catalog_json?.replace(/^"|"$/g, "") ?? "",
-);
+const catalogPath = computed(() => {
+  const raw = creating.value
+    ? selectedPreset.value?.model_values.model_catalog_json
+    : detail.value?.model_values.model_catalog_json;
+  return (raw ?? "").replace(/^["'`]+|["'`]+$/g, "");
+});
 
 const baseFragment = computed(() =>
   creating.value
@@ -113,6 +122,8 @@ const canSave = computed(() => {
 function selectPreset(kind: string) {
   const preset = builtinPresets.find((item) => item.kind === kind);
   if (!preset) return;
+  configTouched.value = false;
+  configBaselineSet = false;
   presetKind.value = kind;
   name.value = preset.name;
   baseUrl.value = preset.base_url;
@@ -123,25 +134,43 @@ function selectPreset(kind: string) {
 
 watch(presetKind, async (kind) => {
   if (!creating.value || !kind) {
-    createCatalog.value = "";
+    catalogText.value = "";
+    catalogTouched.value = false;
     return;
   }
+  catalogTouched.value = false;
   const preset = builtinPresets.find((item) => item.kind === kind);
   if (!preset?.model_values.model_catalog_json) {
-    createCatalog.value = "";
+    catalogText.value = "";
     return;
   }
   try {
-    createCatalog.value = (await api.getBuiltinCatalog(kind)) ?? "";
+    catalogText.value = (await api.getBuiltinCatalog(kind)) ?? "";
+    catalogInitial.value = catalogText.value;
   } catch {
-    createCatalog.value = "";
+    catalogText.value = "";
   }
+});
+
+// 创建模式：配置预览跟随表单字段刷新，用户手动改动后停止自动刷新
+watch(liveConfigFragment, (fragment) => {
+  if (!creating.value) return;
+  if (!configTouched.value) configText.value = fragment;
+  // 首次填充时建立“未保存”基准：此后任何改动（字段或编辑器）才显示圆点
+  if (!configBaselineSet) {
+    configBaselineSet = true;
+    configInitial.value = fragment;
+  }
+});
+
+watch(configText, (text) => {
+  if (creating.value && text !== liveConfigFragment.value) configTouched.value = true;
 });
 
 onMounted(async () => {
   if (creating.value) return;
   try {
-    if (!props.profile) throw new Error("缺少档案信息");
+    if (!props.profile) throw new Error("缺少预设信息");
     detail.value = await api.getProfile(props.profile.id);
     name.value = detail.value.name;
     baseUrl.value = detail.value.base_url ?? "";
@@ -166,7 +195,7 @@ async function saveIcon(icon: string | null) {
     if (creating.value) {
       selectedIcon.value = icon;
     } else {
-      if (!props.profile) throw new Error("缺少档案信息");
+      if (!props.profile) throw new Error("缺少预设信息");
       await api.setProfileIcon(props.profile.id, icon);
       selectedIcon.value = icon;
       if (detail.value) detail.value.icon = icon;
@@ -195,14 +224,22 @@ async function save() {
   saving.value = true;
   try {
     if (creating.value) {
-      await api.addBuiltinProfile(
+      const created = await api.addBuiltinProfile(
         presetKind.value,
         baseUrl.value.trim() || undefined,
         apiKey.value.trim() || undefined,
       );
-      message.success("内置档案已添加");
+      if (configTouched.value || catalogTouched.value) {
+        await api.updateProfileConfig(
+          created.id,
+          configText.value,
+          selectedPreset.value?.model_values.model_catalog_json ? catalogText.value || null : null,
+          null,
+        );
+      }
+      message.success("内置预设已添加");
     } else {
-      if (!props.profile) throw new Error("缺少档案信息");
+      if (!props.profile) throw new Error("缺少预设信息");
       const hasProvider = Boolean(detail.value?.provider);
       await api.updateProfile(
         props.profile.id,
@@ -214,10 +251,12 @@ async function save() {
       await api.updateProfileConfig(
         props.profile.id,
         configText.value,
-        detail.value?.model_values.model_catalog_json ? catalogText.value || null : null,
-        authText.value || null,
+        detail.value?.model_values.model_catalog_json && catalogDirty.value
+          ? catalogText.value || null
+          : null,
+        hasAuthTab.value && authDirty.value ? authText.value : null,
       );
-      message.success("配置档案已更新");
+      message.success("配置预设已更新");
     }
     emit("changed");
     emit("back");
@@ -238,26 +277,26 @@ async function save() {
     @back="pickingIcon = false"
     @save="saveIcon"
   />
-  <section v-else class="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-none flex-col" @keydown.ctrl.enter="save">
-    <button
-      type="button"
-      class="apple-page-header apple-back-button"
-      aria-label="返回"
-      @click="emit('back')"
-    >
-      <svg class="h-4 w-4 shrink-0 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <path d="M15 5.5 8.5 12l6.5 6.5" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      <span class="apple-title">{{ creating ? "新建档案" : "编辑档案" }}</span>
-    </button>
+  <section v-else class="mx-auto flex h-[calc(100vh-2.75rem)] w-full max-w-none flex-col" @keydown.ctrl.enter="save">
+    <div class="-mx-8 flex items-center bg-[var(--app-bg)] px-8 py-2">
+      <button
+        type="button"
+        class="apple-page-header apple-back-button"
+        aria-label="返回"
+        @click="emit('back')"
+      >
+        <svg class="h-4 w-4 shrink-0 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M15 5.5 8.5 12l6.5 6.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="apple-title">{{ creating ? "新建预设" : "编辑预设" }}</span>
+      </button>
+    </div>
 
-    <p v-if="loadError" class="muted mt-4 text-sm">{{ loadError }}</p>
+    <div class="-mx-8 flex min-h-0 flex-1 flex-col overflow-auto px-8 pb-4 [scrollbar-gutter:stable]">
+      <p v-if="loadError" class="muted mt-4 text-sm">{{ loadError }}</p>
 
-    <div v-if="creating" class="apple-group mt-6 p-5 sm:p-6">
-      <div class="flex items-baseline justify-between gap-3">
-        <div class="field-label">选择供应商</div>
-        <span class="muted text-xs">选择后自动填充官方默认配置</span>
-      </div>
+      <div v-if="creating" class="apple-group mt-[var(--gap-page)] shrink-0 p-[var(--gap-card)]">
+      <div class="field-subtitle">选择供应商</div>
       <div class="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
         <button
           v-for="preset in builtinPresets"
@@ -280,7 +319,7 @@ async function save() {
       </div>
     </div>
 
-    <div class="apple-group mt-6 p-5 sm:p-6">
+      <div class="apple-group shrink-0 p-[var(--gap-card)]" :class="creating ? 'mt-[var(--gap-section)]' : 'mt-[var(--gap-page)]'">
       <div class="flex items-center gap-4">
         <button
           type="button"
@@ -300,7 +339,7 @@ async function save() {
         </button>
         <div class="min-w-0 flex-1">
           <div class="field-label mb-1.5">名称</div>
-          <n-input v-model:value="name" :bordered="false" class="underline-input" maxlength="50" placeholder="档案名称" />
+          <n-input v-model:value="name" :bordered="false" class="underline-input" maxlength="50" placeholder="预设名称" />
         </div>
       </div>
       <div v-if="showProviderFields" class="mt-4">
@@ -317,7 +356,7 @@ async function save() {
       </div>
     </div>
 
-    <div class="apple-group mt-4 flex min-h-[180px] flex-1 flex-col p-5 sm:p-6">
+      <div class="apple-group mt-[var(--gap-section)] flex shrink-0 flex-col p-[var(--gap-card)]">
       <div class="flex items-center justify-between gap-3">
         <div class="flex gap-1">
           <button
@@ -329,63 +368,71 @@ async function save() {
             :aria-pressed="activeTab === tab.id"
             @click="activeTab = tab.id"
           >
-            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-              <path d="M6 3h9l4 4v14H6z" stroke-linejoin="round" />
-              <path d="M15 3v4h4" />
+            <svg v-if="tab.id === 'config'" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
-            {{ tab.label }}
+            <svg v-else class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1" />
+              <path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1" />
+            </svg>
+            <span class="relative inline-grid">
+              <span class="invisible font-semibold" aria-hidden="true">{{ tab.label }}</span>
+              <span class="absolute inset-0 whitespace-nowrap">{{ tab.label }}</span>
+            </span>
             <span
               v-if="(tab.id === 'config' && configDirty) || (tab.id === 'models' && catalogDirty) || (tab.id === 'auth' && authDirty)"
-              class="h-1.5 w-1.5 rounded-full bg-[#007aff]"
+              class="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#007aff]"
               aria-label="有未保存的改动"
             />
           </button>
         </div>
       </div>
 
-      <div class="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden pr-1">
-        <div v-if="activeTab === 'config'" class="min-h-0 flex-1">
+      <div class="mt-4 flex flex-col pr-1">
+        <div v-if="activeTab === 'config'">
           <ConfigTextEditor
-            v-if="!creating"
             v-model="configText"
             language="toml"
-            placeholder="编辑 config.toml 内容，保存后仅写入档案；应用时才生效。"
+            :placeholder="creating ? '选择供应商后显示配置预览' : '编辑 config.toml 内容，保存后仅写入预设；应用时才生效。'"
           />
-          <pre v-else class="mono min-h-0 flex-1 overflow-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ liveConfigFragment || "选择供应商后显示配置预览" }}</pre>
         </div>
-        <div v-else-if="activeTab === 'auth'" class="min-h-0 flex-1">
+        <div v-else-if="activeTab === 'auth'">
           <ConfigTextEditor
             v-model="authText"
             language="json"
-            placeholder="认证文件（~/.codex/auth.json）不存在或无法读取；保存后内容将随档案生效。"
+            placeholder="认证文件（~/.codex/auth.json）。保存后随预设生效；清空内容可移除预设自定义认证。"
           />
         </div>
-        <div v-else class="flex h-full min-h-0 flex-col text-sm">
+        <div v-else class="flex flex-col text-sm">
           <div class="flex justify-between gap-4 py-2">
             <span class="field-label">模型目录</span>
             <span class="mono">{{ catalogPath }}</span>
           </div>
-          <ConfigTextEditor
-            v-if="!creating"
-            v-model="catalogText"
-            language="json"
-            placeholder="模型目录文件不存在或无法读取；保存后内容将随档案生效。"
-          />
-          <template v-else>
-            <pre v-if="createCatalog" class="mono mt-2 min-h-0 flex-1 overflow-auto rounded-xl bg-black/4 p-3 text-xs leading-relaxed dark:bg-white/6">{{ createCatalog }}</pre>
-            <p v-else class="muted mt-2 text-xs">模型目录文件不存在或无法读取，文件内容未显示。</p>
-          </template>
+          <div>
+            <ConfigTextEditor
+              v-model="catalogText"
+              language="json"
+              placeholder="模型目录文件不存在或无法读取；保存后内容将随预设生效。"
+            />
+          </div>
         </div>
+      </div>
       </div>
     </div>
 
-    <div class="mt-5 flex items-center justify-between gap-2">
-      <p v-if="creating" class="muted text-xs">保存后仅写入档案，需要时再点击“应用”写入 Codex 配置。</p>
-      <span v-else />
-      <div class="flex gap-2">
-        <n-button @click="emit('back')">取消</n-button>
-        <n-button type="primary" :loading="saving" :disabled="!canSave" @click="save">保存</n-button>
-      </div>
+    <div class="-mx-8 -mb-7 flex items-center justify-end gap-2 bg-[var(--app-bg)] pl-8 pr-[42px] pt-2 pb-4">
+      <n-button secondary @click="emit('back')">取消</n-button>
+      <n-button type="primary" :loading="saving" :disabled="!canSave" @click="save">
+        <template #icon>
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+            <path d="M17 21v-8H7v8" />
+            <path d="M7 3v5h8" />
+          </svg>
+        </template>
+        保存
+      </n-button>
     </div>
   </section>
 </template>

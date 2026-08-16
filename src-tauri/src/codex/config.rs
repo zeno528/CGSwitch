@@ -42,7 +42,7 @@ pub fn capture_from_document(document: &DocumentMut) -> AppResult<ProfilePayload
 
     if provider_id.is_some() && provider_body.is_none() {
         return Err(app_err!(
-            "当前 model_provider 在 model_providers 中不存在，未捕获档案"
+            "当前 model_provider 在 model_providers 中不存在，未捕获预设"
         ));
     }
 
@@ -83,7 +83,7 @@ pub fn apply_to_document(document: &mut DocumentMut, payload: &ProfilePayload) -
 
         let parsed_body: DocumentMut = provider_body
             .parse()
-            .map_err(|_| app_err!("配置档案中的 provider 数据无效"))?;
+            .map_err(|_| app_err!("配置预设中的 provider 数据无效"))?;
         let mut provider = Table::new();
         for (key, item) in parsed_body.as_table() {
             let item = item.clone();
@@ -116,7 +116,7 @@ pub fn matches_profile(document: &DocumentMut, payload: &ProfilePayload) -> AppR
     Ok(normalize_provider(&current.provider_body)? == normalize_provider(&payload.provider_body)?)
 }
 
-/// 宽松匹配：档案的模型键必须是 live 配置的子集且值一致，
+/// 宽松匹配：预设的模型键必须是 live 配置的子集且值一致，
 /// 允许 live 配置在使用过程中累计额外的模型键（如 model_catalog_json）。
 pub fn subset_match(document: &DocumentMut, payload: &ProfilePayload) -> AppResult<bool> {
     let current = capture_from_document(document)?;
@@ -141,7 +141,7 @@ fn is_model_key(key: &str) -> bool {
 fn parse_value(raw: &str) -> AppResult<Value> {
     raw.trim()
         .parse::<Value>()
-        .map_err(|_| app_err!("配置档案中的模型值无效"))
+        .map_err(|_| app_err!("配置预设中的模型值无效"))
 }
 
 fn normalize_provider(body: &Option<String>) -> AppResult<BTreeMap<String, String>> {
@@ -150,7 +150,7 @@ fn normalize_provider(body: &Option<String>) -> AppResult<BTreeMap<String, Strin
     };
     let document: DocumentMut = body
         .parse()
-        .map_err(|_| app_err!("配置档案中的 provider 数据无效"))?;
+        .map_err(|_| app_err!("配置预设中的 provider 数据无效"))?;
     Ok(document
         .as_table()
         .iter()
@@ -165,7 +165,7 @@ pub fn update_provider_body(
 ) -> AppResult<String> {
     let mut document: DocumentMut = body
         .parse()
-        .map_err(|_| app_err!("配置档案中的 provider 数据无效"))?;
+        .map_err(|_| app_err!("配置预设中的 provider 数据无效"))?;
     if let Some(value) = base_url {
         set_table_value(&mut document, "base_url", value);
     }

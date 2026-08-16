@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Emitter};
 
@@ -10,7 +10,8 @@ use crate::database::{profile_summary, Database, StoredProfile};
 use crate::error::{app_err, AppResult};
 use crate::fsutil::{atomic_write, backup_file, prune_backups};
 use crate::models::{
-    AppState, CodexAppStatus, PathInfo, ProfileDetail, ProfilePayload, ProfileSummary, Settings,
+    AppState, CodexAppStatus, PathInfo, ProfileDetail, ProfileKind, ProfilePayload,
+    ProfileSummary, Settings,
 };
 use crate::paths::{now_ms, AppPaths};
 
@@ -77,6 +78,26 @@ fn is_builtin_placeholder(payload: &ProfilePayload, key: &str) -> bool {
         })
 }
 
+/// 把配置原文中已写入的真实密钥还原为模板占位符（编辑器展示与库内快照统一存占位符版本）。
+fn mask_api_key(text: &str, payload: &ProfilePayload) -> String {
+    let Some(kind) = payload.builtin.as_deref() else {
+        return text.to_string();
+    };
+    let Ok(template) = builtin::template(kind) else {
+        return text.to_string();
+    };
+    let Some(placeholder) = template.placeholder else {
+        return text.to_string();
+    };
+    let Some(key) = payload.provider_body.as_deref().and_then(provider_api_key) else {
+        return text.to_string();
+    };
+    if key.is_empty() {
+        return text.to_string();
+    }
+    text.replace(&key, std::str::from_utf8(placeholder).unwrap_or(""))
+}
+
 fn profile_config_fragment(payload: &ProfilePayload) -> String {
     let mut fragment = String::new();
     for (key, raw) in &payload.model_values {
@@ -93,29 +114,38 @@ fn profile_config_fragment(payload: &ProfilePayload) -> String {
 
 #[derive(Debug)]
 pub struct AppContext {
-    database: Database,
+    database: Arc<Database>,
     paths: AppPaths,
     operation: Mutex<()>,
 }
 
 impl AppContext {
     pub fn new(paths: AppPaths) -> AppResult<Self> {
-        Ok(Self {
-            database: Database::open(&paths)?,
+        let database = Arc::new(Database::open(&paths)?);
+        Ok(Self::new_with_database(paths, database))
+    }
+
+    pub fn new_with_database(paths: AppPaths, database: Arc<Database>) -> Self {
+        Self {
+            database,
             paths,
             operation: Mutex::new(()),
-        })
+        }
     }
 
     pub fn get_state(&self) -> AppResult<AppState> {
-        let settings = self.database.settings()?;
+        let settings = self.settings()?;
         let profiles = self.database.profiles()?;
         let live = self.live_document();
-        let active_profile_id = match self.database.latest_applied_profile()? {
+        // 显式状态优先；旧版本无状态时回退到应用日志与 live 配置匹配。
+        let active_profile_id = match self.active_profile_state()? {
             Some(id) if profiles.iter().any(|profile| profile.id == id) => Some(id),
-            _ => match &live {
-                Some(document) => self.matching_active_profile(&profiles, document, None)?,
-                None => self.active_profile_id(&profiles)?,
+            _ => match self.database.latest_applied_profile()? {
+                Some(id) if profiles.iter().any(|profile| profile.id == id) => Some(id),
+                _ => match &live {
+                    Some(document) => self.matching_active_profile(&profiles, document, None)?,
+                    None => self.active_profile_id(&profiles)?,
+                },
             },
         };
         let live_payload = live
@@ -130,11 +160,11 @@ impl AppContext {
                 .iter()
                 .map(|profile| {
                     let mut stored = profile.clone();
-                    // 激活中的档案：标签读取当前配置文件状态；其余档案读取数据库最新字段
+                    // 激活中的预设：标签读取当前配置文件状态；其余预设读取数据库最新字段
                     if Some(&stored.id) == active_profile_id.as_ref() {
                         if let Some(live) = &live_payload {
                             let mut live = live.clone();
-                            // 管理后台网址属于档案元数据，不在 live 配置里，覆盖时保留
+                            // 管理后台网址属于预设元数据，不在 live 配置里，覆盖时保留
                             live.admin_url = stored.payload.admin_url.clone();
                             stored.payload = live;
                         }
@@ -155,7 +185,7 @@ impl AppContext {
 
     /// 轻量 Codex 运行状态查询（仅扫描进程，供前端轮询使用）。
     pub fn codex_status(&self) -> AppResult<CodexAppStatus> {
-        let settings = self.database.settings()?;
+        let settings = self.settings()?;
         let process_ids = codex_process::find_process_ids(settings.codex_app_path.as_deref());
         let (display_path, source) =
             codex_process::codex_display_path(settings.codex_app_path.as_deref());
@@ -213,7 +243,7 @@ impl AppContext {
             let body = payload
                 .provider_body
                 .as_deref()
-                .ok_or_else(|| app_err!("内置档案缺少供应商配置"))?;
+                .ok_or_else(|| app_err!("内置预设缺少供应商配置"))?;
             payload.provider_body =
                 Some(codex_config::update_provider_body(body, base_url, api_key)?);
         }
@@ -249,21 +279,21 @@ impl AppContext {
         let stored = self.database.profile(id)?;
         let payload = &stored.payload;
         if payload.provider_id.is_none() {
-            return Err(app_err!("该档案没有供应商配置，无法测试连通性"));
+            return Err(app_err!("该预设没有供应商配置，无法测试连通性"));
         }
         let body = payload
             .provider_body
             .as_deref()
-            .ok_or_else(|| app_err!("该档案缺少供应商配置数据"))?;
+            .ok_or_else(|| app_err!("该预设缺少供应商配置数据"))?;
         let detail = parse_provider_detail(body)?;
         let base_url = detail
             .base_url
             .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| app_err!("该档案没有配置调用地址"))?;
+            .ok_or_else(|| app_err!("该预设没有配置调用地址"))?;
         let api_key = detail
             .api_key
             .filter(|key| !key.trim().is_empty() && !is_builtin_placeholder(payload, key))
-            .ok_or_else(|| app_err!("该档案没有配置 API 密钥，请先填写后再测试"))?;
+            .ok_or_else(|| app_err!("该预设没有配置 API 密钥，请先填写后再测试"))?;
 
         let models_url = format!("{}/models", base_url.trim_end_matches('/'));
         let client = reqwest::Client::builder()
@@ -434,7 +464,11 @@ impl AppContext {
     }
 
     pub fn delete_profile(&self, id: &str) -> AppResult<()> {
-        self.database.delete_profile(id)
+        self.database.delete_profile(id)?;
+        if self.active_profile_state()?.as_deref() == Some(id) {
+            self.database.set_active_profile(None)?;
+        }
+        Ok(())
     }
 
     pub fn set_profile_icon(&self, id: &str, icon: Option<&str>) -> AppResult<()> {
@@ -443,7 +477,7 @@ impl AppContext {
             .set_profile_icon(id, icon.as_deref(), &now_ms().to_string())
     }
 
-    /// 完整复制档案（配置、图标等），新档案名加“副本”后缀，同名时追加序号。
+    /// 完整复制预设（配置、图标等），新预设名加“副本”后缀，同名时追加序号。
     pub fn duplicate_profile(&self, id: &str) -> AppResult<ProfileSummary> {
         let stored = self.database.profile(id)?;
         let profiles = self.database.profiles()?;
@@ -477,6 +511,7 @@ impl AppContext {
     pub fn get_profile(&self, id: &str) -> AppResult<ProfileDetail> {
         let stored = self.database.profile(id)?;
         let payload = &stored.payload;
+        let active = self.is_active_profile(id)?;
         let provider = payload
             .provider_body
             .as_deref()
@@ -486,33 +521,58 @@ impl AppContext {
             .as_ref()
             .and_then(|detail| detail.api_key.clone())
             .filter(|key| !is_builtin_placeholder(payload, key));
-        let (config_fragment, catalog_content) = match payload.builtin.as_deref() {
-            Some(kind) => {
-                let template = builtin::template(kind)?;
-                // 编辑器始终显示占位符密钥版本；应用时才替换为档案里保存的真实密钥
-                let fragment = String::from_utf8_lossy(&template.render_config(None)?).into_owned();
-                let catalog = payload.raw_catalog.clone().or_else(|| {
-                    template
-                        .catalog
-                        .map(|(_, bytes)| String::from_utf8_lossy(bytes).into_owned())
-                });
-                (fragment, catalog)
-            }
-            None => (
-                payload.raw_config.clone().unwrap_or_else(|| {
-                    // 旧档案没有完整快照时，兜底显示当前 live 完整配置，避免只显示片段
-                    read_optional_text(&self.paths.codex_config())
-                        .unwrap_or_else(|| profile_config_fragment(payload))
-                }),
-                payload.raw_catalog.clone().or_else(|| {
-                    payload
-                        .model_values
-                        .get("model_catalog_json")
-                        .and_then(|raw| self.resolve_codex_path(raw))
-                        .and_then(|file| read_optional_text(&file))
-                }),
-            ),
+
+        // 使用中：live 文件是唯一事实源；未使用：数据库快照
+        let live_config = active
+            .then(|| read_optional_text(&self.paths.codex_config()))
+            .flatten();
+        let live_catalog = if active {
+            payload
+                .model_values
+                .get("model_catalog_json")
+                .and_then(|raw| self.resolve_codex_path(raw))
+                .and_then(|file| read_optional_text(&file))
+        } else {
+            None
         };
+        let live_auth = active
+            .then(|| read_optional_text(&self.paths.codex_home.join("auth.json")))
+            .flatten();
+
+        let raw_config = live_config
+            .as_ref()
+            .map(|text| {
+                if payload.builtin.is_some() {
+                    mask_api_key(text, payload)
+                } else {
+                    text.clone()
+                }
+            })
+            .or_else(|| payload.raw_config.clone());
+        let config_fragment = match raw_config.as_deref() {
+            Some(raw) => raw.to_string(),
+            None => match payload.builtin.as_deref() {
+                Some(kind) => {
+                    String::from_utf8_lossy(&builtin::template(kind)?.render_config(None)?)
+                        .into_owned()
+                }
+                None => profile_config_fragment(payload),
+            },
+        };
+        let catalog_content = if active {
+            live_catalog.or_else(|| payload.raw_catalog.clone())
+        } else {
+            payload.raw_catalog.clone()
+        }
+        .or_else(|| {
+            payload
+                .builtin
+                .as_deref()
+                .and_then(|kind| builtin::template(kind).ok())
+                .and_then(|template| template.catalog)
+                .map(|(_, bytes)| String::from_utf8_lossy(bytes).into_owned())
+        });
+
         Ok(ProfileDetail {
             id: stored.id.clone(),
             name: stored.name.clone(),
@@ -522,11 +582,8 @@ impl AppContext {
             api_key,
             model_values: payload.model_values.clone(),
             config_fragment,
-            raw_config: payload.raw_config.clone(),
-            auth_content: payload
-                .raw_auth
-                .clone()
-                .or_else(|| read_optional_text(&self.paths.codex_home.join("auth.json"))),
+            raw_config,
+            auth_content: payload.raw_auth.clone().or_else(|| live_auth),
             catalog_content,
             raw_catalog: payload.raw_catalog.clone(),
             raw_auth: payload.raw_auth.clone(),
@@ -535,8 +592,8 @@ impl AppContext {
         })
     }
 
-    /// 保存档案自身的完整配置原文：内置档案存 raw_config（应用时整文件回填）；
-    /// 普通档案解析回结构化字段（继续走合并回填）。models.json 统一存 raw_catalog。
+    /// 保存预设自身的完整配置原文：内置预设存 raw_config（应用时整文件回填）；
+    /// 普通预设解析回结构化字段（继续走合并回填）。models.json 统一存 raw_catalog。
     pub fn update_profile_config(
         &self,
         id: &str,
@@ -547,6 +604,11 @@ impl AppContext {
         let stored = self.database.profile(id)?;
         let mut payload = stored.payload;
 
+        // 清空 auth 内容 = 移除档案级覆盖，恢复为账号自动凭据
+        let auth_override = auth_text
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_string);
         let document = codex_config::parse_document(config_text)?;
         if let Some(provider_id) = payload.provider_id.as_deref() {
             let provider_ok = document
@@ -570,33 +632,52 @@ impl AppContext {
             serde_json::from_str::<serde_json::Value>(text)
                 .map_err(|error| app_err!("models.json 不是有效 JSON: {error}"))?;
         }
-        if let Some(text) = auth_text {
+        if let Some(text) = auth_override.as_deref() {
             serde_json::from_str::<serde_json::Value>(text)
                 .map_err(|error| app_err!("auth.json 不是有效 JSON: {error}"))?;
         }
 
         if payload.builtin.is_some() {
             payload.raw_config = Some(config_text.to_string());
-            if catalog_text.is_some() {
-                payload.raw_catalog = catalog_text.map(str::to_string);
-            }
-            if auth_text.is_some() {
-                payload.raw_auth = auth_text.map(str::to_string);
-            }
         } else {
             let parsed = codex_config::capture_from_document(&document)?;
             payload.model_values = parsed.model_values;
             payload.provider_body = parsed.provider_body;
             payload.raw_config = Some(config_text.to_string());
-            if catalog_text.is_some() {
-                payload.raw_catalog = catalog_text.map(str::to_string);
-            }
-            if auth_text.is_some() {
-                payload.raw_auth = auth_text.map(str::to_string);
-            }
+        }
+        if catalog_text.is_some() {
+            payload.raw_catalog = catalog_text.map(str::to_string);
+        }
+        if auth_text.is_some() {
+            payload.raw_auth = auth_override.clone();
         }
         self.database
             .update_profile(id, &stored.name, &payload, &now_ms().to_string())?;
+
+        // 使用中：编辑内容立即写进当前 Codex 文件（是否生效由 Codex 重启决定）
+        if self.is_active_profile(id)? {
+            let config_path = self.paths.codex_config();
+            let live_config = if payload.builtin.is_some() {
+                let kind = payload
+                    .builtin
+                    .as_deref()
+                    .ok_or_else(|| app_err!("预设缺少内置类型"))?;
+                let api_key = payload.provider_body.as_deref().and_then(provider_api_key);
+                let rendered = builtin::template(kind)?
+                    .substitute_key(config_text.as_bytes().to_vec(), api_key.as_deref())?;
+                String::from_utf8(rendered).map_err(|_| app_err!("内置模板不是有效 UTF-8"))?
+            } else {
+                config_text.to_string()
+            };
+            backup_file(&config_path, &self.paths.config_backup, "config")?;
+            atomic_write(&config_path, live_config.as_bytes())?;
+            if catalog_text.is_some() {
+                self.write_raw_catalog(&payload)?;
+            }
+            if auth_text.is_some() && payload.raw_auth.is_some() {
+                self.write_raw_auth(&payload)?;
+            }
+        }
         self.get_profile(id)
     }
 
@@ -622,42 +703,28 @@ impl AppContext {
             let body = payload
                 .provider_body
                 .as_deref()
-                .ok_or_else(|| app_err!("该档案缺少供应商配置数据"))?;
+                .ok_or_else(|| app_err!("该预设缺少供应商配置数据"))?;
             if base_url.is_some() || api_key.is_some() {
                 payload.provider_body =
                     Some(codex_config::update_provider_body(body, base_url, api_key)?);
             }
         } else if base_url.is_some() || api_key.is_some() {
-            return Err(app_err!("该档案没有供应商配置，无法修改调用地址或密钥"));
+            return Err(app_err!("该预设没有供应商配置，无法修改调用地址或密钥"));
         }
-        let mut write_back = false;
-        if (base_url.is_some() || api_key.is_some()) && payload.provider_id.is_some() {
-            let profiles = self.database.profiles()?;
-            let live = std::fs::read_to_string(self.paths.codex_config()).ok();
-            if let Some(document) = live
-                .as_deref()
-                .and_then(|text| codex_config::parse_document(text).ok())
-            {
-                write_back = self
-                    .matching_active_profile(&profiles, &document, None)?
-                    .as_deref()
-                    == Some(id);
-            }
-        }
+        let write_back = (base_url.is_some() || api_key.is_some())
+            && payload.provider_id.is_some()
+            && self.is_active_profile(id)?;
         let updated = self
             .database
             .update_profile(id, &name, &payload, &now_ms().to_string())?;
         if write_back {
-            if payload.builtin.is_some() {
-                self.apply_builtin_profile(id, &payload, "update")?;
-            } else {
-                self.write_live_provider_update(
-                    id,
-                    payload.provider_id.as_deref().expect("已检查 provider_id"),
-                    base_url,
-                    api_key,
-                )?;
-            }
+            // 使用中：只就地更新 live 的供应商段落，保留 Codex 期间生成的其他内容
+            self.write_live_provider_update(
+                id,
+                payload.provider_id.as_deref().expect("已检查 provider_id"),
+                base_url,
+                api_key,
+            )?;
         }
         Ok(profile_summary(&updated))
     }
@@ -696,16 +763,14 @@ impl AppContext {
             .map_err(|error| app_err!("无法读取 {}: {error}", config_path.display()))?;
         let mut document = codex_config::parse_document(&original)?;
 
-        // 切换前把当前 live 配置回写进正在生效的档案，使档案跟随使用中的累计更新
+        // 切换前把当前 live 配置回写进正在生效的预设，使预设跟随使用中的累计更新
         self.autosync_active_profile(id, &document)?;
 
         let payload = self.database.profile(id)?.payload;
         if payload.builtin.is_some() {
-            return self.apply_builtin_profile(id, &payload, "apply");
-        }
-
-        // 完整快照档案：直接回填完整原文（含 MCP、插件、注释等全部内容）
-        if let Some(raw) = &payload.raw_config {
+            self.apply_builtin_profile(id, &payload, "apply")?;
+        } else if let Some(raw) = &payload.raw_config {
+            // 完整快照预设：直接回填完整原文（含 MCP、插件、注释等全部内容）
             backup_file(&config_path, &self.paths.config_backup, "config")?;
             atomic_write(&config_path, raw.as_bytes())?;
             self.write_raw_catalog(&payload)?;
@@ -717,23 +782,24 @@ impl AppContext {
                 Some("configuration applied"),
                 &now_ms().to_string(),
             )?;
-            return Ok(());
+        } else {
+            codex_config::apply_to_document(&mut document, &payload)?;
+            let updated = document.to_string();
+
+            backup_file(&config_path, &self.paths.config_backup, "config")?;
+            atomic_write(&config_path, updated.as_bytes())?;
+            self.write_raw_catalog(&payload)?;
+            self.write_raw_auth(&payload)?;
+            self.database.record_event(
+                Some(id),
+                "apply",
+                "success",
+                Some("configuration applied"),
+                &now_ms().to_string(),
+            )?;
         }
-
-        codex_config::apply_to_document(&mut document, &payload)?;
-        let updated = document.to_string();
-
-        backup_file(&config_path, &self.paths.config_backup, "config")?;
-        atomic_write(&config_path, updated.as_bytes())?;
-        self.write_raw_catalog(&payload)?;
-        self.write_raw_auth(&payload)?;
-        self.database.record_event(
-            Some(id),
-            "apply",
-            "success",
-            Some("configuration applied"),
-            &now_ms().to_string(),
-        )?;
+        // 显式记录当前激活预设，避免依赖应用日志反推
+        self.database.set_active_profile(Some(id))?;
         Ok(())
     }
 
@@ -762,13 +828,32 @@ impl AppContext {
         Ok(())
     }
 
-    /// 是否为官方订阅档案（无 API 供应商，凭据走 ChatGPT 订阅）。
+    /// 是否为官方订阅预设（无 API 供应商，凭据走 ChatGPT 订阅）。
     pub fn is_subscription_profile(&self, id: &str) -> AppResult<bool> {
-        Ok(self.database.profile(id)?.payload.provider_id.is_none())
+        Ok(self.database.profile(id)?.kind == ProfileKind::Official)
     }
 
-    /// 内置官方档案：整文件替换为模板原文（仅替换密钥占位符），
-    /// 并写入本档案自带的关联文件（deepseek/智谱各自独立的 models.json、minimax 的 custom-catalog.json），
+    /// 官方预设绑定的订阅账号；未绑定返回 None（由调用方回退默认账号）。
+    pub fn bound_account_id(&self, id: &str) -> AppResult<Option<String>> {
+        Ok(self.database.profile(id)?.account_id.clone())
+    }
+
+    fn active_profile_state(&self) -> AppResult<Option<String>> {
+        Ok(self.database.app_state()?.0)
+    }
+
+    /// 该预设是否为当前使用中（以显式激活状态为准，不做配置比对）。
+    pub fn is_active_profile(&self, id: &str) -> AppResult<bool> {
+        Ok(self.active_profile_state()?.as_deref() == Some(id))
+    }
+
+    /// 官方预设是否保存了自己的 auth.json 覆盖（有则应用时不再用账号现生成）。
+    pub fn has_auth_override(&self, id: &str) -> AppResult<bool> {
+        Ok(self.database.profile(id)?.payload.raw_auth.is_some())
+    }
+
+    /// 内置官方预设：整文件替换为模板原文（仅替换密钥占位符），
+    /// 并写入本预设自带的关联文件（deepseek/智谱各自独立的 models.json、minimax 的 custom-catalog.json），
     /// 写生产文件前都先备份旧文件。
     fn apply_builtin_profile(
         &self,
@@ -779,7 +864,7 @@ impl AppContext {
         let kind = payload
             .builtin
             .as_deref()
-            .ok_or_else(|| app_err!("档案缺少内置类型"))?;
+            .ok_or_else(|| app_err!("预设缺少内置类型"))?;
         let template = builtin::template(kind)?;
         let api_key = payload.provider_body.as_deref().and_then(provider_api_key);
         let rendered = match &payload.raw_config {
@@ -815,7 +900,7 @@ impl AppContext {
         Ok(())
     }
 
-    /// 把档案自己编辑保存的 models.json 原文写入 model_catalog_json 指向的位置。
+    /// 把预设自己编辑保存的 models.json 原文写入 model_catalog_json 指向的位置。
     fn write_raw_catalog(&self, payload: &ProfilePayload) -> AppResult<()> {
         let Some(raw) = payload.raw_catalog.as_deref() else {
             return Ok(());
@@ -839,7 +924,7 @@ impl AppContext {
         Ok(())
     }
 
-    /// 把档案自己编辑保存的 auth.json 原文写入 ~/.codex/auth.json。
+    /// 把预设自己编辑保存的 auth.json 原文写入 ~/.codex/auth.json。
     fn write_raw_auth(&self, payload: &ProfilePayload) -> AppResult<()> {
         let Some(raw) = payload.raw_auth.as_deref() else {
             return Ok(());
@@ -878,25 +963,38 @@ impl AppContext {
         document: &toml_edit::DocumentMut,
     ) -> AppResult<()> {
         let profiles = self.database.profiles()?;
-        let Some(active_id) = self.matching_active_profile(&profiles, document, Some(target_id))?
-        else {
+        // 显式激活状态优先；旧数据无状态时回退配置比对
+        let Some(active_id) = (match self.active_profile_state()? {
+            Some(id) => Some(id),
+            None => self.matching_active_profile(&profiles, document, Some(target_id))?,
+        }) else {
             return Ok(());
         };
+        if active_id == target_id {
+            return Ok(());
+        }
         let Some(profile) = profiles.iter().find(|profile| profile.id == active_id) else {
             return Ok(());
         };
-        // 内置档案是固定官方模板，应用时整文件替换，不参与累计更新回写
-        if profile.payload.builtin.is_some() {
-            return Ok(());
-        }
         let Ok(mut live) = codex_config::capture_from_document(document) else {
             return Ok(());
         };
-        // 档案自己编辑保存的 models.json 内容不属于 live 捕获，回写时保留
-        live.raw_catalog = profile.payload.raw_catalog.clone();
+        live.builtin = profile.payload.builtin.clone();
+        // 使用中模型目录按 live 文件回写；档案自己保存的 auth 覆盖保持不变
+        live.raw_catalog = profile
+            .payload
+            .model_values
+            .get("model_catalog_json")
+            .and_then(|raw| self.resolve_codex_path(raw))
+            .and_then(|file| read_optional_text(&file))
+            .or_else(|| profile.payload.raw_catalog.clone());
         live.raw_auth = profile.payload.raw_auth.clone();
-        // 快照跟随当前 live 完整文本，保证档案是完整状态
-        live.raw_config = Some(document.to_string());
+        // 快照跟随当前 live 完整文本，保证预设是完整状态（内置模板密钥还原为占位符）
+        live.raw_config = Some(if profile.payload.builtin.is_some() {
+            mask_api_key(&document.to_string(), &profile.payload)
+        } else {
+            document.to_string()
+        });
         if live == profile.payload {
             return Ok(());
         }
@@ -915,8 +1013,8 @@ impl AppContext {
         Ok(())
     }
 
-    /// 识别当前 live 配置对应的激活档案：严格匹配优先；
-    /// 配置累计新键导致严格匹配失效时，用"档案是 live 子集"的宽松匹配，且仅当唯一候选。
+    /// 识别当前 live 配置对应的激活预设：严格匹配优先；
+    /// 配置累计新键导致严格匹配失效时，用"预设是 live 子集"的宽松匹配，且仅当唯一候选。
     fn matching_active_profile(
         &self,
         profiles: &[StoredProfile],
@@ -944,7 +1042,7 @@ impl AppContext {
             .operation
             .lock()
             .map_err(|_| app_err!("操作锁已损坏"))?;
-        let settings = self.database.settings()?;
+        let settings = self.settings()?;
         emit(app, "stopping", None);
 
         let process_ids = codex_process::find_process_ids(settings.codex_app_path.as_deref());
@@ -991,7 +1089,21 @@ impl AppContext {
     }
 
     pub fn settings(&self) -> AppResult<Settings> {
-        self.database.settings()
+        let path = &self.paths.settings;
+        let text = match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                // 首次运行：写出默认设置文件，方便直接手动编辑
+                let defaults = Settings::default();
+                let text = serde_json::to_string_pretty(&defaults)
+                    .map_err(|_| app_err!("默认设置序列化失败"))?;
+                atomic_write(path, text.as_bytes())?;
+                return Ok(defaults);
+            }
+            Err(error) => return Err(app_err!("无法读取设置文件 {}: {error}", path.display())),
+        };
+        serde_json::from_str(&text)
+            .map_err(|error| app_err!("设置文件 {} 无效: {error}", path.display()))
     }
 
     pub fn save_settings(&self, settings: &Settings) -> AppResult<Settings> {
@@ -1009,7 +1121,9 @@ impl AppContext {
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_string);
-        self.database.save_settings(&settings)?;
+        let text = serde_json::to_string_pretty(&settings)
+            .map_err(|_| app_err!("设置序列化失败"))?;
+        atomic_write(&self.paths.settings, text.as_bytes())?;
         Ok(settings)
     }
 
@@ -1044,6 +1158,10 @@ impl AppContext {
                 path: self.paths.database.display().to_string(),
             },
             PathInfo {
+                label: "设置文件".into(),
+                path: self.paths.settings.display().to_string(),
+            },
+            PathInfo {
                 label: "Codex 配置".into(),
                 path: self.paths.codex_config().display().to_string(),
             },
@@ -1054,10 +1172,6 @@ impl AppContext {
             PathInfo {
                 label: "数据库备份".into(),
                 path: self.paths.database_backup.display().to_string(),
-            },
-            PathInfo {
-                label: "日志".into(),
-                path: self.paths.logs.display().to_string(),
             },
         ]
     }
@@ -1070,7 +1184,7 @@ impl AppContext {
 fn validated_name(name: &str) -> AppResult<String> {
     let name = name.trim();
     if name.is_empty() || name.len() > 50 {
-        return Err(app_err!("配置档案名称长度必须在 1 到 50 个字符之间"));
+        return Err(app_err!("配置预设名称长度必须在 1 到 50 个字符之间"));
     }
     Ok(name.to_string())
 }
@@ -1413,7 +1527,7 @@ experimental_bearer_token = "old-key"
 
         let context = AppContext::new(paths).unwrap();
         context.capture_profile("First").unwrap();
-        // 档案 id 取毫秒时间戳，同毫秒内二次捕获会撞 id；真实 UI 不可能，测试里隔开
+        // 预设 id 取毫秒时间戳，同毫秒内二次捕获会撞 id；真实 UI 不可能，测试里隔开
         std::thread::sleep(std::time::Duration::from_millis(2));
         let second = context.capture_profile("Second").unwrap();
 
@@ -1604,7 +1718,7 @@ experimental_bearer_token = "old-key"
 
         let context = AppContext::new(paths).unwrap();
         let profile = context.capture_profile("ZAI High").unwrap();
-        // live 累计新键，严格匹配失效，但档案仍是唯一子集候选
+        // live 累计新键，严格匹配失效，但预设仍是唯一子集候选
         std::fs::write(
             context.paths.codex_config(),
             "model = \"glm-5.3\"\nmodel_provider = \"ZAI\"\nmodel_reasoning_effort = \"high\"\nmodel_catalog_json = \"zai.json\"\n\n[mcp_servers.keep]\ncommand = \"node\"\n\n[model_providers.ZAI]\nname = \"ZAI\"\nbase_url = \"https://api.example\"\nexperimental_bearer_token = \"secret\"\n",
@@ -1709,7 +1823,7 @@ experimental_bearer_token = "old-key"
             .unwrap();
         assert_eq!(config, expected);
         assert!(!String::from_utf8_lossy(&config).contains("<你的 DeepSeek API Key>"));
-        // 关联文件按本档案字节写入，旧文件已备份
+        // 关联文件按本预设字节写入，旧文件已备份
         let models = std::fs::read(context.paths.codex_home.join("models.json")).unwrap();
         assert_eq!(models, crate::builtin::DEEPSEEK_MODELS);
         let backup = std::fs::read_dir(context.paths.codex_files_backup.clone())

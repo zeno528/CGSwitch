@@ -43,12 +43,11 @@ onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <template>
-  <div class="h-80 overflow-hidden rounded-xl border border-[var(--panel-border)] bg-black/4 dark:bg-white/6">
+  <div class="overflow-hidden rounded-xl border border-[var(--panel-border)] bg-black/4 dark:bg-white/6">
     <Codemirror
       :model-value="modelValue"
       :placeholder="placeholder ?? '在此编辑配置…'"
       :extensions="extensions"
-      :style="{ height: '100%' }"
       @update:model-value="emit('update:modelValue', $event)"
     />
   </div>
@@ -56,10 +55,12 @@ onBeforeUnmount(() => observer?.disconnect());
 
 <style scoped>
 :deep(.cm-editor) {
-  height: 100%;
+  height: auto;
   background: transparent;
 }
 :deep(.cm-scroller) {
+  /* 编辑器默认按内容自动撑高，无纵向滚动条；横向滚动保留 */
+  overflow: auto;
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 12px;
   line-height: 1.6;

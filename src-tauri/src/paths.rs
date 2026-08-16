@@ -6,10 +6,10 @@ use crate::error::{err, AppResult};
 pub struct AppPaths {
     pub root: PathBuf,
     pub database: PathBuf,
+    pub settings: PathBuf,
     pub config_backup: PathBuf,
     pub database_backup: PathBuf,
     pub codex_files_backup: PathBuf,
-    pub logs: PathBuf,
     pub codex_home: PathBuf,
 }
 
@@ -24,7 +24,6 @@ impl AppPaths {
             &self.config_backup,
             &self.database_backup,
             &self.codex_files_backup,
-            &self.logs,
         ] {
             std::fs::create_dir_all(dir)
                 .map_err(|error| err(format!("无法创建目录 {}: {error}", dir.display())))?;
@@ -41,10 +40,10 @@ pub fn from_home(home: &Path) -> AppResult<AppPaths> {
     let root = home.join(".cgswitch");
     Ok(AppPaths {
         database: root.join("cgswitch.db"),
+        settings: root.join("settings.json"),
         config_backup: root.join("backups").join("config"),
         database_backup: root.join("backups").join("database"),
         codex_files_backup: root.join("backups").join("codex-files"),
-        logs: root.join("logs"),
         codex_home: home.join(".codex"),
         root,
     })

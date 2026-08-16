@@ -1,6 +1,31 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+/// 预设类型：官方订阅（ChatGPT）或第三方供应商（Codex 协议）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProfileKind {
+    Official,
+    ThirdParty,
+}
+
+impl ProfileKind {
+    pub fn from_db(raw: &str) -> Option<Self> {
+        match raw {
+            "official" => Some(Self::Official),
+            "third_party" => Some(Self::ThirdParty),
+            _ => None,
+        }
+    }
+
+    pub fn as_db(self) -> &'static str {
+        match self {
+            Self::Official => "official",
+            Self::ThirdParty => "third_party",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProfilePayload {
     #[serde(default)]
@@ -9,16 +34,16 @@ pub struct ProfilePayload {
     pub provider_id: Option<String>,
     #[serde(default)]
     pub provider_body: Option<String>,
-    /// 内置官方档案类型（deepseek/minimax/zhipu/chatgpt）；普通捕获的档案为 None。
+    /// 内置官方预设类型（deepseek/minimax/zhipu/chatgpt）；普通捕获的预设为 None。
     #[serde(default)]
     pub builtin: Option<String>,
-    /// 档案自己保存的完整 config 原文（内置档案可全量编辑；普通档案无该字段）。
+    /// 预设自己保存的完整 config 原文（内置预设可全量编辑；普通预设无该字段）。
     #[serde(default)]
     pub raw_config: Option<String>,
-    /// 档案自己保存的 models.json 原文（编辑后随档案应用写入 ~/.codex）。
+    /// 预设自己保存的 models.json 原文（编辑后随预设应用写入 ~/.codex）。
     #[serde(default)]
     pub raw_catalog: Option<String>,
-    /// 档案自己保存的 auth.json 原文（编辑后随档案应用写入 ~/.codex/auth.json）。
+    /// 预设自己保存的 auth.json 原文（编辑后随预设应用写入 ~/.codex/auth.json）。
     #[serde(default)]
     pub raw_auth: Option<String>,
     /// 模型提供方的管理后台网址（卡片显示跳转按钮）。
@@ -33,7 +58,7 @@ pub struct ProfileSummary {
     pub model: Option<String>,
     pub provider: Option<String>,
     pub reasoning_effort: Option<String>,
-    /// 档案是否已配置有效 API 密钥（占位符视为未配置）
+    /// 预设是否已配置有效 API 密钥（占位符视为未配置）
     pub has_key: bool,
     pub admin_url: Option<String>,
     pub icon: Option<String>,
@@ -62,6 +87,7 @@ pub struct ProfileDetail {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Settings {
+    #[serde(default = "default_theme")]
     pub theme: String,
     #[serde(default)]
     pub codex_app_path: Option<String>,
@@ -79,6 +105,10 @@ pub struct Settings {
 
 pub fn default_restart_timeout() -> u64 {
     5_000
+}
+
+fn default_theme() -> String {
+    "system".into()
 }
 
 impl Default for Settings {

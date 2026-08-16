@@ -32,18 +32,18 @@
 
 ```text
 ~/.cgswitch/
+├── settings.json
 ├── cgswitch.db
-├── backups/
-│   ├── config/
-│   ├── database/
-│   └── codex-files/
-└── logs/
+└── backups/
+    ├── config/
+    ├── database/
+    └── codex-files/
 ```
 
 - Windows：`C:\Users\<user>\.cgswitch`
 - macOS：`/Users/<user>/.cgswitch`
 
-数据库保存档案、设置和切换事件。provider token 只保留在本机，不要把 `.cgswitch/`、日志或数据库提交到 Git。
+`settings.json` 保存应用设置（可直接编辑），数据库保存档案、账号和切换事件。provider token 只保留在本机，不要把 `.cgswitch/` 或数据库提交到 Git。
 
 ## 开发
 
