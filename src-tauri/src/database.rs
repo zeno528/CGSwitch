@@ -39,8 +39,44 @@ CREATE INDEX idx_switch_events_profile_id ON switch_events(profile_id);
 
 const SCHEMA_V2: &str = "ALTER TABLE profiles ADD COLUMN icon TEXT;";
 
+const SCHEMA_V3: &str = r#"
+ALTER TABLE profiles RENAME TO profiles_old;
+
+CREATE TABLE profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  icon TEXT
+);
+
+INSERT INTO profiles (id, name, payload_json, created_at, updated_at, icon)
+  SELECT id, name, payload_json, created_at, updated_at, icon FROM profiles_old;
+
+CREATE TABLE switch_events_new (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  profile_id TEXT,
+  action TEXT NOT NULL,
+  status TEXT NOT NULL,
+  message TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE SET NULL
+);
+
+INSERT INTO switch_events_new (id, profile_id, action, status, message, created_at)
+  SELECT id, profile_id, action, status, message, created_at FROM switch_events;
+
+DROP TABLE switch_events;
+ALTER TABLE switch_events_new RENAME TO switch_events;
+DROP TABLE profiles_old;
+
+CREATE INDEX idx_switch_events_created_at ON switch_events(created_at DESC);
+CREATE INDEX idx_switch_events_profile_id ON switch_events(profile_id);
+"#;
+
 fn migrations() -> Migrations<'static> {
-    Migrations::new(vec![M::up(SCHEMA_V1), M::up(SCHEMA_V2)])
+    Migrations::new(vec![M::up(SCHEMA_V1), M::up(SCHEMA_V2), M::up(SCHEMA_V3)])
 }
 
 #[derive(Debug)]

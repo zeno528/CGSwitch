@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 
@@ -162,6 +163,8 @@ struct CodexAccountData {
     account_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     email: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    id_token: Option<String>,
     refresh_token: String,
     authenticated_at: i64,
 }
@@ -328,7 +331,7 @@ impl CodexOAuthManager {
         );
 
         let account = self
-            .add_account_internal(account_id, refresh_token, email)
+            .add_account_internal(account_id, refresh_token, email, tokens.id_token.clone())
             .await?;
         Ok(Some(account))
     }
@@ -427,13 +430,27 @@ impl CodexOAuthManager {
         };
         let new_tokens = self.refresh_with_token(&refresh_token).await?;
 
-        if let Some(new_refresh) = new_tokens.refresh_token.clone() {
-            if new_refresh != refresh_token {
-                let mut accounts = self.accounts.write().await;
-                if let Some(account) = accounts.get_mut(account_id) {
-                    account.refresh_token = new_refresh;
+        let new_refresh = new_tokens.refresh_token.clone();
+        let new_id_token = new_tokens.id_token.clone();
+        if new_refresh.is_some() || new_id_token.is_some() {
+            let mut changed = false;
+            let mut accounts = self.accounts.write().await;
+            if let Some(account) = accounts.get_mut(account_id) {
+                if let Some(token) = new_refresh {
+                    if account.refresh_token != token {
+                        account.refresh_token = token;
+                        changed = true;
+                    }
                 }
-                drop(accounts);
+                if let Some(token) = new_id_token {
+                    if account.id_token.as_deref() != Some(token.as_str()) {
+                        account.id_token = Some(token);
+                        changed = true;
+                    }
+                }
+            }
+            drop(accounts);
+            if changed {
                 self.save_to_disk().await?;
             }
         }
@@ -446,6 +463,34 @@ impl CodexOAuthManager {
             },
         );
         Ok(new_tokens.access_token)
+    }
+
+    /// 生成官方 Codex CLI 的 auth.json 内容（ChatGPT 订阅登录格式）。
+    pub async fn codex_auth_json(&self, account_id: &str) -> Result<String, CodexOAuthError> {
+        let access_token = self.get_valid_token_for_account(account_id).await?;
+        let (refresh_token, id_token) = {
+            let accounts = self.accounts.read().await;
+            let account = accounts
+                .get(account_id)
+                .ok_or_else(|| CodexOAuthError::AccountNotFound(account_id.to_string()))?;
+            (account.refresh_token.clone(), account.id_token.clone())
+        };
+        let id_token = id_token.ok_or_else(|| {
+            CodexOAuthError::RequestFailed("账号缺少 id_token，请重新登录".to_string())
+        })?;
+        let auth = serde_json::json!({
+            "auth_mode": "chatgpt",
+            "OPENAI_API_KEY": null,
+            "tokens": {
+                "id_token": id_token,
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "account_id": account_id,
+            },
+            "last_refresh": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
+        });
+        serde_json::to_string_pretty(&auth)
+            .map_err(|error| CodexOAuthError::ParseError(error.to_string()))
     }
 
     // ==================== 账号管理 ====================
@@ -464,6 +509,28 @@ impl CodexOAuthManager {
             default_account_id: default_id.clone(),
             accounts: sorted_accounts(&accounts, default_id.as_deref()),
         }
+    }
+
+    pub async fn default_account_id(&self) -> Option<String> {
+        self.resolve_default_account_id().await
+    }
+
+    /// 切换当前订阅账号（用于多账号管理）。
+    pub async fn set_default_account(&self, account_id: &str) -> Result<(), CodexOAuthError> {
+        {
+            let accounts = self.accounts.read().await;
+            if !accounts.contains_key(account_id) {
+                return Err(CodexOAuthError::AccountNotFound(account_id.to_string()));
+            }
+        }
+        {
+            let mut default = self.default_account_id.write().await;
+            if default.as_deref() == Some(account_id) {
+                return Ok(());
+            }
+            *default = Some(account_id.to_string());
+        }
+        self.save_to_disk().await
     }
 
     pub async fn remove_account(&self, account_id: &str) -> Result<(), CodexOAuthError> {
@@ -496,10 +563,12 @@ impl CodexOAuthManager {
         account_id: String,
         refresh_token: String,
         email: Option<String>,
+        id_token: Option<String>,
     ) -> Result<ManagedAccount, CodexOAuthError> {
         let data = CodexAccountData {
             account_id: account_id.clone(),
             email,
+            id_token,
             refresh_token,
             authenticated_at: now_secs(),
         };
@@ -509,9 +578,7 @@ impl CodexOAuthManager {
         }
         {
             let mut default = self.default_account_id.write().await;
-            if default.is_none() {
-                *default = Some(account_id.clone());
-            }
+            *default = Some(account_id.clone());
         }
         self.save_to_disk().await?;
         Ok(ManagedAccount {
@@ -775,6 +842,7 @@ mod tests {
                     "acc-123".to_string(),
                     "rt-secret".to_string(),
                     Some("user@example.com".to_string()),
+                    Some("id-jwt".to_string()),
                 )
                 .await
                 .unwrap();
@@ -796,6 +864,7 @@ mod tests {
                 "acc-123".to_string(),
                 "rt".to_string(),
                 Some("a@example.com".to_string()),
+                None,
             )
             .await
             .unwrap();
@@ -804,6 +873,7 @@ mod tests {
                 "acc-456".to_string(),
                 "rt2".to_string(),
                 Some("b@example.com".to_string()),
+                None,
             )
             .await
             .unwrap();
@@ -812,5 +882,37 @@ mod tests {
         let accounts = manager.list_accounts().await;
         assert_eq!(accounts.len(), 1);
         assert_eq!(accounts[0].id, "acc-456");
+    }
+
+    #[tokio::test]
+    async fn codex_auth_json_matches_official_chatgpt_shape() {
+        let dir = tempfile::tempdir().unwrap();
+        let manager = CodexOAuthManager::new(store_path(dir.path()));
+        manager
+            .add_account_internal(
+                "acc-1".to_string(),
+                "rt-1".to_string(),
+                Some("a@example.com".to_string()),
+                Some("id-jwt".to_string()),
+            )
+            .await
+            .unwrap();
+        manager.access_tokens.write().await.insert(
+            "acc-1".to_string(),
+            CachedAccessToken {
+                token: "at-1".to_string(),
+                expires_at_ms: now_ms() + 3_600_000,
+            },
+        );
+
+        let json = manager.codex_auth_json("acc-1").await.unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["auth_mode"], "chatgpt");
+        assert!(value["OPENAI_API_KEY"].is_null());
+        assert_eq!(value["tokens"]["id_token"], "id-jwt");
+        assert_eq!(value["tokens"]["access_token"], "at-1");
+        assert_eq!(value["tokens"]["refresh_token"], "rt-1");
+        assert_eq!(value["tokens"]["account_id"], "acc-1");
+        assert!(value["last_refresh"].is_string());
     }
 }

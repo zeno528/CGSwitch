@@ -43,9 +43,14 @@ async function poll() {
     while (Date.now() < deadline) {
       const account = await api.authPollForAccount(current.device_code);
       if (account) {
-        message.success("ChatGPT 账号已登录");
         login.value = null;
         await refreshStatus();
+        try {
+          await api.authApplyToCodex(account.id);
+          message.success("ChatGPT 账号已登录，Codex 将使用订阅额度");
+        } catch (error) {
+          message.error(`账号已登录，但写入认证失败：${String(error)}`);
+        }
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, current.interval * 1000));
@@ -90,6 +95,16 @@ async function removeAccount(accountId: string) {
   }
 }
 
+async function setDefault(accountId: string) {
+  try {
+    await api.authSetDefaultAccount(accountId);
+    message.success("已切换当前订阅账号");
+    await refreshStatus();
+  } catch (error) {
+    message.error(String(error));
+  }
+}
+
 onMounted(refreshStatus);
 </script>
 
@@ -106,6 +121,7 @@ onMounted(refreshStatus);
           <span class="mono truncate">{{ account.login }}</span>
           <n-tag v-if="account.is_default" size="small" type="success">默认</n-tag>
         </div>
+        <n-button v-if="!account.is_default" size="small" secondary @click="setDefault(account.id)">设为当前</n-button>
         <n-button size="small" quaternary type="error" @click="removeAccount(account.id)">移除</n-button>
       </div>
     </div>

@@ -30,6 +30,8 @@ const profileName = ref("");
 const editingProfile = ref<ProfileSummary | null>(null);
 const creatingProfile = ref(false);
 const modalProfile = ref<ProfileSummary | null>(null);
+const subscriptionAuthed = ref(false);
+const subscriptionAccount = ref<string | null>(null);
 
 let unlisten: (() => void) | null = null;
 
@@ -188,6 +190,14 @@ onMounted(async () => {
     restartStage.value = payload.stage;
     restartMessage.value = payload.message ?? "";
   });
+  try {
+    const status = await api.authGetStatus();
+    subscriptionAuthed.value = status.authenticated;
+    subscriptionAccount.value =
+      status.accounts.find((account) => account.id === status.default_account_id)?.login ?? null;
+  } catch {
+    subscriptionAuthed.value = false;
+  }
 });
 
 onBeforeUnmount(() => {
@@ -292,6 +302,8 @@ onBeforeUnmount(() => {
             :profile="profile"
             :active="profile.id === state.active_profile_id"
             :busy="busy"
+            :subscription-authed="subscriptionAuthed"
+            :subscription-account="subscriptionAccount"
             @apply="applyProfile(profile)"
             @rename="openRename(profile)"
             @edit="editingProfile = profile"

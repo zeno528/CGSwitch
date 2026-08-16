@@ -142,8 +142,29 @@ pub fn delete_profile(id: String, state: State<'_, AppContext>) -> AppResult<()>
 }
 
 #[tauri::command]
-pub fn apply_profile(id: String, state: State<'_, AppContext>) -> AppResult<()> {
-    state.apply_profile(&id)
+pub async fn apply_profile(
+    id: String,
+    state: State<'_, AppContext>,
+    oauth: State<'_, CodexOAuthState>,
+) -> Result<(), String> {
+    state.apply_profile(&id).map_err(|error| error.to_string())?;
+    // 订阅档案：已有认证账号时自动写入订阅凭据，Codex 直接用订阅额度跑
+    if state
+        .is_subscription_profile(&id)
+        .map_err(|error| error.to_string())?
+    {
+        let manager = oauth.0.read().await;
+        if let Some(account_id) = manager.default_account_id().await {
+            let content = manager
+                .codex_auth_json(&account_id)
+                .await
+                .map_err(|error| error.to_string())?;
+            state
+                .write_codex_auth_json(&content)
+                .map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -232,6 +253,32 @@ pub async fn auth_remove_account(
         .write()
         .await
         .remove_account(&account_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn auth_set_default_account(
+    account_id: String,
+    state: State<'_, CodexOAuthState>,
+) -> Result<(), String> {
+    state
+        .0
+        .write()
+        .await
+        .set_default_account(&account_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn auth_apply_to_codex(
+    account_id: String,
+    state: State<'_, AppContext>,
+    oauth: State<'_, CodexOAuthState>,
+) -> Result<(), String> {
+    state
+        .apply_oauth_auth(&oauth, &account_id)
         .await
         .map_err(|error| error.to_string())
 }

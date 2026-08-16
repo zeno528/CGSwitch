@@ -57,6 +57,8 @@ pub fn run() {
             commands::auth_poll_for_account,
             commands::auth_get_status,
             commands::auth_remove_account,
+            commands::auth_set_default_account,
+            commands::auth_apply_to_codex,
             commands::open_url,
             commands::get_settings,
             commands::save_settings,

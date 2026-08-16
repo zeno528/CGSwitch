@@ -3,6 +3,7 @@ use std::sync::Mutex;
 
 use tauri::{AppHandle, Emitter};
 
+use crate::auth::codex_oauth::CodexOAuthState;
 use crate::builtin;
 use crate::codex::{config as codex_config, process as codex_process};
 use crate::database::{profile_summary, Database, StoredProfile};
@@ -172,13 +173,6 @@ impl AppContext {
 
     pub fn capture_profile(&self, name: &str) -> AppResult<ProfileSummary> {
         let name = validated_name(name)?;
-        let profiles = self.database.profiles()?;
-        if profiles
-            .iter()
-            .any(|profile| profile.name.eq_ignore_ascii_case(&name))
-        {
-            return Err(app_err!("已存在同名配置档案"));
-        }
         let mut payload = codex_config::read_profile(&self.paths.codex_config())?;
         // 保存完整配置原文，编辑页按完整文件展示/编辑
         payload.raw_config = std::fs::read_to_string(self.paths.codex_config())
@@ -203,13 +197,6 @@ impl AppContext {
         api_key: Option<&str>,
     ) -> AppResult<ProfileSummary> {
         let template = builtin::template(kind)?;
-        let profiles = self.database.profiles()?;
-        if profiles
-            .iter()
-            .any(|profile| profile.name.eq_ignore_ascii_case(template.name))
-        {
-            return Err(app_err!("已存在同名配置档案"));
-        }
         let base_url = base_url.map(str::trim).filter(|value| !value.is_empty());
         let api_key = api_key.map(str::trim).filter(|key| !key.is_empty());
         if template.placeholder.is_some() && api_key.is_none() {
@@ -256,8 +243,8 @@ impl AppContext {
             .map(|(_, bytes)| String::from_utf8_lossy(bytes).into_owned()))
     }
 
-    /// 复刻 cc-switch 的端点测速：预热请求 + 计时 GET（带 Bearer 密钥），
-    /// 返回延迟 / HTTP 状态 / 错误信息。
+    /// 验证供应商密钥连通性：请求 OpenAI 兼容的 GET {base}/models（带 Bearer 密钥），
+    /// 2xx 视为可用，401/403 视为密钥无效，返回延迟 / HTTP 状态 / 错误信息。
     pub async fn test_profile_connection(&self, id: &str) -> AppResult<ProfileConnectionResult> {
         let stored = self.database.profile(id)?;
         let payload = &stored.payload;
@@ -275,34 +262,45 @@ impl AppContext {
             .ok_or_else(|| app_err!("该档案没有配置调用地址"))?;
         let api_key = detail
             .api_key
-            .filter(|key| !key.trim().is_empty() && !is_builtin_placeholder(payload, key));
-        if api_key.is_none() {
-            return Err(app_err!("该档案没有配置 API 密钥，请先填写后再测试"));
-        }
+            .filter(|key| !key.trim().is_empty() && !is_builtin_placeholder(payload, key))
+            .ok_or_else(|| app_err!("该档案没有配置 API 密钥，请先填写后再测试"))?;
 
+        let models_url = format!("{}/models", base_url.trim_end_matches('/'));
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(8))
             .build()
             .map_err(|error| app_err!("创建 HTTP 客户端失败: {error}"))?;
-        let build_request = || {
-            let mut request = client.get(&base_url);
-            if let Some(key) = &api_key {
-                request = request.bearer_auth(key);
-            }
-            request
-        };
-
-        // 预热请求，忽略结果，仅用于建立连接
-        let _ = build_request().send().await;
 
         let start = std::time::Instant::now();
-        match build_request().send().await {
-            Ok(response) => Ok(ProfileConnectionResult {
-                ok: true,
-                latency_ms: Some(start.elapsed().as_millis()),
-                status: Some(response.status().as_u16()),
-                error: None,
-            }),
+        match client.get(&models_url).bearer_auth(api_key).send().await {
+            Ok(response) => {
+                let status = response.status();
+                let latency_ms = Some(start.elapsed().as_millis());
+                if status.is_success() {
+                    Ok(ProfileConnectionResult {
+                        ok: true,
+                        latency_ms,
+                        status: Some(status.as_u16()),
+                        error: None,
+                    })
+                } else if status == reqwest::StatusCode::UNAUTHORIZED
+                    || status == reqwest::StatusCode::FORBIDDEN
+                {
+                    Ok(ProfileConnectionResult {
+                        ok: false,
+                        latency_ms,
+                        status: Some(status.as_u16()),
+                        error: Some("API 密钥无效".to_string()),
+                    })
+                } else {
+                    Ok(ProfileConnectionResult {
+                        ok: false,
+                        latency_ms,
+                        status: Some(status.as_u16()),
+                        error: Some(format!("接口返回 HTTP {status}")),
+                    })
+                }
+            }
             Err(error) => {
                 let status = error.status().map(|status| status.as_u16());
                 let error_message = if error.is_timeout() {
@@ -431,13 +429,6 @@ impl AppContext {
 
     pub fn rename_profile(&self, id: &str, name: &str) -> AppResult<()> {
         let name = validated_name(name)?;
-        let profiles = self.database.profiles()?;
-        if profiles
-            .iter()
-            .any(|profile| profile.id != id && profile.name.eq_ignore_ascii_case(&name))
-        {
-            return Err(app_err!("已存在同名配置档案"));
-        }
         self.database
             .rename_profile(id, &name, &now_ms().to_string())
     }
@@ -618,13 +609,6 @@ impl AppContext {
         admin_url: Option<&str>,
     ) -> AppResult<ProfileSummary> {
         let name = validated_name(name)?;
-        let profiles = self.database.profiles()?;
-        if profiles
-            .iter()
-            .any(|profile| profile.id != id && profile.name.eq_ignore_ascii_case(&name))
-        {
-            return Err(app_err!("已存在同名配置档案"));
-        }
         let stored = self.database.profile(id)?;
         let mut payload = stored.payload;
         let admin_url = admin_url.map(str::trim).filter(|value| !value.is_empty());
@@ -751,6 +735,36 @@ impl AppContext {
             &now_ms().to_string(),
         )?;
         Ok(())
+    }
+
+    /// 把 OAuth 账号的订阅凭据按官方格式写入 ~/.codex/auth.json，
+    /// 让 Codex 直接使用该 ChatGPT 订阅额度，而不是 API key。
+    pub async fn apply_oauth_auth(
+        &self,
+        oauth: &CodexOAuthState,
+        account_id: &str,
+    ) -> AppResult<()> {
+        let content = oauth
+            .0
+            .read()
+            .await
+            .codex_auth_json(account_id)
+            .await
+            .map_err(|error| app_err!("{error}"))?;
+        self.write_codex_auth_json(&content)
+    }
+
+    /// 把订阅凭据原文写入 ~/.codex/auth.json（写前备份旧文件）。
+    pub fn write_codex_auth_json(&self, content: &str) -> AppResult<()> {
+        let destination = self.paths.codex_home.join("auth.json");
+        backup_file(&destination, &self.paths.codex_files_backup, "auth")?;
+        atomic_write(&destination, content.as_bytes())?;
+        Ok(())
+    }
+
+    /// 是否为官方订阅档案（无 API 供应商，凭据走 ChatGPT 订阅）。
+    pub fn is_subscription_profile(&self, id: &str) -> AppResult<bool> {
+        Ok(self.database.profile(id)?.payload.provider_id.is_none())
     }
 
     /// 内置官方档案：整文件替换为模板原文（仅替换密钥占位符），
@@ -1390,7 +1404,7 @@ experimental_bearer_token = "old-key"
     }
 
     #[test]
-    fn update_profile_rejects_duplicate_name() {
+    fn update_profile_allows_duplicate_name() {
         let home = tempfile::tempdir().unwrap();
         let paths = crate::paths::from_home(home.path()).unwrap();
         paths.ensure().unwrap();
@@ -1403,10 +1417,11 @@ experimental_bearer_token = "old-key"
         std::thread::sleep(std::time::Duration::from_millis(2));
         let second = context.capture_profile("Second").unwrap();
 
-        let error = context
+        // 名字不是唯一键，重命名为已存在的名字应允许，靠 ID 区分
+        let updated = context
             .update_profile(&second.id, "first", None, None, None)
-            .unwrap_err();
-        assert!(error.0.contains("已存在同名配置档案"));
+            .unwrap();
+        assert_eq!(updated.name, "first");
     }
 
     #[test]
@@ -1472,10 +1487,12 @@ experimental_bearer_token = "old-key"
             original
         );
 
-        let error = context
-            .add_builtin_profile("deepseek", None, None)
-            .unwrap_err();
-        assert!(error.0.contains("已存在同名配置档案"));
+        // 同名模板允许重复添加，名字相同，靠 ID 区分
+        let duplicate = context
+            .add_builtin_profile("deepseek", None, Some("sk-test"))
+            .unwrap();
+        assert_eq!(duplicate.name, "DeepSeek 官方");
+        assert_ne!(duplicate.id, profile.id);
     }
 
     #[test]

@@ -9,6 +9,8 @@ const props = defineProps<{
   profile: ProfileSummary;
   active: boolean;
   busy: boolean;
+  subscriptionAuthed?: boolean;
+  subscriptionAccount?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -88,6 +90,14 @@ async function testConnection() {
         <div class="flex items-center gap-2">
           <h3 class="cursor-pointer truncate text-base font-semibold tracking-tight transition-colors hover:text-[#007aff]" title="点击重命名" @click="emit('rename')">{{ profile.name }}</h3>
           <n-tag v-if="active" type="success" size="small">当前生效</n-tag>
+          <n-tag
+            v-if="profile.provider === null"
+            :type="subscriptionAuthed ? 'success' : 'warning'"
+            size="small"
+            :title="subscriptionAuthed ? (subscriptionAccount ? `当前订阅账号：${subscriptionAccount}` : 'ChatGPT 订阅已登录，Codex 使用订阅额度') : '尚未完成 ChatGPT 订阅登录，请到设置页认证'"
+          >
+            {{ subscriptionAuthed ? "订阅已认证" : "订阅未认证" }}
+          </n-tag>
         </div>
         <div class="muted mt-1 flex flex-wrap items-center gap-1 text-[10px]">
           <span class="rounded-full border border-current/15 bg-black/4 px-1 py-px leading-none dark:bg-white/8">{{ profile.model ?? "未设置" }}</span>
