@@ -20,9 +20,7 @@ use crate::services::AppContext;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let paths = paths::app_paths().expect("无法定位用户数据目录");
-    let database = Arc::new(
-        database::Database::open(&paths).expect("无法初始化 CGSwitch 数据库"),
-    );
+    let database = Arc::new(database::Database::open(&paths).expect("无法初始化 CGSwitch 数据库"));
     let context = AppContext::new_with_database(paths.clone(), database.clone());
     let oauth_state = auth::CodexOAuthState(Arc::new(tokio::sync::RwLock::new(
         auth::codex_oauth::CodexOAuthManager::new(database),

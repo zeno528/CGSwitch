@@ -10,8 +10,8 @@ use crate::database::{profile_summary, Database, StoredProfile};
 use crate::error::{app_err, AppResult};
 use crate::fsutil::{atomic_write, backup_file, prune_backups};
 use crate::models::{
-    AppState, CodexAppStatus, PathInfo, ProfileDetail, ProfileKind, ProfilePayload,
-    ProfileSummary, Settings,
+    AppState, CodexAppStatus, PathInfo, ProfileDetail, ProfileKind, ProfilePayload, ProfileSummary,
+    Settings,
 };
 use crate::paths::{now_ms, AppPaths};
 
@@ -1237,8 +1237,8 @@ impl AppContext {
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_string);
-        let text = serde_json::to_string_pretty(&settings)
-            .map_err(|_| app_err!("设置序列化失败"))?;
+        let text =
+            serde_json::to_string_pretty(&settings).map_err(|_| app_err!("设置序列化失败"))?;
         atomic_write(&self.paths.settings, text.as_bytes())?;
         Ok(settings)
     }
@@ -1687,7 +1687,12 @@ experimental_bearer_token = "old-key"
 
         let context = AppContext::new(paths).unwrap();
         let profile = context
-            .add_builtin_profile("deepseek", Some("https://custom.example"), Some("sk-test"), None)
+            .add_builtin_profile(
+                "deepseek",
+                Some("https://custom.example"),
+                Some("sk-test"),
+                None,
+            )
             .unwrap();
 
         assert_eq!(profile.name, "DeepSeek");
@@ -1990,8 +1995,8 @@ experimental_bearer_token = "old-key"
             .unwrap();
 
         // 使用中改密钥：只就地更新供应商段落，模板其余内容保持不变
-        let config = String::from_utf8(std::fs::read(context.paths.codex_config()).unwrap())
-            .unwrap();
+        let config =
+            String::from_utf8(std::fs::read(context.paths.codex_config()).unwrap()).unwrap();
         assert!(config.contains("model = \"deepseek-v4-flash\""));
         assert!(config.contains("experimental_bearer_token = \"sk-real\""));
         assert!(!config.contains("sk-old"));
@@ -2082,7 +2087,9 @@ experimental_bearer_token = "old-key"
         std::fs::write(paths.codex_home.join("auth.json"), b"{\"login\":\"kept\"}").unwrap();
 
         let context = AppContext::new(paths).unwrap();
-        let profile = context.add_builtin_profile("chatgpt", None, None, None).unwrap();
+        let profile = context
+            .add_builtin_profile("chatgpt", None, None, None)
+            .unwrap();
         context.apply_profile(&profile.id).unwrap();
 
         assert_eq!(

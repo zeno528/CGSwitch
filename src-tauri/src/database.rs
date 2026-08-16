@@ -134,7 +134,9 @@ impl Database {
                 params![id, name, payload_json, kind.as_db(), timestamp],
             )
             .map_err(|error| app_err!("无法保存配置预设: {error}"))?;
-        Ok(summary(&id, name, payload, None, None, timestamp, timestamp))
+        Ok(summary(
+            &id, name, payload, None, None, timestamp, timestamp,
+        ))
     }
 
     pub fn set_profile_icon(&self, id: &str, icon: Option<&str>, timestamp: &str) -> AppResult<()> {
@@ -485,8 +487,7 @@ fn profile_from_row(row: &Row<'_>) -> rusqlite::Result<StoredProfile> {
     let payload_json = row.get::<_, String>(2)?;
     let payload = serde_json::from_str(&payload_json).map_err(|_| rusqlite::Error::InvalidQuery)?;
     let kind_raw: String = row.get(4)?;
-    let kind = ProfileKind::from_db(&kind_raw)
-        .ok_or(rusqlite::Error::InvalidQuery)?;
+    let kind = ProfileKind::from_db(&kind_raw).ok_or(rusqlite::Error::InvalidQuery)?;
     Ok(StoredProfile {
         id,
         name,
@@ -632,14 +633,18 @@ mod tests {
 
         // 无供应商 → 官方；有供应商 → 第三方
         let mut official = ProfilePayload::default();
-        official.model_values
+        official
+            .model_values
             .insert("model".into(), "\"gpt-5.6\"".into());
         let official_id = db.insert_profile("官方", &official, "1").unwrap().id;
         let mut third = ProfilePayload::default();
         third.provider_id = Some("ZAI".into());
         third.provider_body = Some("name = \"ZAI\"".into());
         let third_id = db.insert_profile("第三方", &third, "2").unwrap().id;
-        assert_eq!(db.profile(&official_id).unwrap().kind, ProfileKind::Official);
+        assert_eq!(
+            db.profile(&official_id).unwrap().kind,
+            ProfileKind::Official
+        );
         assert_eq!(db.profile(&third_id).unwrap().kind, ProfileKind::ThirdParty);
 
         let account = StoredAccount {
@@ -664,5 +669,4 @@ mod tests {
         db.set_default_account(None).unwrap();
         assert_eq!(db.app_state().unwrap(), (None, None));
     }
-
 }

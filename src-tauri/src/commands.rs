@@ -203,7 +203,9 @@ pub async fn apply_profile(
     state: State<'_, AppContext>,
     oauth: State<'_, CodexOAuthState>,
 ) -> Result<(), String> {
-    state.apply_profile(&id).map_err(|error| error.to_string())?;
+    state
+        .apply_profile(&id)
+        .map_err(|error| error.to_string())?;
     // 订阅预设：有档案级 auth 覆盖时直接用它，否则优先绑定账号、未绑定用默认账号
     let is_subscription = state
         .is_subscription_profile(&id)
