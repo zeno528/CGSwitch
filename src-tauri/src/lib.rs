@@ -65,6 +65,16 @@ pub fn run() {
         .setup(|app| {
             use tauri_plugin_autostart::ManagerExt;
 
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.unminimize();
+                        let _ = window.set_focus();
+                    }
+                }))?;
+
             let settings = app.state::<AppContext>().settings()?;
             if settings.autostart_enabled {
                 if let Err(error) = app.autolaunch().enable() {
