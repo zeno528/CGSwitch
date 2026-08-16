@@ -11,6 +11,8 @@
     "build": "pnpm sync-version && vite build",
     "build:debug": "pnpm sync-version && tauri build --debug",
     "typecheck": "vue-tsc --noEmit",
+    "check": "pnpm typecheck && pnpm check:rust",
+    "check:rust": "cargo fmt --all --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
     "preview": "vite preview",
     "tauri": "pnpm sync-version && tauri"
   },
