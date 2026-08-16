@@ -4,12 +4,17 @@ use crate::auth::codex_oauth::{
     AuthStatus, CodexOAuthError, CodexOAuthState, DeviceCodeResponse, ManagedAccount,
 };
 use crate::error::{app_err, AppResult};
-use crate::models::{AppState, ProfileDetail, ProfileSummary, Settings};
-use crate::services::AppContext;
+use crate::models::{AppState, CodexAppStatus, ProfileDetail, ProfileSummary, Settings};
+use crate::services::{AppContext, ProfileConnectionResult};
 
 #[tauri::command]
 pub fn get_state(state: State<'_, AppContext>) -> AppResult<AppState> {
     state.get_state()
+}
+
+#[tauri::command]
+pub fn get_codex_status(state: State<'_, AppContext>) -> AppResult<CodexAppStatus> {
+    state.codex_status()
 }
 
 #[tauri::command]
@@ -33,6 +38,14 @@ pub fn get_builtin_catalog(
     state: State<'_, AppContext>,
 ) -> AppResult<Option<String>> {
     state.get_builtin_catalog(&kind)
+}
+
+#[tauri::command]
+pub async fn test_profile_connection(
+    id: String,
+    state: State<'_, AppContext>,
+) -> AppResult<ProfileConnectionResult> {
+    state.test_profile_connection(&id).await
 }
 
 #[tauri::command]

@@ -18,6 +18,15 @@ struct ProviderDetail {
     fragment: String,
 }
 
+/// 供应商连通性测试结果
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProfileConnectionResult {
+    pub ok: bool,
+    pub latency_ms: Option<u128>,
+    pub status: Option<u16>,
+    pub error: Option<String>,
+}
+
 fn parse_provider_detail(body: &str) -> AppResult<ProviderDetail> {
     let document = codex_config::parse_document(body)?;
     let table = document.as_table();
@@ -132,6 +141,19 @@ impl AppContext {
         })
     }
 
+    /// 轻量 Codex 运行状态查询（仅扫描进程，供前端轮询使用）。
+    pub fn codex_status(&self) -> AppResult<CodexAppStatus> {
+        let settings = self.database.settings()?;
+        let process_ids = codex_process::find_process_ids(settings.codex_app_path.as_deref());
+        let (display_path, source) =
+            codex_process::codex_display_path(settings.codex_app_path.as_deref());
+        Ok(CodexAppStatus {
+            running: !process_ids.is_empty(),
+            display_path,
+            source,
+        })
+    }
+
     fn live_document(&self) -> Option<toml_edit::DocumentMut> {
         let text = std::fs::read_to_string(self.paths.codex_config()).ok()?;
         codex_config::parse_document(&text).ok()
@@ -217,6 +239,72 @@ impl AppContext {
         Ok(template
             .catalog
             .map(|(_, bytes)| String::from_utf8_lossy(bytes).into_owned()))
+    }
+
+    /// 复刻 cc-switch 的端点测速：预热请求 + 计时 GET（带 Bearer 密钥），
+    /// 返回延迟 / HTTP 状态 / 错误信息。
+    pub async fn test_profile_connection(&self, id: &str) -> AppResult<ProfileConnectionResult> {
+        let stored = self.database.profile(id)?;
+        let payload = &stored.payload;
+        if payload.provider_id.is_none() {
+            return Err(app_err!("该档案没有供应商配置，无法测试连通性"));
+        }
+        let body = payload
+            .provider_body
+            .as_deref()
+            .ok_or_else(|| app_err!("该档案缺少供应商配置数据"))?;
+        let detail = parse_provider_detail(body)?;
+        let base_url = detail
+            .base_url
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| app_err!("该档案没有配置调用地址"))?;
+        let api_key = detail
+            .api_key
+            .filter(|key| !key.trim().is_empty() && !is_builtin_placeholder(payload, key));
+        if api_key.is_none() {
+            return Err(app_err!("该档案没有配置 API 密钥，请先填写后再测试"));
+        }
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(8))
+            .build()
+            .map_err(|error| app_err!("创建 HTTP 客户端失败: {error}"))?;
+        let build_request = || {
+            let mut request = client.get(&base_url);
+            if let Some(key) = &api_key {
+                request = request.bearer_auth(key);
+            }
+            request
+        };
+
+        // 预热请求，忽略结果，仅用于建立连接
+        let _ = build_request().send().await;
+
+        let start = std::time::Instant::now();
+        match build_request().send().await {
+            Ok(response) => Ok(ProfileConnectionResult {
+                ok: true,
+                latency_ms: Some(start.elapsed().as_millis()),
+                status: Some(response.status().as_u16()),
+                error: None,
+            }),
+            Err(error) => {
+                let status = error.status().map(|status| status.as_u16());
+                let error_message = if error.is_timeout() {
+                    "请求超时".to_string()
+                } else if error.is_connect() {
+                    "连接失败".to_string()
+                } else {
+                    error.to_string()
+                };
+                Ok(ProfileConnectionResult {
+                    ok: false,
+                    latency_ms: None,
+                    status,
+                    error: Some(error_message),
+                })
+            }
+        }
     }
 
     pub fn rename_profile(&self, id: &str, name: &str) -> AppResult<()> {
@@ -1089,6 +1177,7 @@ experimental_bearer_token = "old-key"
         assert_eq!(profile.provider.as_deref(), Some("deepseek"));
         assert_eq!(profile.reasoning_effort.as_deref(), Some("high"));
         assert_eq!(profile.icon.as_deref(), Some("deepseek"));
+        assert!(profile.has_key);
 
         let stored = context.database.profile(&profile.id).unwrap();
         assert_eq!(stored.payload.builtin.as_deref(), Some("deepseek"));
@@ -1455,5 +1544,12 @@ experimental_bearer_token = "old-key"
         let detail = context.get_profile(&summary.id).unwrap();
         assert_eq!(detail.api_key, None);
         assert!(detail.config_fragment.contains("<你的 DeepSeek API Key>"));
+        let state = context.get_state().unwrap();
+        let stored_summary = state
+            .profiles
+            .iter()
+            .find(|item| item.id == summary.id)
+            .unwrap();
+        assert!(!stored_summary.has_key);
     }
 }

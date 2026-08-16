@@ -25,6 +25,28 @@ const indicatorTop = ref(8);
 const state = ref<AppState | null>(null);
 const loadError = ref("");
 const systemDark = ref(window.matchMedia("(prefers-color-scheme: dark)").matches);
+let codexPollTimer: number | undefined;
+let codexPolling = false;
+
+function startCodexPolling() {
+  if (codexPollTimer !== undefined) return;
+  codexPollTimer = window.setInterval(pollCodexStatus, 3000);
+}
+
+function stopCodexPolling() {
+  if (codexPollTimer !== undefined) {
+    window.clearInterval(codexPollTimer);
+    codexPollTimer = undefined;
+  }
+}
+
+function syncCodexPolling() {
+  if (document.hidden) {
+    stopCodexPolling();
+  } else {
+    startCodexPolling();
+  }
+}
 
 const media = window.matchMedia("(prefers-color-scheme: dark)");
 const mediaListener = (event: MediaQueryListEvent) => {
@@ -64,6 +86,19 @@ async function refresh() {
   }
 }
 
+async function pollCodexStatus() {
+  if (codexPolling || !state.value) return;
+  codexPolling = true;
+  try {
+    const codex = await api.getCodexStatus();
+    if (state.value) state.value = { ...state.value, codex };
+  } catch {
+    // 轮询失败时保留上次状态，不打扰用户
+  } finally {
+    codexPolling = false;
+  }
+}
+
 async function saveSettings(settings: Settings) {
   if (!state.value) return;
   state.value = { ...state.value, settings };
@@ -92,9 +127,17 @@ onMounted(async () => {
   media.addEventListener("change", mediaListener);
   updateSidebarIndicator();
   await refresh();
+  syncCodexPolling();
+  document.addEventListener("visibilitychange", syncCodexPolling);
+  window.addEventListener("blur", stopCodexPolling);
+  window.addEventListener("focus", syncCodexPolling);
 });
 
 onBeforeUnmount(() => {
+  stopCodexPolling();
+  document.removeEventListener("visibilitychange", syncCodexPolling);
+  window.removeEventListener("blur", stopCodexPolling);
+  window.removeEventListener("focus", syncCodexPolling);
   media.removeEventListener("change", mediaListener);
 });
 </script>

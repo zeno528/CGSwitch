@@ -204,10 +204,13 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <div class="flex items-center gap-2">
-            <span class="h-2 w-2 rounded-full" :class="state.codex.running ? 'bg-[#34c759]' : 'bg-zinc-400'" />
+          <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors" :class="state.codex.running ? 'bg-[#34c759]/10 text-[#248a3d] dark:text-[#6ee7a0]' : 'bg-zinc-500/10 text-zinc-500'">
+            <span class="relative flex h-2 w-2">
+              <span v-if="state.codex.running" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#34c759] opacity-60" />
+              <span class="relative inline-flex h-2 w-2 rounded-full" :class="state.codex.running ? 'bg-[#34c759]' : 'bg-zinc-400'" />
+            </span>
             Codex {{ state.codex.running ? "运行中" : "未运行" }}
-          </div>
+          </span>
           <span v-if="state.settings.auto_restart" class="ml-1 border-l border-[var(--panel-border)] pl-3" title="应用配置后自动重启已开启" aria-label="应用配置后自动重启已开启">
             <span class="flex h-5 w-9 items-center rounded-full bg-[#007aff] p-[2px]" aria-hidden="true">
               <span class="ml-auto grid h-4 w-4 place-items-center rounded-full bg-white text-[#007aff]">

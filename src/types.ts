@@ -4,6 +4,7 @@ export interface ProfileSummary {
   model: string | null;
   provider: string | null;
   reasoning_effort: string | null;
+  has_key: boolean;
   icon: string | null;
   created_at: string;
   updated_at: string;
@@ -21,6 +22,13 @@ export interface ProfileDetail {
   auth_content: string | null;
   catalog_content: string | null;
   updated_at: string;
+}
+
+export interface ProfileConnectionResult {
+  ok: boolean;
+  latency_ms: number | null;
+  status: number | null;
+  error: string | null;
 }
 
 export interface DeviceCodeResponse {

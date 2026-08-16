@@ -3,9 +3,11 @@ import { builtinPresetByKind } from "./presets";
 import type {
   AppState,
   AuthStatus,
+  CodexAppStatus,
   DeviceCodeResponse,
   ManagedAccount,
   ProfileDetail,
+  ProfileConnectionResult,
   ProfileSummary,
   RestartStage,
   Settings,
@@ -22,6 +24,7 @@ const webProfiles: ProfileSummary[] = [
     model: "glm-5.3",
     provider: "ZAI",
     reasoning_effort: "high",
+    has_key: true,
     icon: "zhipu",
     created_at: "2026-08-15 10:00:00",
     updated_at: "2026-08-15 10:00:00",
@@ -32,6 +35,7 @@ const webProfiles: ProfileSummary[] = [
     model: "glm-5-turbo",
     provider: "ZAI",
     reasoning_effort: "low",
+    has_key: false,
     icon: null,
     created_at: "2026-08-15 10:01:00",
     updated_at: "2026-08-15 10:01:00",
@@ -42,6 +46,7 @@ const webProfiles: ProfileSummary[] = [
     model: "gpt-5.6",
     provider: null,
     reasoning_effort: "medium",
+    has_key: false,
     icon: "openai-chatgpt",
     created_at: "2026-08-15 10:02:00",
     updated_at: "2026-08-15 10:02:00",
@@ -150,6 +155,8 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     case "get_state":
     case "get_settings":
       return webState() as T;
+    case "get_codex_status":
+      return webState().codex as T;
     case "capture_profile": {
       const now = new Date().toISOString();
       const profile: ProfileSummary = {
@@ -158,6 +165,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
         model: "glm-5.3",
         provider: "ZAI",
         reasoning_effort: "high",
+        has_key: true,
         icon: null,
         created_at: now,
         updated_at: now,
@@ -180,6 +188,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
         model: preset.model,
         provider: preset.provider,
         reasoning_effort: preset.model_values.model_reasoning_effort?.replace(/^"|"$/g, "") ?? null,
+        has_key: Boolean(preset.provider),
         icon: preset.icon,
         created_at: now,
         updated_at: now,
@@ -197,6 +206,13 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       const preset = builtinPresetByKind(String(args?.kind ?? ""));
       if (!preset?.model_values.model_catalog_json) return null as T;
       return '{\n  "models": [\n    { "id": "preview", "name": "模型目录预览" }\n  ]\n}' as T;
+    }
+    case "test_profile_connection": {
+      const profile = webProfiles.find((item) => item.id === args?.id);
+      if (!profile) throw new Error("配置档案不存在");
+      if (!profile.provider) throw new Error("该档案没有供应商配置，无法测试连通性");
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return { ok: true, latency_ms: 87, status: 200, error: null } as T;
     }
     case "rename_profile": {
       const profile = webProfiles.find((item) => item.id === args?.id);
@@ -252,10 +268,13 @@ function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
 
 export const api = {
   getState: () => call<AppState>("get_state"),
+  getCodexStatus: () => call<CodexAppStatus>("get_codex_status"),
   captureProfile: (name: string) => call<ProfileSummary>("capture_profile", { name }),
   addBuiltinProfile: (kind: string, baseUrl?: string, apiKey?: string) =>
     call<ProfileSummary>("add_builtin_profile", { kind, baseUrl, apiKey }),
   getBuiltinCatalog: (kind: string) => call<string | null>("get_builtin_catalog", { kind }),
+  testProfileConnection: (id: string) =>
+    call<ProfileConnectionResult>("test_profile_connection", { id }),
   renameProfile: (id: string, name: string) => call<void>("rename_profile", { id, name }),
   setProfileIcon: (id: string, icon: string | null) => call<void>("set_profile_icon", { id, icon }),
   getProfile: (id: string) => call<ProfileDetail>("get_profile", { id }),

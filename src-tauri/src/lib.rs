@@ -31,9 +31,11 @@ pub fn run() {
         .manage(oauth_state)
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
+            commands::get_codex_status,
             commands::capture_profile,
             commands::add_builtin_profile,
             commands::get_builtin_catalog,
+            commands::test_profile_connection,
             commands::rename_profile,
             commands::set_profile_icon,
             commands::get_profile,

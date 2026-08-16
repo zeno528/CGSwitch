@@ -329,10 +329,41 @@ fn summary(
         model: display_text(payload.model_values.get("model")),
         provider: payload.provider_id.clone(),
         reasoning_effort: display_text(payload.model_values.get("model_reasoning_effort")),
+        has_key: payload_has_key(payload),
         icon: icon.map(str::to_string),
         created_at: created_at.into(),
         updated_at: updated_at.into(),
     }
+}
+
+fn payload_has_key(payload: &ProfilePayload) -> bool {
+    let Some(body) = payload.provider_body.as_deref() else {
+        return false;
+    };
+    let Ok(document) = body.parse::<toml_edit::DocumentMut>() else {
+        return false;
+    };
+    let Some(key) = document
+        .as_table()
+        .get("experimental_bearer_token")
+        .and_then(toml_edit::Item::as_str)
+    else {
+        return false;
+    };
+    if key.trim().is_empty() {
+        return false;
+    }
+    if let Some(kind) = payload.builtin.as_deref() {
+        if let Ok(template) = crate::builtin::template(kind) {
+            if template
+                .placeholder
+                .is_some_and(|placeholder| placeholder == key.as_bytes())
+            {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 fn display_text(value: Option<&String>) -> Option<String> {

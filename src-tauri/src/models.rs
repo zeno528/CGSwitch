@@ -21,6 +21,8 @@ pub struct ProfileSummary {
     pub model: Option<String>,
     pub provider: Option<String>,
     pub reasoning_effort: Option<String>,
+    /// 档案是否已配置有效 API 密钥（占位符视为未配置）
+    pub has_key: bool,
     pub icon: Option<String>,
     pub created_at: String,
     pub updated_at: String,
