@@ -90,7 +90,6 @@ export interface Settings {
   theme: "system" | "light" | "dark";
   codex_app_path: string | null;
   auto_restart: boolean;
-  restart_timeout_ms: number;
   autostart_enabled: boolean;
   silent_start: boolean;
   minimize_to_tray: boolean;

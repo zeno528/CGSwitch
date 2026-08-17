@@ -9,7 +9,7 @@
   --panel-ring: rgba(60, 60, 67, 0.12);
   --panel-divider: rgba(60, 60, 67, 0.1);
   --text-secondary: rgba(60, 60, 67, 0.68);
-  --sidebar-bg: #eaf0f9;
+  --sidebar-bg: #e8e8e9;
   --selection-bg: rgba(0, 122, 255, 0.12);
   --scrollbar-thumb: color-mix(in srgb, var(--text-secondary) 25%, transparent);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--text-secondary) 40%, transparent);
@@ -188,6 +188,19 @@ main {
   transition: width 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* 侧边栏应用名 wordmark：Windows 自带几何字体 Bahnschrift + 品牌蓝紫渐变 */
+.apple-wordmark {
+  background: linear-gradient(90deg, #007aff 0%, #5856d6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-family: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", -apple-system, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
 /* 首页供应商卡片动画：出现复刻侧边栏展开（高度 0→auto + 淡入），
    消失保持淡出缩小 + 兄弟卡片 FLIP 位移（opacity/transform） */
 .profile-list-move {
@@ -276,7 +289,8 @@ main {
 
 .apple-sidebar--collapsed .apple-sidebar-nav-button {
   gap: 0;
-  padding-left: 13px;
+  justify-content: center;
+  padding-left: 0;
   padding-right: 0;
 }
 
@@ -295,7 +309,8 @@ main {
   display: flex;
   margin-inline: -2rem;
   margin-top: -1rem;
-  padding: 0.5rem 2rem;
+  /* 内容区中心对齐侧边栏 wordmark（实测差 6px），按钮仍在容器内垂直居中 */
+  padding: 0.875rem 2rem 0.125rem;
 }
 
 /* 编辑类页面的统一返回按钮（ProfileEdit / ProfileIconEdit 共用） */
@@ -401,6 +416,22 @@ button {
 
 .n-modal-mask.fade-in-transition-leave-active {
   transition: opacity 0.12s cubic-bezier(0, 0, 0.2, 1) !important;
+}
+
+/* 下拉菜单（select）进场：naive-ui 的 select 弹层与弹窗共用同名过渡类
+   （fade-in-scale-up-transition），默认是 scale(0.5) 弹窗式弹出；
+   这里单独覆盖成原生下拉的淡入 + 轻位移，弹窗动画保持不动 */
+.n-base-select-menu.n-select-menu.fade-in-scale-up-transition-enter-active,
+.n-base-select-menu.n-select-menu.fade-in-scale-up-transition-leave-active {
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.n-base-select-menu.n-select-menu.fade-in-scale-up-transition-enter-from,
+.n-base-select-menu.n-select-menu.fade-in-scale-up-transition-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .apple-sidebar-indicator {

@@ -49,8 +49,8 @@ pub struct ProfilePayload {
     /// 模型提供方的管理后台网址（卡片显示跳转按钮）。
     #[serde(default)]
     pub admin_url: Option<String>,
-    /// 供应商级开关：是否在卡片显示并自动刷新 DeepSeek 余额（默认开）。
-    #[serde(default = "default_true")]
+    /// 供应商级开关：是否在卡片显示并自动刷新 DeepSeek 余额（默认关，用户自行开启）。
+    #[serde(default = "default_false")]
     pub show_balance: bool,
 }
 
@@ -65,13 +65,13 @@ impl Default for ProfilePayload {
             raw_catalog: None,
             raw_auth: None,
             admin_url: None,
-            show_balance: true,
+            show_balance: false,
         }
     }
 }
 
-fn default_true() -> bool {
-    true
+fn default_false() -> bool {
+    false
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -130,18 +130,12 @@ pub struct Settings {
     pub codex_app_path: Option<String>,
     #[serde(default)]
     pub auto_restart: bool,
-    #[serde(default = "default_restart_timeout")]
-    pub restart_timeout_ms: u64,
     #[serde(default)]
     pub autostart_enabled: bool,
     #[serde(default)]
     pub silent_start: bool,
     #[serde(default)]
     pub minimize_to_tray: bool,
-}
-
-pub fn default_restart_timeout() -> u64 {
-    5_000
 }
 
 fn default_theme() -> String {
@@ -154,7 +148,6 @@ impl Default for Settings {
             theme: "system".into(),
             codex_app_path: None,
             auto_restart: false,
-            restart_timeout_ms: default_restart_timeout(),
             autostart_enabled: false,
             silent_start: false,
             minimize_to_tray: false,

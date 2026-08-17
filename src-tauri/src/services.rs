@@ -1329,8 +1329,8 @@ impl AppContext {
         if !process_ids.is_empty() {
             codex_process::terminate_process_ids(&process_ids);
             emit(app, "waiting", None);
-            let exited =
-                codex_process::wait_for_exit(&process_ids, settings.restart_timeout_ms, 100);
+            // 固定等待 5 秒（可配置的“重启等待超时”已移除）
+            let exited = codex_process::wait_for_exit(&process_ids, 5_000, 100);
             if !exited {
                 let message = "Codex 未在超时时间内退出，已取消重新启动";
                 self.database.record_event(
@@ -1391,9 +1391,6 @@ impl AppContext {
         settings.theme = settings.theme.trim().to_lowercase();
         if !["system", "light", "dark"].contains(&settings.theme.as_str()) {
             return Err(app_err!("不支持的主题设置"));
-        }
-        if !(1_000..=60_000).contains(&settings.restart_timeout_ms) {
-            return Err(app_err!("重启等待时间必须在 1000 到 60000 毫秒之间"));
         }
         settings.codex_app_path = settings
             .codex_app_path
@@ -2147,7 +2144,7 @@ experimental_bearer_token = "secret"
 
         let context = AppContext::new(paths).unwrap();
         let profile = context.capture_profile("ZAI").unwrap();
-        assert!(profile.show_balance); // 默认开启
+        assert!(!profile.show_balance); // 默认关闭
 
         context
             .set_profile_show_balance(&profile.id, false)

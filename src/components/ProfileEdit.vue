@@ -149,7 +149,7 @@ const authText = ref("");
 const configInitial = ref("");
 const catalogInitial = ref("");
 const authInitial = ref("");
-const showBalance = ref(true);
+const showBalance = ref(false);
 const savingBalance = ref(false);
 // 初始数据装载完成后才允许双向同步，避免装载时产生假差异
 let initialized = false;

@@ -13,13 +13,13 @@ import { api, isTauri } from "./api";
 import { useWindowActivation } from "./composables/useWindowActivation";
 import { themeOverrides } from "./theme";
 import type { AppState, Settings } from "./types";
-import version from "../VERSION?raw";
 
 type View = "profiles" | "settings";
 
 const view = ref<View>("profiles");
 const profilesNavReset = ref(0);
-const sidebarCollapsed = ref(false);
+// 侧边栏折叠状态：默认收缩，选择记忆在 localStorage（WebView2 应用专属存储），重启后还原
+const sidebarCollapsed = ref(localStorage.getItem("cgswitch.sidebar-collapsed") !== "0");
 const sidebarFlyoutArmed = ref(true);
 const profilesNavBtn = ref<HTMLElement | null>(null);
 const settingsNavBtn = ref<HTMLElement | null>(null);
@@ -83,6 +83,7 @@ watch(view, updateSidebarIndicator);
 
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value;
+  localStorage.setItem("cgswitch.sidebar-collapsed", sidebarCollapsed.value ? "1" : "0");
   if (sidebarCollapsed.value) sidebarFlyoutArmed.value = false;
   window.setTimeout(updateSidebarIndicator, 360);
 }
@@ -174,24 +175,30 @@ useWindowActivation({
       <n-message-provider>
         <n-layout class="h-full! rounded-none! bg-transparent!">
           <div class="flex h-screen">
-            <aside class="apple-sidebar relative h-full shrink-0" :class="isSidebarCollapsed ? ['w-[60px]', 'apple-sidebar--collapsed'] : 'w-[144px]'">
+            <aside class="apple-sidebar relative h-full shrink-0" :class="isSidebarCollapsed ? ['w-12', 'apple-sidebar--collapsed'] : 'w-[144px]'">
               <div
-                class="apple-sidebar-brand mx-3 mt-3 flex items-center gap-3"
+                class="apple-sidebar-brand mt-3 flex h-9 cursor-pointer items-center"
+                :class="isSidebarCollapsed ? 'justify-center' : 'mx-3'"
                 role="button"
                 tabindex="0"
+                aria-label="CGSwitch"
                 @click="toggleSidebar"
                 @keyup.enter="toggleSidebar"
               >
-                <img src="/logo.png" alt="CGSwitch" class="h-9 w-9 shrink-0" />
-                <div class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">
-                  <div class="text-sm font-bold">CGSwitch</div>
-                  <div class="app-version" :aria-label="`版本 ${version.trim()}`">
-                    <span>v{{ version.trim() }}</span>
-                  </div>
-                </div>
+                <span
+                  v-if="isSidebarCollapsed"
+                  class="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] text-[var(--text-secondary)] transition-colors hover:bg-black/5 hover:text-[#007aff] dark:hover:bg-white/8"
+                  aria-hidden="true"
+                >
+                  <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M9 4v16" />
+                  </svg>
+                </span>
+                <span v-else class="apple-sidebar-label apple-wordmark whitespace-nowrap">CGSwitch</span>
               </div>
 
-              <nav ref="sidebarNavRef" class="relative mx-2 mt-6 space-y-1">
+              <nav ref="sidebarNavRef" class="relative mx-1.5 mt-6 space-y-1">
                 <span class="apple-sidebar-indicator" :style="{ top: `${indicatorTop}px`, left: `${indicatorLeft}px` }" aria-hidden="true" />
                 <button ref="profilesNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="供应商配置" @click="goProfiles" @mouseenter="sidebarFlyoutArmed = true">
                   <svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -204,7 +211,7 @@ useWindowActivation({
                 </button>
               </nav>
 
-              <div class="absolute inset-x-2 bottom-4">
+              <div class="absolute inset-x-1.5 bottom-4">
                 <button ref="settingsNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'settings' ? 'bg-[var(--selection-bg)] font-semibold text-[#007aff]' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="设置" @click="view = 'settings'" @mouseenter="sidebarFlyoutArmed = true">
                   <svg class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                     <circle cx="12" cy="12" r="3" />
