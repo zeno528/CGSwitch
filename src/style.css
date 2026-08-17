@@ -313,6 +313,32 @@ main {
   padding: 0.875rem 2rem 0.125rem;
 }
 
+/* 表单行内小按钮（测试连通 / 获取 API 密钥 等同款样式全局复用） */
+.apple-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 1.5rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 0.375rem;
+  padding-inline: 0.5rem;
+  font-size: 11px;
+  font-weight: 500;
+  color: #007aff;
+  transition:
+    background-color 150ms ease-out,
+    opacity 150ms ease-out;
+}
+
+.apple-inline-btn:hover {
+  background: rgba(0, 122, 255, 0.1);
+}
+
+.apple-inline-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
 /* 编辑类页面的统一返回按钮（ProfileEdit / ProfileIconEdit 共用） */
 .apple-page-header {
   display: flex;

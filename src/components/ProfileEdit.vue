@@ -180,6 +180,11 @@ const isOfficial = computed(() =>
     : detail.value?.provider === null,
 );
 const isCustom = computed(() => creating.value && presetKind.value === "custom");
+const isOpenCode = computed(() =>
+  creating.value
+    ? presetKind.value === "opencode"
+    : detail.value?.provider === "opencode-go",
+);
 const accountOptions = computed(() => [
   { label: "跟随默认账号", value: "" },
   ...authAccounts.value.map((account) => ({
@@ -304,6 +309,14 @@ async function openAdminUrl() {
   if (!url) return;
   try {
     await api.openUrl(url);
+  } catch (error) {
+    message.error(String(error));
+  }
+}
+
+async function openOpenCodeRef() {
+  try {
+    await api.openUrl("https://opencode.ai/go?ref=APHY0DXATH");
   } catch (error) {
     message.error(String(error));
   }
@@ -555,7 +568,7 @@ async function save() {
 
       <div v-if="creating" class="apple-group mt-[var(--gap-page)] shrink-0 p-[var(--gap-card)]">
       <div class="field-subtitle">选择供应商</div>
-      <div class="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+      <div class="mt-3 grid gap-2 sm:grid-cols-3 md:grid-cols-6">
         <button
           v-for="preset in builtinPresets"
           :key="preset.kind"
@@ -606,22 +619,43 @@ async function save() {
       </div>
       <div v-if="showProviderFields" class="mt-4">
         <div class="mb-1.5 flex items-center justify-between gap-2">
-          <span class="field-label">API 密钥</span>
-          <button
-            v-if="!creating"
-            type="button"
-            class="flex h-6 shrink-0 items-center gap-1 rounded-md border border-[var(--panel-border)] px-2 text-[11px] font-medium text-[#007aff] transition-colors enabled:hover:bg-[#007aff]/10 disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="!apiKey.trim() || !baseUrl.trim()"
-            @click="testConnection"
-          >
-            <LoadingSpinner v-if="testing" />
-            <svg v-else class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 12h3l2-7 4 14 2-7h3" />
-            </svg>
-            测试连通
-          </button>
+          <div class="flex items-center gap-2">
+            <span class="field-label">API 密钥</span>
+            <button
+              v-if="isOpenCode"
+              type="button"
+              class="apple-inline-btn"
+              @click="openOpenCodeRef"
+            >
+              <svg class="h-3 w-3" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zM19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7z" />
+              </svg>
+              获取 API 密钥
+            </button>
+            <button
+              v-if="!creating"
+              type="button"
+              class="apple-inline-btn"
+              :disabled="!apiKey.trim() || !baseUrl.trim()"
+              @click="testConnection"
+            >
+              <LoadingSpinner v-if="testing" />
+              <svg v-else class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12h3l2-7 4 14 2-7h3" />
+              </svg>
+              测试连通
+            </button>
+          </div>
         </div>
         <n-input v-model:value="apiKey" type="password" show-password-on="click" placeholder="请输入 API 密钥" />
+        <p v-if="isOpenCode" class="muted mt-2 flex items-start gap-1.5 text-xs">
+          <svg class="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5" />
+            <path d="M12 11.2v4.6" />
+            <path d="M12 7.8h.01" />
+          </svg>
+          使用此链接订阅 OpenCode Go，首月只需 $5，并可获得额外的 $5 额度！
+        </p>
       </div>
       <div v-if="isOfficial" class="mt-4">
         <div class="field-subtitle mb-1.5">订阅账号</div>

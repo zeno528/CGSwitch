@@ -1,0 +1,12 @@
+model = "deepseek-v4-flash"
+model_provider = "opencode-go"
+preferred_auth_method = "apikey"
+forced_login_method = "api"
+model_reasoning_effort = "high"
+model_catalog_json = "~/.codex/models.json"
+
+[model_providers.opencode-go]
+name = "OpenCode Go"
+base_url = "https://opencode.ai/zen/go/v1"
+wire_api = "responses"
+experimental_bearer_token = "<你的 OpenCode API Key>"

@@ -4,6 +4,7 @@ pub const KIND_DEEPSEEK: &str = "deepseek";
 pub const KIND_MINIMAX: &str = "minimax";
 pub const KIND_ZHIPU: &str = "zhipu";
 pub const KIND_CHATGPT: &str = "chatgpt";
+pub const KIND_OPENCODE: &str = "opencode";
 
 pub const DEEPSEEK_CONFIG: &[u8] = include_bytes!("../assets/builtin/deepseek.toml");
 pub const DEEPSEEK_MODELS: &[u8] = include_bytes!("../assets/builtin/deepseek-models.json");
@@ -12,6 +13,7 @@ pub const MINIMAX_CATALOG: &[u8] = include_bytes!("../assets/builtin/minimax-cat
 pub const ZHIPU_CONFIG: &[u8] = include_bytes!("../assets/builtin/zhipu.toml");
 pub const ZHIPU_MODELS: &[u8] = include_bytes!("../assets/builtin/zhipu-models.json");
 pub const CHATGPT_CONFIG: &[u8] = include_bytes!("../assets/builtin/chatgpt.toml");
+pub const OPENCODE_CONFIG: &[u8] = include_bytes!("../assets/builtin/opencode.toml");
 
 pub struct BuiltinTemplate {
     pub kind: &'static str,
@@ -27,7 +29,7 @@ pub struct BuiltinTemplate {
     pub insert_catalog_line: bool,
 }
 
-pub const BUILTINS: [BuiltinTemplate; 4] = [
+pub const BUILTINS: [BuiltinTemplate; 5] = [
     BuiltinTemplate {
         kind: KIND_DEEPSEEK,
         name: "DeepSeek",
@@ -62,6 +64,16 @@ pub const BUILTINS: [BuiltinTemplate; 4] = [
         config: CHATGPT_CONFIG,
         placeholder: None,
         catalog: None,
+        insert_catalog_line: false,
+    },
+    // OpenAI Code 没有官方 models.json 模板，但保留空文件入口供用户自行填写模型目录
+    BuiltinTemplate {
+        kind: KIND_OPENCODE,
+        name: "OpenCode",
+        icon: "opencode",
+        config: OPENCODE_CONFIG,
+        placeholder: Some("<你的 OpenCode API Key>".as_bytes()),
+        catalog: Some(("models.json", b"")),
         insert_catalog_line: false,
     },
 ];
@@ -138,6 +150,10 @@ mod tests {
             CHATGPT_CONFIG,
             b"model = \"gpt-5.6\"\nmodel_reasoning_effort = \"medium\"\n"
         );
+        assert_eq!(
+            OPENCODE_CONFIG,
+            b"model = \"deepseek-v4-flash\"\nmodel_provider = \"opencode-go\"\npreferred_auth_method = \"apikey\"\nforced_login_method = \"api\"\nmodel_reasoning_effort = \"high\"\nmodel_catalog_json = \"~/.codex/models.json\"\n\n[model_providers.opencode-go]\nname = \"OpenCode Go\"\nbase_url = \"https://opencode.ai/zen/go/v1\"\nwire_api = \"responses\"\nexperimental_bearer_token = \"<\xE4\xBD\xA0\xE7\x9A\x84 OpenCode API Key>\""
+        );
     }
 
     #[test]
@@ -148,6 +164,8 @@ mod tests {
         assert_eq!(count(ZHIPU_MODELS, b"\r\n"), 72);
         assert_eq!(MINIMAX_CATALOG.len(), 953);
         assert_eq!(count(MINIMAX_CATALOG, b"\r\n"), 25);
+        // OpenAI Code 无官方模板：models.json 保留为空入口
+        assert_eq!(template(KIND_OPENCODE).unwrap().catalog.unwrap().1.len(), 0);
     }
 
     #[test]
