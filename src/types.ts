@@ -88,7 +88,6 @@ export interface AuthStatus {
 
 export interface Settings {
   theme: "system" | "light" | "dark";
-  codex_app_path: string | null;
   auto_restart: boolean;
   autostart_enabled: boolean;
   silent_start: boolean;

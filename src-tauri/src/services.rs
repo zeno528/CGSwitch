@@ -177,9 +177,9 @@ impl AppContext {
         let live_payload = live
             .as_ref()
             .and_then(|document| codex_config::capture_from_document(document).ok());
-        let process_ids = codex_process::find_process_ids(settings.codex_app_path.as_deref());
-        let (display_path, source) =
-            codex_process::codex_display_path(settings.codex_app_path.as_deref());
+        // 应用安装路径固定 + 自动识别，不支持手动覆盖
+        let process_ids = codex_process::find_process_ids(None);
+        let (display_path, source) = codex_process::codex_display_path(None);
 
         Ok(AppState {
             profiles: profiles
@@ -213,10 +213,8 @@ impl AppContext {
 
     /// 轻量 Codex 运行状态查询（仅扫描进程，供前端轮询使用）。
     pub fn codex_status(&self) -> AppResult<CodexAppStatus> {
-        let settings = self.settings()?;
-        let process_ids = codex_process::find_process_ids(settings.codex_app_path.as_deref());
-        let (display_path, source) =
-            codex_process::codex_display_path(settings.codex_app_path.as_deref());
+        let process_ids = codex_process::find_process_ids(None);
+        let (display_path, source) = codex_process::codex_display_path(None);
         Ok(CodexAppStatus {
             running: !process_ids.is_empty(),
             display_path,
@@ -1322,10 +1320,9 @@ impl AppContext {
             .operation
             .lock()
             .map_err(|_| app_err!("操作锁已损坏"))?;
-        let settings = self.settings()?;
         emit(app, "stopping", None);
 
-        let process_ids = codex_process::find_process_ids(settings.codex_app_path.as_deref());
+        let process_ids = codex_process::find_process_ids(None);
         if !process_ids.is_empty() {
             codex_process::terminate_process_ids(&process_ids);
             emit(app, "waiting", None);
@@ -1346,7 +1343,7 @@ impl AppContext {
         }
 
         emit(app, "launching", None);
-        let result = codex_process::launch_codex(settings.codex_app_path.as_deref());
+        let result = codex_process::launch_codex(None);
         let status = if result.is_ok() { "success" } else { "failed" };
         let message = result.as_ref().err().map(|error| error.0.clone());
         self.database.record_event(
@@ -1392,12 +1389,6 @@ impl AppContext {
         if !["system", "light", "dark"].contains(&settings.theme.as_str()) {
             return Err(app_err!("不支持的主题设置"));
         }
-        settings.codex_app_path = settings
-            .codex_app_path
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string);
         let text =
             serde_json::to_string_pretty(&settings).map_err(|_| app_err!("设置序列化失败"))?;
         atomic_write(&self.paths.settings, text.as_bytes())?;

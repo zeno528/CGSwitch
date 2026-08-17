@@ -148,7 +148,6 @@ function webProfileDetail(id: string): ProfileDetail {
 
 let webSettings: Settings = {
   theme: "system",
-  codex_app_path: null,
   auto_restart: false,
   autostart_enabled: false,
   silent_start: false,

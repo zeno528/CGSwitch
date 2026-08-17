@@ -127,8 +127,6 @@ pub struct Settings {
     #[serde(default = "default_theme")]
     pub theme: String,
     #[serde(default)]
-    pub codex_app_path: Option<String>,
-    #[serde(default)]
     pub auto_restart: bool,
     #[serde(default)]
     pub autostart_enabled: bool,
@@ -146,7 +144,6 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: "system".into(),
-            codex_app_path: None,
             auto_restart: false,
             autostart_enabled: false,
             silent_start: false,

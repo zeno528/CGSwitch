@@ -128,14 +128,6 @@ body {
   border-bottom-color: #007aff;
 }
 
-/* Naive UI 表单标签与全局字段标签同级：主色 + 中等字重，
-   并去掉 naive-ui 自带的 color .3s 过渡，避免深浅色切换时标签颜色慢半拍 */
-.n-form-item .n-form-item-label {
-  color: inherit;
-  font-weight: 500;
-  transition: none !important;
-}
-
 /* 删除确认弹窗：标题与操作按钮统一红色语义 */
 .delete-profile-dialog .n-dialog__title {
   color: #ff3b30;

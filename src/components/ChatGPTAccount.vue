@@ -110,7 +110,40 @@ onMounted(refreshStatus);
 
 <template>
   <div>
-    <div v-if="status?.authenticated" class="space-y-3">
+    <div v-if="login" class="space-y-4">
+      <p class="muted text-sm">在浏览器打开下面的地址，输入验证码完成授权：</p>
+      <div class="rounded-xl bg-black/4 p-4 dark:bg-white/6">
+        <div class="flex items-center justify-center gap-3">
+          <span class="mono whitespace-nowrap text-2xl font-bold tracking-[0.3em]">{{ login.user_code }}</span>
+          <button
+            type="button"
+            class="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#007aff] transition-colors hover:bg-[#007aff]/10"
+            title="复制授权码"
+            aria-label="复制授权码"
+            @click="copyUserCode"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="12" height="12" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          </button>
+        </div>
+        <button
+          type="button"
+          class="mono mt-3 block w-full break-all text-center text-[#007aff] hover:underline"
+          @click="openVerification"
+        >
+          {{ login.verification_uri }}
+        </button>
+      </div>
+      <div class="flex items-center justify-between">
+        <n-button size="small" secondary @click="openVerification">重新打开浏览器</n-button>
+        <n-button size="small" quaternary @click="cancelLogin">取消</n-button>
+      </div>
+      <p class="muted text-xs">{{ polling ? "正在等待授权…" : "即将打开浏览器" }}</p>
+    </div>
+
+    <div v-else-if="status?.authenticated" class="space-y-3">
       <p class="muted text-sm">ChatGPT 官方订阅已认证，添加 ChatGPT 供应商时无需再输入密钥。</p>
       <div
         v-for="account in status.accounts"
@@ -124,37 +157,14 @@ onMounted(refreshStatus);
         <n-button v-if="!account.is_default" size="small" secondary @click="setDefault(account.id)">设为当前</n-button>
         <n-button size="small" quaternary type="error" @click="removeAccount(account.id)">移除</n-button>
       </div>
-    </div>
-
-    <div v-else-if="login" class="space-y-4">
-      <p class="muted text-sm">在浏览器打开下面的地址，输入验证码完成授权：</p>
-      <div class="flex items-center justify-center gap-2 rounded-xl bg-black/4 p-4 dark:bg-white/6">
-        <div class="mono text-2xl font-bold tracking-[0.3em]">{{ login.user_code }}</div>
-        <button
-          type="button"
-          class="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[#007aff] transition-colors hover:bg-[#007aff]/10"
-          title="复制授权码"
-          aria-label="复制授权码"
-          @click="copyUserCode"
-        >
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="9" y="9" width="12" height="12" rx="2" />
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+      <n-button secondary :loading="busy" @click="startLogin">
+        <template #icon>
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
           </svg>
-        </button>
-        <button
-          type="button"
-          class="mono mt-2 block w-full break-all text-[#007aff] hover:underline"
-          @click="openVerification"
-        >
-          {{ login.verification_uri }}
-        </button>
-      </div>
-      <div class="flex items-center justify-between">
-        <n-button size="small" secondary @click="openVerification">重新打开浏览器</n-button>
-        <n-button size="small" quaternary @click="cancelLogin">取消</n-button>
-      </div>
-      <p class="muted text-xs">{{ polling ? "正在等待授权…" : "即将打开浏览器" }}</p>
+        </template>
+        添加账号
+      </n-button>
     </div>
 
     <div v-else class="space-y-3">

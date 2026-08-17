@@ -4,8 +4,6 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   NButton,
   NDivider,
-  NForm,
-  NFormItem,
   NInput,
   NList,
   NListItem,
@@ -25,7 +23,6 @@ const message = useMessage();
 const dialog = useDialog();
 
 const form = reactive<Settings>({ ...props.state.settings });
-const saving = ref(false);
 const savingGeneral = ref(false);
 const openingPath = ref<string | null>(null);
 const section = ref<"general" | "codex" | "account" | "about" | "advanced">("general");
@@ -241,21 +238,6 @@ onMounted(async () => {
   loadBackups();
   updateTabIndicator();
 });
-
-async function save() {
-  if (saving.value) return;
-  saving.value = true;
-  try {
-    const settings = await api.saveSettings({ ...form });
-    message.success("设置已保存");
-    emit("saved", settings);
-    emit("refresh");
-  } catch (error) {
-    message.error(String(error));
-  } finally {
-    saving.value = false;
-  }
-}
 
 async function saveGeneral() {
   if (savingGeneral.value) return;
@@ -581,21 +563,13 @@ async function openPath(item: PathInfo) {
     </div>
 
     <div v-else-if="section === 'codex'" class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
-      <n-form label-placement="top">
-        <n-form-item label="Codex / ChatGPT 应用路径覆盖">
-          <n-input v-model:value="form.codex_app_path" clearable placeholder="留空使用自动识别" />
-        </n-form-item>
-        <div class="flex items-center justify-between gap-4">
-          <div>
-            <div class="text-sm font-semibold">应用配置后自动重启 Codex</div>
-            <div class="muted mt-0.5 text-xs">开启后应用配置会自动重启 Codex 生效；关闭则只保存配置，稍后可手动重启。</div>
-          </div>
-          <n-switch v-model:value="form.auto_restart" @update:value="updateAutoRestart" />
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <div class="text-sm font-semibold">应用配置后自动重启 Codex</div>
+          <div class="muted mt-0.5 text-xs">开启后应用配置会自动重启 Codex 生效；关闭则只保存配置，稍后可手动重启。</div>
         </div>
-        <div class="mt-3 flex justify-end">
-          <n-button type="primary" :loading="saving" @click="save">保存设置</n-button>
-        </div>
-      </n-form>
+        <n-switch v-model:value="form.auto_restart" @update:value="updateAutoRestart" />
+      </div>
     </div>
 
     <div v-else-if="section === 'account'" class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
