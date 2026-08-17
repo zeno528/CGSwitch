@@ -56,6 +56,9 @@ jobs:
       - run: rustup target add ${{ matrix.rust-target }}
         shell: bash
         working-directory: src-tauri
+      - run: rustup component add rustfmt clippy
+        shell: bash
+        working-directory: src-tauri
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
