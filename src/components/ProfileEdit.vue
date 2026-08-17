@@ -560,8 +560,8 @@ async function save() {
           v-for="preset in builtinPresets"
           :key="preset.kind"
           type="button"
-          class="flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition-colors"
-          :class="presetKind === preset.kind ? 'border-[#007aff] bg-[var(--selection-bg)]' : 'border-[var(--panel-border)] hover:bg-black/3 dark:hover:bg-white/4'"
+          class="flex items-center gap-2.5 rounded-xl p-2.5 text-left transition-colors"
+          :class="presetKind === preset.kind ? 'shadow-[0_0_0_1px_#007aff] bg-[var(--selection-bg)]' : 'shadow-[0_0_0_1px_var(--panel-ring)] hover:bg-black/3 dark:hover:bg-white/4'"
           :aria-pressed="presetKind === preset.kind"
           @click="selectPreset(preset.kind)"
         >

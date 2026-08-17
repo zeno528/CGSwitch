@@ -36,8 +36,8 @@ const selected = ref<string | null>(props.icon);
           v-for="icon in providerIcons"
           :key="icon.id"
           type="button"
-          class="flex flex-col items-center gap-1 rounded-lg border px-1.5 py-2 transition-colors"
-          :class="selected === icon.id ? 'border-[#007aff] bg-[var(--selection-bg)]' : 'border-[var(--panel-border)] hover:bg-black/3 dark:hover:bg-white/4'"
+          class="flex flex-col items-center gap-1 rounded-lg px-1.5 py-2 transition-colors"
+          :class="selected === icon.id ? 'shadow-[0_0_0_1px_#007aff] bg-[var(--selection-bg)]' : 'shadow-[0_0_0_1px_var(--panel-ring)] hover:bg-black/3 dark:hover:bg-white/4'"
           :aria-pressed="selected === icon.id"
           @click="selected = icon.id"
         >

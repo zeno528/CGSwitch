@@ -157,7 +157,12 @@ async function testConnection() {
 </script>
 
 <template>
-  <article class="flex cursor-pointer flex-col gap-4 px-5 py-4 transition-colors sm:flex-row sm:items-center sm:justify-between" :class="active ? 'bg-[linear-gradient(90deg,var(--selection-bg),transparent_80%)]' : 'hover:bg-black/3 dark:hover:bg-white/4'" title="单击编辑" @click="emit('edit')">
+  <article
+    class="flex cursor-pointer flex-col gap-4 px-5 py-4 transition-colors sm:flex-row sm:items-center sm:justify-between"
+    :class="active ? 'bg-[linear-gradient(90deg,var(--selection-bg),transparent_80%)]' : 'hover:bg-black/3 dark:hover:bg-white/4'"
+    title="单击编辑"
+    @click="emit('edit')"
+  >
     <div class="flex min-w-0 flex-1 items-center gap-3">
       <ProfileIconTile :name="profile.name" :icon="profile.icon" />
       <div class="min-w-0 flex-1">

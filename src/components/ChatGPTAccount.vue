@@ -115,7 +115,7 @@ onMounted(refreshStatus);
       <div
         v-for="account in status.accounts"
         :key="account.id"
-        class="flex items-center justify-between gap-3 rounded-xl border border-[var(--panel-border)] px-3 py-2.5"
+        class="flex items-center justify-between gap-3 rounded-xl shadow-[0_0_0_1px_var(--panel-ring)] px-3 py-2.5"
       >
         <div class="flex min-w-0 items-center gap-2">
           <span class="mono truncate">{{ account.login }}</span>

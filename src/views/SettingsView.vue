@@ -445,7 +445,7 @@ async function openPath(item: PathInfo) {
         <div
           v-for="backup in backups"
           :key="backup.name"
-          class="flex items-center justify-between gap-3 rounded-lg border border-[var(--panel-border)] px-3 py-2"
+          class="flex items-center justify-between gap-3 rounded-lg shadow-[0_0_0_1px_var(--panel-ring)] px-3 py-2"
         >
           <div class="min-w-0">
             <div class="mono truncate text-xs font-medium">{{ backup.name }}</div>

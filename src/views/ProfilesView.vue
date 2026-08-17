@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, TransitionGroup, watch } from "vue";
 import {
   NButton,
   NEmpty,
@@ -283,7 +283,7 @@ onBeforeUnmount(() => {
     </header>
 
     <transition name="apple-reveal">
-      <div v-if="restartStage !== 'idle'" class="mt-[var(--gap-page)] rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3">
+      <div v-if="restartStage !== 'idle'" class="mt-[var(--gap-page)] rounded-xl shadow-[0_0_0_1px_var(--panel-ring)] bg-[var(--panel-bg)] px-4 py-3">
         <div class="flex items-center justify-between gap-3">
           <div class="font-semibold">重启进度</div>
           <n-tag size="small" :type="restartStage === 'error' ? 'error' : restartStage === 'success' ? 'success' : 'default'">
@@ -298,10 +298,15 @@ onBeforeUnmount(() => {
     <div class="mt-[var(--gap-page)]">
       <n-empty v-if="state.profiles.length === 0" description="还没有供应商配置。可以添加内置官方供应商，或先把 ~/.codex/config.toml 调整到目标状态，再点击“捕获当前配置”。" class="apple-group py-14" />
       <template v-else>
-        <div class="apple-group divide-y divide-[var(--panel-border)]">
+        <TransitionGroup
+          tag="div"
+          name="profile-list"
+          class="apple-group relative"
+        >
           <ProfileCard
             v-for="profile in state.profiles"
             :key="profile.id"
+            class="border-t border-[var(--panel-divider)] -mt-px"
             :profile="profile"
             :active="profile.id === state.active_profile_id"
             :busy="busy"
@@ -315,7 +320,7 @@ onBeforeUnmount(() => {
             @remove="removeProfile(profile)"
             @duplicate="duplicateProfile(profile)"
           />
-        </div>
+        </TransitionGroup>
       </template>
     </div>
 

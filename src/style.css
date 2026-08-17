@@ -6,6 +6,8 @@
   --app-bg: #f7f7f8;
   --panel-bg: #ffffff;
   --panel-border: rgba(60, 60, 67, 0.16);
+  --panel-ring: rgba(60, 60, 67, 0.12);
+  --panel-divider: rgba(60, 60, 67, 0.1);
   --text-secondary: rgba(60, 60, 67, 0.68);
   --sidebar-bg: #eaf0f9;
   --selection-bg: rgba(0, 122, 255, 0.12);
@@ -27,6 +29,8 @@
   --app-bg: #000000;
   --panel-bg: #1c1c1e;
   --panel-border: rgba(84, 84, 88, 0.65);
+  --panel-ring: rgba(255, 255, 255, 0.12);
+  --panel-divider: rgba(255, 255, 255, 0.1);
   --text-secondary: rgba(235, 235, 245, 0.6);
   --sidebar-bg: #151922;
   --selection-bg: rgba(10, 132, 255, 0.24);
@@ -69,9 +73,10 @@ body {
 }
 
 .panel {
-  border: 1px solid var(--panel-border);
   background: var(--panel-bg);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 0 0 1px var(--panel-ring),
+    0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .muted {
@@ -198,6 +203,40 @@ main {
   transform: translateY(-6px);
 }
 
+/* 首页供应商卡片列表增删动画：只动画合成器属性（opacity/transform），
+   离开的卡片 absolute 脱离文档流，兄弟卡片位移由 Vue TransitionGroup
+   FLIP（v-move）用 transform 补间——全程不触发逐帧 layout/paint */
+.profile-list-move {
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.profile-list-enter-active {
+  transition:
+    opacity 240ms ease-out,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.profile-list-leave-active {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.profile-list-enter-from {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.profile-list-leave-to {
+  opacity: 0;
+  transform: scale(0.97);
+}
+
 .apple-sidebar-label {
   max-width: 160px;
   overflow: hidden;
@@ -213,10 +252,11 @@ main {
   left: calc(100% + 0.6rem);
   top: 50%;
   z-index: 10;
-  border: 1px solid var(--panel-border);
   border-radius: 8px;
   background: var(--panel-bg);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  box-shadow:
+    0 0 0 1px var(--panel-ring),
+    0 6px 20px rgba(0, 0, 0, 0.14);
   color: inherit;
   opacity: 0;
   padding: 0.4rem 0.6rem;
@@ -301,10 +341,19 @@ main {
 
 .apple-group {
   overflow: hidden;
-  border: 1px solid var(--panel-border);
   border-radius: 18px;
   background: var(--panel-bg);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 0 0 1px var(--panel-ring),
+    0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* 暗色下卡片增加纵深：半透明白 hairline 环 + 更强的黑接触阴影，避免贴平背景 */
+:root.dark .panel,
+:root.dark .apple-group {
+  box-shadow:
+    0 0 0 1px var(--panel-ring),
+    0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .startup-skeleton > div {

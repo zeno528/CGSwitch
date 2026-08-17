@@ -43,7 +43,7 @@ onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-xl border border-[var(--panel-border)] bg-black/4 dark:bg-white/6">
+  <div class="overflow-hidden rounded-xl shadow-[0_0_0_1px_var(--panel-ring)] bg-black/4 dark:bg-white/6">
     <Codemirror
       :model-value="modelValue"
       :placeholder="placeholder ?? '在此编辑配置…'"
