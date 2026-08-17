@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { builtinPresetByKind } from "./presets";
 import type {
   AppState,
@@ -511,7 +512,6 @@ export const api = {
   openPath: (path: string) => call<void>("open_path", { path }),
   onRestartProgress: async (handler: RestartProgressHandler) => {
     if (!isTauri) return () => undefined;
-    const { listen } = await import("@tauri-apps/api/event");
     return listen("restart-progress", (event) =>
       handler(event.payload as { stage: RestartStage; message: string | null }),
     );

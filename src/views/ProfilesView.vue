@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, TransitionGroup, watch } from "vue";
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, TransitionGroup, watch } from "vue";
 import {
   NButton,
   NEmpty,
@@ -10,10 +10,12 @@ import {
   useDialog,
   useMessage,
 } from "naive-ui";
-import ProfileEdit from "../components/ProfileEdit.vue";
 import ProfileCard from "../components/ProfileCard.vue";
 import { api } from "../api";
 import type { AppState, ManagedAccount, ProfileSummary, RestartStage } from "../types";
+
+// 编辑页按需加载：只在打开编辑/新建时拉取，避免把 CodeMirror/预设数据带进启动入口
+const ProfileEdit = defineAsyncComponent(() => import("../components/ProfileEdit.vue"));
 
 const props = defineProps<{ state: AppState }>();
 const emit = defineEmits<{ refresh: [] }>();

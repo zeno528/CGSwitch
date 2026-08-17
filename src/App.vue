@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   NConfigProvider,
   NDialogProvider,
@@ -8,12 +8,14 @@ import {
   darkTheme,
 } from "naive-ui";
 import ProfilesView from "./views/ProfilesView.vue";
-import SettingsView from "./views/SettingsView.vue";
 import { api, isTauri } from "./api";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useWindowActivation } from "./composables/useWindowActivation";
 import { themeOverrides } from "./theme";
 import type { AppState, Settings } from "./types";
+
+// 设置页按需加载：进入设置时才拉取，不拖累启动入口
+const SettingsView = defineAsyncComponent(() => import("./views/SettingsView.vue"));
 
 type View = "profiles" | "settings";
 

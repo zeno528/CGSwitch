@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
+use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System, UpdateKind};
 
 use crate::error::{app_err, AppResult};
 
@@ -44,7 +44,10 @@ pub fn running_process_ids(ids: &[u32]) -> Vec<u32> {
 
 fn process_system() -> System {
     System::new_with_specifics(
-        RefreshKind::nothing().with_processes(ProcessRefreshKind::everything()),
+        // 只需要进程可执行文件路径判断 Codex 桌面进程；不刷新 CPU/内存/磁盘等无关数据，
+        // 避免每 3 秒轮询和每次 get_state 全量扫描系统进程产生无谓开销
+        RefreshKind::nothing()
+            .with_processes(ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet)),
     )
 }
 
