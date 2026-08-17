@@ -308,11 +308,9 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     }
     case "export_database": {
       const name = `cgswitch-export-${Date.now()}.db`;
-      webBackups.unshift({ name, size_bytes: 20480 });
+      webBackups.unshift({ name, size_bytes: 20480, created_at: Math.floor(Date.now() / 1000) });
       return `C:\\Users\\<user>\\.cgswitch\\backups\\database\\${name}` as T;
     }
-    case "export_database_to":
-      return String(args?.path ?? "") as T;
     case "import_database":
       return undefined as T;
     case "list_database_backups":
@@ -321,6 +319,17 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       return undefined as T;
     case "delete_database_backup": {
       webBackups = webBackups.filter((backup) => backup.name !== args?.name);
+      return undefined as T;
+    }
+    case "rename_database_backup": {
+      const backup = webBackups.find((item) => item.name === args?.oldName);
+      if (backup) {
+        let stem = String(args?.title ?? "").trim();
+        if (stem.startsWith("cgswitch-export-")) stem = stem.slice("cgswitch-export-".length);
+        if (stem.endsWith(".db")) stem = stem.slice(0, -3);
+        stem = stem.replace(/[<>:"/\\|?*]/g, "").trim();
+        if (stem) backup.name = `cgswitch-export-${stem}.db`;
+      }
       return undefined as T;
     }
     case "rename_profile": {
@@ -460,11 +469,12 @@ export const api = {
   getDeepseekBalance: (id: string) =>
     call<DeepSeekBalance>("get_deepseek_balance", { id }),
   exportDatabase: () => call<string>("export_database"),
-  exportDatabaseTo: (path: string) => call<string>("export_database_to", { path }),
   importDatabase: (path: string) => call<void>("import_database", { path }),
   listDatabaseBackups: () => call<DatabaseBackupInfo[]>("list_database_backups"),
   restoreDatabase: (name: string) => call<void>("restore_database", { name }),
   deleteDatabaseBackup: (name: string) => call<void>("delete_database_backup", { name }),
+  renameDatabaseBackup: (oldName: string, title: string) =>
+    call<void>("rename_database_backup", { oldName, title }),
   renameProfile: (id: string, name: string) => call<void>("rename_profile", { id, name }),
   setProfileIcon: (id: string, icon: string | null) => call<void>("set_profile_icon", { id, icon }),
   setProfileShowBalance: (id: string, enabled: boolean) =>

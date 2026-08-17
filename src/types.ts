@@ -62,6 +62,7 @@ export interface DeepSeekBalance {
 export interface DatabaseBackupInfo {
   name: string;
   size_bytes: number;
+  created_at: number;
 }
 
 export interface DeviceCodeResponse {

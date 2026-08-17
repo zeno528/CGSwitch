@@ -98,11 +98,6 @@ pub fn export_database(state: State<'_, AppContext>) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub fn export_database_to(path: String, state: State<'_, AppContext>) -> AppResult<String> {
-    Ok(state.export_database_to(&path)?.display().to_string())
-}
-
-#[tauri::command]
 pub async fn import_database(
     path: String,
     state: State<'_, AppContext>,
@@ -133,6 +128,15 @@ pub async fn restore_database(
 #[tauri::command]
 pub fn delete_database_backup(name: String, state: State<'_, AppContext>) -> AppResult<()> {
     state.delete_database_backup(&name)
+}
+
+#[tauri::command]
+pub fn rename_database_backup(
+    old_name: String,
+    title: String,
+    state: State<'_, AppContext>,
+) -> AppResult<()> {
+    state.rename_database_backup(&old_name, &title)
 }
 
 #[tauri::command]

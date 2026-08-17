@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from "vue";
-import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   NButton,
   NDivider,
@@ -10,6 +10,7 @@ import {
   NInputNumber,
   NList,
   NListItem,
+  NModal,
   NSwitch,
   useDialog,
   useMessage,
@@ -34,6 +35,43 @@ const indicatorWidth = ref("0px");
 const backups = ref<DatabaseBackupInfo[]>([]);
 const exporting = ref(false);
 const importing = ref(false);
+const renameTarget = ref<DatabaseBackupInfo | null>(null);
+const renameText = ref("");
+const renaming = ref(false);
+
+function backupTitle(name: string) {
+  return name.replace(/^cgswitch-export-/, "").replace(/\.db$/, "");
+}
+
+const backupActions = [
+  {
+    key: "import",
+    label: "导入备份",
+    desc: "从备份文件恢复供应商数据库",
+    color: "#007aff",
+    bgClass: "bg-[#007aff]/10 enabled:hover:bg-[#007aff]/[0.16]",
+    disabled: () => importing.value,
+    run: () => importBackupFromFile(),
+  },
+  {
+    key: "export",
+    label: "导出备份",
+    desc: "导出全部供应商配置",
+    color: "#34c759",
+    bgClass: "bg-[#34c759]/10 enabled:hover:bg-[#34c759]/[0.16]",
+    disabled: () => exporting.value,
+    run: () => exportBackupToFile(),
+  },
+  {
+    key: "folder",
+    label: "打开备份文件夹",
+    desc: "查看本地备份文件",
+    color: "#ff9500",
+    bgClass: "bg-[#ff9500]/10 hover:bg-[#ff9500]/[0.16]",
+    disabled: () => false,
+    run: () => openBackupFolder(),
+  },
+];
 const themeOptions: { label: string; value: Settings["theme"] }[] = [
   { label: "浅色", value: "light" },
   { label: "深色", value: "dark" },
@@ -60,21 +98,10 @@ async function loadSettings() {
 
 async function exportBackupToFile() {
   if (exporting.value) return;
+  exporting.value = true;
   try {
-    let target: string | null = null;
-    if (isTauri) {
-      const picked = await saveDialog({
-        title: "导出数据库备份",
-        defaultPath: `cgswitch-export-${Date.now()}.db`,
-        filters: [{ name: "SQLite 数据库", extensions: ["db"] }],
-      });
-      target = typeof picked === "string" ? picked : null;
-    }
-    if (!target && isTauri) return;
-    exporting.value = true;
-    const path = isTauri
-      ? await api.exportDatabaseTo(target!)
-      : await api.exportDatabase();
+    // 导出到预设备份目录，不弹路径选择；导出后备份记录自动刷新可见
+    const path = await api.exportDatabase();
     message.success(`数据库已导出：${path}`);
     await loadBackups();
   } catch (error) {
@@ -82,6 +109,36 @@ async function exportBackupToFile() {
   } finally {
     exporting.value = false;
   }
+}
+
+function openRename(backup: DatabaseBackupInfo) {
+  renameTarget.value = backup;
+  renameText.value = backupTitle(backup.name);
+}
+
+async function submitRename() {
+  const target = renameTarget.value;
+  const text = renameText.value.trim();
+  if (!target || renaming.value) return;
+  if (!text || text === backupTitle(target.name)) {
+    renameTarget.value = null;
+    return;
+  }
+  renaming.value = true;
+  try {
+    await api.renameDatabaseBackup(target.name, text);
+    message.success("备份已重命名");
+    await loadBackups();
+    renameTarget.value = null;
+  } catch (error) {
+    message.error(String(error));
+  } finally {
+    renaming.value = false;
+  }
+}
+
+function onRenameShowChange(show: boolean) {
+  if (!show) renameTarget.value = null;
 }
 
 async function importBackupFromFile() {
@@ -152,6 +209,12 @@ function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function formatTimestamp(seconds: number) {
+  const date = new Date(seconds * 1000);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function openBackupFolder() {
@@ -430,34 +493,91 @@ async function openPath(item: PathInfo) {
     </div>
 
     <div v-else-if="section === 'advanced'" class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
-      <div class="flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#007aff]/10 text-[#007aff]">
+          <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+            <ellipse cx="12" cy="5" rx="8" ry="3" />
+            <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+            <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+          </svg>
+        </span>
         <div>
-          <div class="text-sm font-semibold">数据备份</div>
+          <div class="field-subtitle">数据备份</div>
           <div class="muted mt-0.5 text-xs">导入/导出供应商数据库</div>
         </div>
-        <div class="flex gap-2">
-          <n-button size="small" secondary :loading="importing" @click="importBackupFromFile">导入备份</n-button>
-          <n-button size="small" secondary :loading="exporting" @click="exportBackupToFile">导出备份</n-button>
-          <n-button size="small" secondary @click="openBackupFolder">打开备份文件夹</n-button>
-        </div>
       </div>
-      <div v-if="backups.length" class="mt-3 space-y-2">
+
+      <div class="mt-4 flex flex-col gap-2">
+        <button
+          v-for="action in backupActions"
+          :key="action.key"
+          type="button"
+          class="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          :class="action.bgClass"
+          :disabled="action.disabled()"
+          @click="action.run()"
+        >
+          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] text-white" :style="{ backgroundColor: action.color }">
+            <svg v-if="action.key === 'import'" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3v12" />
+              <path d="m7 10 5 5 5-5" />
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            </svg>
+            <svg v-else-if="action.key === 'export'" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 15V3" />
+              <path d="m7 8 5-5 5 5" />
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            </svg>
+            <svg v-else class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+            </svg>
+          </span>
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-semibold">{{ action.label }}</span>
+            <span class="muted block truncate text-xs">{{ action.desc }}</span>
+          </span>
+          <svg class="h-4 w-4 shrink-0" :style="{ color: action.color }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m9 6 6 6-6 6" />
+          </svg>
+        </button>
+      </div>
+
+      <n-divider :style="{ marginTop: '16px' }" />
+      <div class="field-subtitle mb-2">备份记录</div>
+      <div v-if="backups.length" class="space-y-2">
         <div
           v-for="backup in backups"
           :key="backup.name"
-          class="flex items-center justify-between gap-3 rounded-lg shadow-[0_0_0_1px_var(--panel-ring)] px-3 py-2"
+          class="flex items-center justify-between gap-3 rounded-xl shadow-[0_0_0_1px_var(--panel-ring)] px-3 py-2.5"
         >
-          <div class="min-w-0">
-            <div class="mono truncate text-xs font-medium">{{ backup.name }}</div>
-            <div class="muted text-xs">{{ formatSize(backup.size_bytes) }}</div>
+          <div class="flex min-w-0 items-center gap-2.5">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#007aff]/10 text-[#007aff]">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="4" rx="1" />
+                <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" />
+                <path d="M10 12h4" />
+              </svg>
+            </span>
+            <div class="min-w-0">
+              <div class="mono truncate text-xs font-medium">{{ backup.name }}</div>
+              <div class="muted text-[11px]">{{ formatTimestamp(backup.created_at) }} · {{ formatSize(backup.size_bytes) }}</div>
+            </div>
           </div>
           <div class="flex shrink-0 gap-1.5">
+            <n-button size="tiny" quaternary @click="openRename(backup)">编辑</n-button>
             <n-button size="tiny" secondary type="primary" @click="restoreBackup(backup)">恢复</n-button>
             <n-button size="tiny" quaternary type="error" @click="deleteBackup(backup)">删除</n-button>
           </div>
         </div>
       </div>
-      <p v-else class="muted mt-3 text-xs">还没有导出过备份。</p>
+      <div v-else class="muted flex items-center gap-2 text-xs">
+        <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="4" rx="1" />
+          <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" />
+          <path d="M10 12h4" />
+        </svg>
+        还没有导出过备份。
+      </div>
     </div>
 
     <div v-else-if="section === 'codex'" class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
@@ -510,5 +630,29 @@ async function openPath(item: PathInfo) {
         </n-list-item>
       </n-list>
     </div>
+
+    <n-modal
+      :show="renameTarget !== null"
+      preset="card"
+      class="max-w-[380px]"
+      title="重命名备份"
+      @update:show="onRenameShowChange"
+    >
+      <div class="space-y-4">
+        <n-input
+          v-model:value="renameText"
+          maxlength="80"
+          show-count
+          placeholder="输入新的备份标题"
+          @keyup.enter="submitRename"
+        />
+        <div class="flex justify-end gap-2">
+          <n-button @click="renameTarget = null">取消</n-button>
+          <n-button type="primary" :loading="renaming" :disabled="!renameText.trim()" @click="submitRename">
+            保存
+          </n-button>
+        </div>
+      </div>
+    </n-modal>
   </section>
 </template>

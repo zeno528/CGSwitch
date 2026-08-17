@@ -50,6 +50,7 @@ struct DeepSeekBalanceResponse {
 pub struct DatabaseBackupInfo {
     pub name: String,
     pub size_bytes: u64,
+    pub created_at: i64,
 }
 
 fn parse_provider_detail(body: &str) -> AppResult<ProviderDetail> {
@@ -547,24 +548,6 @@ impl AppContext {
         Ok(target)
     }
 
-    /// 导出到用户选择的路径（保存对话框指定）。
-    pub fn export_database_to(&self, path: &str) -> AppResult<PathBuf> {
-        let target = PathBuf::from(path);
-        if target.extension().and_then(|ext| ext.to_str()) != Some("db") {
-            return Err(app_err!("备份文件扩展名必须是 .db"));
-        }
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|error| app_err!("无法创建导出目录: {error}"))?;
-        }
-        if target.exists() {
-            std::fs::remove_file(&target)
-                .map_err(|error| app_err!("无法覆盖已有备份文件: {error}"))?;
-        }
-        self.database.export_database(&target)?;
-        Ok(target)
-    }
-
     /// 从用户选择的备份文件导入并恢复。
     pub fn import_database(&self, path: &str) -> AppResult<()> {
         let source = PathBuf::from(path);
@@ -600,7 +583,18 @@ impl AppContext {
                     continue;
                 }
                 let size_bytes = entry.metadata().map(|metadata| metadata.len()).unwrap_or(0);
-                backups.push(DatabaseBackupInfo { name, size_bytes });
+                let created_at = entry
+                    .metadata()
+                    .and_then(|metadata| metadata.modified())
+                    .ok()
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|duration| duration.as_secs() as i64)
+                    .unwrap_or(0);
+                backups.push(DatabaseBackupInfo {
+                    name,
+                    size_bytes,
+                    created_at,
+                });
             }
         }
         backups.sort_by(|left, right| right.name.cmp(&left.name));
@@ -623,6 +617,39 @@ impl AppContext {
     pub fn delete_database_backup(&self, name: &str) -> AppResult<()> {
         let path = self.database_backup_path(name)?;
         std::fs::remove_file(&path).map_err(|error| app_err!("删除备份失败: {error}"))?;
+        Ok(())
+    }
+
+    /// 重命名备份（标题写入文件名，保留 cgswitch-export- 前缀与 .db 后缀）。
+    pub fn rename_database_backup(&self, old_name: &str, title: &str) -> AppResult<()> {
+        let from = self.database_backup_path(old_name)?;
+        let mut stem = title.trim().to_string();
+        if let Some(rest) = stem.strip_prefix("cgswitch-export-") {
+            stem = rest.to_string();
+        }
+        if stem.ends_with(".db") {
+            stem.truncate(stem.len() - 3);
+        }
+        let stem: String = stem
+            .chars()
+            .filter(|ch| !matches!(ch, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'))
+            .take(80)
+            .collect();
+        let stem = stem.trim();
+        if stem.is_empty() {
+            return Err(app_err!("备份标题不能为空"));
+        }
+        let to = self
+            .paths
+            .database_backup
+            .join(format!("cgswitch-export-{stem}.db"));
+        if to == from {
+            return Ok(());
+        }
+        if to.exists() {
+            return Err(app_err!("同名备份已存在"));
+        }
+        std::fs::rename(&from, &to).map_err(|error| app_err!("重命名备份失败: {error}"))?;
         Ok(())
     }
 
@@ -2192,35 +2219,6 @@ experimental_bearer_token = "secret"
         assert!(context.delete_database_backup("..\\evil.db").is_err());
         assert!(context
             .restore_database("cgswitch-export-nothere.db")
-            .is_err());
-    }
-
-    #[test]
-    fn export_to_path_and_import_round_trip() {
-        let home = tempfile::tempdir().unwrap();
-        let paths = crate::paths::from_home(home.path()).unwrap();
-        paths.ensure().unwrap();
-        std::fs::create_dir_all(&paths.codex_home).unwrap();
-        std::fs::write(paths.codex_config(), "model = \"glm-5.3\"\n").unwrap();
-
-        let context = AppContext::new(paths.clone()).unwrap();
-        let profile = context.capture_profile("A").unwrap();
-
-        let target = home.path().join("custom-backup.db");
-        let exported = context
-            .export_database_to(target.to_str().unwrap())
-            .unwrap();
-        assert!(exported.exists());
-
-        context.database.delete_profile(&profile.id).unwrap();
-        assert!(context.database.profiles().unwrap().is_empty());
-        context.import_database(target.to_str().unwrap()).unwrap();
-        assert_eq!(context.database.profiles().unwrap().len(), 1);
-
-        // 非法扩展名与导入当前库都拒绝
-        assert!(context.export_database_to("backup.txt").is_err());
-        assert!(context
-            .import_database(paths.database.to_str().unwrap())
             .is_err());
     }
 
