@@ -1,0 +1,74 @@
+name: Performance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src-tauri/**'
+      - '.github/workflows/performance.yml'
+  pull_request:
+    paths:
+      - 'src-tauri/**'
+      - '.github/workflows/performance.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  store:
+    name: 存储基准到 gh-pages
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      deployments: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: 运行热路径基准
+        working-directory: src-tauri
+        run: cargo bench --bench config_bench -- --warm-up-time 1 --measurement-time 2 --color never --noplot 2>&1 | tee output.txt
+      - name: 存储并对比基准结果
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: cgswitch-core-hotpath
+          tool: cargo
+          output-file-path: src-tauri/output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: '200%'
+          fail-on-alert: false
+          summary-always: true
+          max-items-in-chart: 500
+
+  compare:
+    name: 对比基准并告警
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: 运行热路径基准
+        working-directory: src-tauri
+        run: cargo bench --bench config_bench -- --warm-up-time 1 --measurement-time 2 --color never --noplot 2>&1 | tee output.txt
+      - name: 对比基准结果
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: cgswitch-core-hotpath
+          tool: cargo
+          output-file-path: src-tauri/output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: false
+          alert-threshold: '200%'
+          fail-on-alert: false
+          comment-on-alert: true
+          summary-always: true
