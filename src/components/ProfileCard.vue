@@ -216,7 +216,7 @@ async function testConnection() {
       </div>
     </div>
     <div class="flex shrink-0 items-center gap-2" @click.stop>
-      <n-button type="primary" size="small" :disabled="busy || active" @click="emit('apply')">应用</n-button>
+      <n-button type="primary" size="small" :disabled="busy || active" @click="emit('apply')">{{ active ? "已应用" : "应用" }}</n-button>
       <button
         type="button"
         class="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition-colors hover:bg-[#007aff]/10 hover:text-[#007aff] dark:text-zinc-500"

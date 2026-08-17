@@ -74,7 +74,8 @@ function updateSidebarIndicator() {
   const nav = sidebarNavRef.value;
   if (target && nav) {
     indicatorTop.value = target.getBoundingClientRect().top - nav.getBoundingClientRect().top + 8;
-    indicatorLeft.value = target.offsetLeft + 4;
+    // 指示条贴着导航按钮左边缘
+    indicatorLeft.value = target.offsetLeft;
   }
 }
 

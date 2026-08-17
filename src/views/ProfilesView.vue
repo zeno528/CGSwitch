@@ -379,12 +379,12 @@ onBeforeUnmount(() => {
       </template>
     </div>
 
-    <n-modal v-model:show="modalVisible" preset="card" class="max-w-[460px]" title="供应商配置" @after-leave="blurActiveOnModalLeave">
+    <n-modal v-model:show="modalVisible" preset="card" class="max-w-[460px]" :title="modalMode === 'capture' ? '保存当前配置快照' : '重命名供应商'" @after-leave="blurActiveOnModalLeave">
       <div class="space-y-4">
         <p class="muted text-sm">
-          {{ modalMode === "capture" ? "为当前 Codex 配置创建一个可回滚的供应商配置。" : "输入新的供应商名称。" }}
+          {{ modalMode === "capture" ? "为当前 Codex 配置创建快照，切换供应商后可一键恢复。" : "输入新的供应商名称。" }}
         </p>
-        <n-input v-model:value="profileName" maxlength="50" show-count placeholder="例如：ZAI GLM 高推理" @keyup.enter="submitModal" />
+        <n-input v-model:value="profileName" maxlength="50" show-count placeholder="例如：DeepSeek 日常" @keyup.enter="submitModal" />
         <div class="flex justify-end gap-2">
           <n-button @click="modalVisible = false">取消</n-button>
           <n-button type="primary" :loading="busy" @click="submitModal">保存</n-button>

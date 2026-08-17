@@ -568,7 +568,7 @@ async function save() {
           <ProfileIconTile :name="preset.name" :icon="preset.icon" size="xs" />
           <span class="min-w-0 flex-1">
             <span class="block truncate text-xs font-semibold tracking-tight">{{ preset.name }}</span>
-            <span class="muted block truncate text-[11px]">{{ preset.model }}{{ preset.base_url ? "" : " · 无需密钥" }}</span>
+            <span class="muted block truncate text-[11px]">{{ preset.model }}{{ preset.base_url ? "" : (preset.kind === "chatgpt" ? " · 认证登录" : " · 无需密钥") }}</span>
           </span>
           <svg v-if="presetKind === preset.kind" class="h-4 w-4 shrink-0 text-[#007aff]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true">
             <path d="m6 12.5 4 4 8-9" stroke-linecap="round" stroke-linejoin="round" />
