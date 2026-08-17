@@ -61,6 +61,61 @@ const stageText = computed(() => {
 
 let restartCollapseTimer: ReturnType<typeof setTimeout> | undefined;
 
+// 重启进度卡入场/收起：rAF 驱动 + 每帧高度/外边距取整。
+// 不用 CSS 高度过渡——它收尾会落到小数像素，列表在亚像素上重绘产生顿挫（实测收尾步进 3.4px→1.9px 全小数）；
+// 每帧取整后列表始终落在整数像素上，收尾平滑。
+// 内边距也必须一起动画：border-box 下盒子高度不能小于上下内边距之和（py-3=24px），
+// 不压内边距的话高度会被浏览器钳制在 24px，移除瞬间列表再跳 24px（实测复现）。
+const RESTART_CARD_DURATION = 360;
+
+function animateRestartCard(el: Element, entering: boolean, done: () => void) {
+  const node = el as HTMLElement;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    done();
+    return;
+  }
+  const natural = node.scrollHeight;
+  const margin = parseFloat(getComputedStyle(node).marginTop) || 24;
+  const padTop = parseFloat(getComputedStyle(node).paddingTop) || 0;
+  const padBottom = parseFloat(getComputedStyle(node).paddingBottom) || 0;
+  const fromH = entering ? 0 : natural;
+  const toH = entering ? natural : 0;
+  const fromM = entering ? 0 : margin;
+  const toM = entering ? margin : 0;
+  node.style.overflow = "hidden";
+  node.style.opacity = entering ? "0" : "1";
+  const start = performance.now();
+  const tick = (now: number) => {
+    const progress = Math.min(1, (now - start) / RESTART_CARD_DURATION);
+    // easeOutQuart：与全站曲线同属强 ease-out，收尾更快、尾部不留拖影
+    const eased = 1 - (1 - progress) ** 4;
+    node.style.height = `${Math.round(fromH + (toH - fromH) * eased)}px`;
+    node.style.marginTop = `${Math.round(fromM + (toM - fromM) * eased)}px`;
+    node.style.paddingTop = `${Math.round(padTop * (entering ? eased : 1 - eased))}px`;
+    node.style.paddingBottom = `${Math.round(padBottom * (entering ? eased : 1 - eased))}px`;
+    node.style.opacity = `${entering ? eased : 1 - eased}`;
+    if (progress < 1) {
+      requestAnimationFrame(tick);
+      return;
+    }
+    // 进场结束后复位内联样式（卡片仍驻留）；出场不复位——元素随后即被移除，
+    // 复位会把它弹回完整高度+外边距一帧，列表先下移再上弹，形成收尾顿挫（实测末帧跳 24px）
+    if (entering) {
+      node.style.cssText = "";
+    }
+    done();
+  };
+  requestAnimationFrame(tick);
+}
+
+function onRestartCardEnter(el: Element, done: () => void) {
+  animateRestartCard(el, true, done);
+}
+
+function onRestartCardLeave(el: Element, done: () => void) {
+  animateRestartCard(el, false, done);
+}
+
 watch(restartStage, (stage) => {
   if (restartCollapseTimer !== undefined) {
     clearTimeout(restartCollapseTimer);
@@ -282,7 +337,7 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <transition name="apple-reveal">
+    <transition :css="false" @enter="onRestartCardEnter" @leave="onRestartCardLeave">
       <div v-if="restartStage !== 'idle'" class="mt-[var(--gap-page)] rounded-xl shadow-[0_0_0_1px_var(--panel-ring)] bg-[var(--panel-bg)] px-4 py-3">
         <div class="flex items-center justify-between gap-3">
           <div class="font-semibold">重启进度</div>
@@ -301,7 +356,7 @@ onBeforeUnmount(() => {
         <TransitionGroup
           tag="div"
           name="profile-list"
-          class="apple-group relative"
+          class="apple-group relative will-change-transform"
         >
           <ProfileCard
             v-for="profile in state.profiles"
