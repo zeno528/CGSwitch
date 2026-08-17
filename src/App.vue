@@ -10,6 +10,7 @@ import {
 import ProfilesView from "./views/ProfilesView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import { api, isTauri } from "./api";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useWindowActivation } from "./composables/useWindowActivation";
 import { themeOverrides } from "./theme";
 import type { AppState, Settings } from "./types";
@@ -67,6 +68,20 @@ const isSidebarCollapsed = sidebarCollapsed;
 async function syncWindowTitleBarTheme(dark: boolean) {
   if (!isTauri) return;
   await api.setWindowTheme(dark);
+}
+
+const appWindow = isTauri ? getCurrentWindow() : null;
+
+function windowMinimize() {
+  void appWindow?.minimize();
+}
+
+function windowToggleMaximize() {
+  void appWindow?.toggleMaximize();
+}
+
+function windowClose() {
+  void appWindow?.close();
 }
 
 function updateSidebarIndicator() {
@@ -174,7 +189,29 @@ useWindowActivation({
     <n-dialog-provider>
       <n-message-provider>
         <n-layout class="h-full! rounded-none! bg-transparent!">
-          <div class="flex h-screen">
+          <div class="flex h-screen flex-col">
+            <div class="flex h-8 shrink-0 items-center bg-[var(--app-bg)]">
+              <div data-tauri-drag-region class="h-full shrink-0 bg-[var(--sidebar-bg)] transition-[width] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)]" :class="isSidebarCollapsed ? 'w-12' : 'w-[144px]'" />
+              <div data-tauri-drag-region class="min-w-0 flex-1 self-stretch" />
+              <div class="flex h-full items-center">
+                <button type="button" class="grid h-8 w-10 place-items-center text-[var(--text-secondary)] transition-colors hover:bg-black/6 dark:hover:bg-white/10" aria-label="最小化" @click="windowMinimize">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                    <path d="M5 12h14" />
+                  </svg>
+                </button>
+                <button type="button" class="grid h-8 w-10 place-items-center text-[var(--text-secondary)] transition-colors hover:bg-black/6 dark:hover:bg-white/10" aria-label="最大化" @click="windowToggleMaximize">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                    <rect x="5.5" y="5.5" width="13" height="13" rx="1" />
+                  </svg>
+                </button>
+                <button type="button" class="grid h-8 w-10 place-items-center text-[var(--text-secondary)] transition-colors hover:bg-[#e81123] hover:text-white" aria-label="关闭" @click="windowClose">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="flex min-h-0 flex-1">
             <aside class="apple-sidebar relative h-full shrink-0" :class="isSidebarCollapsed ? ['w-12', 'apple-sidebar--collapsed'] : 'w-[144px]'">
               <div
                 class="apple-sidebar-brand mt-3 flex h-9 cursor-pointer items-center"
@@ -237,6 +274,7 @@ useWindowActivation({
                 <p v-if="loadError" class="muted mt-4 text-sm">{{ loadError }}</p>
               </div>
             </main>
+            </div>
           </div>
         </n-layout>
       </n-message-provider>
