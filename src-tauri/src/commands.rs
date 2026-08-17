@@ -51,6 +51,8 @@ pub fn get_builtin_catalog(
 }
 
 #[tauri::command]
+// 参数个数受前端 IPC 调用约束（一次性提交 config/catalog/auth 三件套），不宜拆结构体
+#[allow(clippy::too_many_arguments)]
 pub fn add_custom_profile(
     name: String,
     config_text: String,

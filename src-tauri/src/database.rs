@@ -645,9 +645,11 @@ mod tests {
             .model_values
             .insert("model".into(), "\"gpt-5.6\"".into());
         let official_id = db.insert_profile("官方", &official, "1").unwrap().id;
-        let mut third = ProfilePayload::default();
-        third.provider_id = Some("ZAI".into());
-        third.provider_body = Some("name = \"ZAI\"".into());
+        let third = ProfilePayload {
+            provider_id: Some("ZAI".into()),
+            provider_body: Some("name = \"ZAI\"".into()),
+            ..Default::default()
+        };
         let third_id = db.insert_profile("第三方", &third, "2").unwrap().id;
         assert_eq!(
             db.profile(&official_id).unwrap().kind,

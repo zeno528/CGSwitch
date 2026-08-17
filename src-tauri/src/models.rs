@@ -26,7 +26,7 @@ impl ProfileKind {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ProfilePayload {
     #[serde(default)]
     pub model_values: BTreeMap<String, String>,
@@ -52,22 +52,6 @@ pub struct ProfilePayload {
     /// 供应商级开关：是否在卡片显示并自动刷新 DeepSeek 余额（默认关，用户自行开启）。
     #[serde(default = "default_false")]
     pub show_balance: bool,
-}
-
-impl Default for ProfilePayload {
-    fn default() -> Self {
-        Self {
-            model_values: BTreeMap::new(),
-            provider_id: None,
-            provider_body: None,
-            builtin: None,
-            raw_config: None,
-            raw_catalog: None,
-            raw_auth: None,
-            admin_url: None,
-            show_balance: false,
-        }
-    }
 }
 
 fn default_false() -> bool {

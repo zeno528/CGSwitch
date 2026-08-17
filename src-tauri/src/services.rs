@@ -305,6 +305,8 @@ impl AppContext {
     }
 
     /// 自定义供应商：用户填写的三件套入库，config 必填，模型目录/认证文件有内容才存。
+    // 参数个数与 commands::add_custom_profile 一一对应（前端三件套 + 元数据）
+    #[allow(clippy::too_many_arguments)]
     pub fn add_custom_profile(
         &self,
         name: &str,
@@ -857,7 +859,7 @@ impl AppContext {
             model_values: payload.model_values.clone(),
             config_fragment,
             raw_config,
-            auth_content: payload.raw_auth.clone().or_else(|| live_auth),
+            auth_content: payload.raw_auth.clone().or(live_auth),
             catalog_content,
             raw_catalog: payload.raw_catalog.clone(),
             raw_auth: payload.raw_auth.clone(),
