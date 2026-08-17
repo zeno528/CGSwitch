@@ -32,7 +32,7 @@ jobs:
       - name: 运行热路径基准
         shell: bash
         working-directory: src-tauri
-        run: cargo bench --bench config_bench -- --warm-up-time 1 --measurement-time 2 --color never --noplot 2>&1 | tee output.txt
+        run: cargo bench --bench config_bench -- --warm-up-time 1 --measurement-time 2 --output-format bencher --color never --noplot 2>&1 | tee output.txt
       - name: 存储并对比基准结果
         uses: benchmark-action/github-action-benchmark@v1
         with:
@@ -61,7 +61,7 @@ jobs:
       - name: 运行热路径基准
         shell: bash
         working-directory: src-tauri
-        run: cargo bench --bench config_bench -- --warm-up-time 1 --measurement-time 2 --color never --noplot 2>&1 | tee output.txt
+        run: cargo bench --bench config_bench -- --warm-up-time 1 --measurement-time 2 --output-format bencher --color never --noplot 2>&1 | tee output.txt
       - name: 对比基准结果
         uses: benchmark-action/github-action-benchmark@v1
         with:

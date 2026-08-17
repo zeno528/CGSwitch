@@ -1,6 +1,7 @@
 //! 核心后端热路径基准：settings 读写、config.toml 解析/应用、SQLite 档案查询。
 //!
 //! 运行：cargo bench --bench config_bench --manifest-path src-tauri/Cargo.toml
+//! CI 解析需要 bencher 输出：加 `-- --output-format bencher`（github-action-benchmark 的 cargo 解析器只认该格式）
 //! 全部使用临时目录（tempfile），不触碰真实 ~/.cgswitch 与 ~/.codex 数据。
 
 use std::hint::black_box;
