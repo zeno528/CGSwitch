@@ -20,7 +20,7 @@ jobs:
   store:
     name: 存储基准到 gh-pages
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     permissions:
       contents: write
       deployments: write
@@ -30,6 +30,7 @@ jobs:
         with:
           workspaces: src-tauri
       - name: 运行热路径基准
+        shell: bash
         working-directory: src-tauri
         run: cargo bench --bench config_bench -- --warm-up-time 1 --measurement-time 2 --color never --noplot 2>&1 | tee output.txt
       - name: 存储并对比基准结果
@@ -48,7 +49,7 @@ jobs:
   compare:
     name: 对比基准并告警
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     permissions:
       contents: read
       pull-requests: write
@@ -58,6 +59,7 @@ jobs:
         with:
           workspaces: src-tauri
       - name: 运行热路径基准
+        shell: bash
         working-directory: src-tauri
         run: cargo bench --bench config_bench -- --warm-up-time 1 --measurement-time 2 --color never --noplot 2>&1 | tee output.txt
       - name: 对比基准结果
