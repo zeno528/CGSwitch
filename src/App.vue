@@ -212,14 +212,14 @@ useModalEnterConfirm();
                   class="apple-sidebar-brand flex h-full w-fit cursor-pointer items-center pt-2"
                   role="button"
                   tabindex="0"
-                  aria-label="CGSwitch"
+                  aria-label="CGswitch"
                   @click="toggleSidebar"
                   @keyup.enter="toggleSidebar"
                   @mouseenter="sidebarFlyoutArmed = true"
                   @mouseleave="sidebarFlyoutArmed = false"
                 >
-                  <img src="/logo.png" alt="CGSwitch" class="h-6 w-6 shrink-0 rounded-md" draggable="false" />
-                  <span class="apple-sidebar-label apple-wordmark whitespace-nowrap">CGSwitch</span>
+                  <img src="/logo.svg" alt="CGswitch" class="h-6 w-6 shrink-0 rounded-md" draggable="false" />
+                  <span class="apple-sidebar-label apple-wordmark whitespace-nowrap">CGswitch</span>
                 </div>
                 <span v-if="sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">{{ isSidebarCollapsed ? "展开侧边栏" : "收缩侧边栏" }}</span>
               </div>

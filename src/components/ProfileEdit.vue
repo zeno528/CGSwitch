@@ -221,7 +221,7 @@ const isOpenCode = computed(() =>
 );
 const accountOptions = computed(() => [
   {
-    label: externalAccount.value?.login ?? "跟随 CGSwitch 默认",
+    label: externalAccount.value?.login ?? "跟随 CGswitch 默认",
     source: externalAccount.value ? "desktop" : "oauth",
     value: "",
   },
@@ -749,7 +749,7 @@ async function save() {
           v-model:value="boundAccountId"
           :options="accountOptions"
           :render-label="renderAuthOptionLabel"
-          :placeholder="externalAccount ? '桌面端认证' : '跟随 CGSwitch 默认'"
+          :placeholder="externalAccount ? '桌面端认证' : '跟随 CGswitch 默认'"
         />
       </div>
       <div v-if="!creating || selectedPreset?.base_url" class="mt-4">

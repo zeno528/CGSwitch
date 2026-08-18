@@ -400,9 +400,9 @@ impl Database {
                 [],
                 |row| row.get(0),
             )
-            .map_err(|error| app_err!("备份文件不是有效的 CGSwitch 数据库: {error}"))?;
+            .map_err(|error| app_err!("备份文件不是有效的 CGswitch 数据库: {error}"))?;
         if has_profiles == 0 {
-            return Err(app_err!("备份文件不是有效的 CGSwitch 数据库"));
+            return Err(app_err!("备份文件不是有效的 CGswitch 数据库"));
         }
 
         let mut connection = self.lock()?;
@@ -458,7 +458,7 @@ impl Database {
     fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, Connection>> {
         self.connection
             .lock()
-            .map_err(|_| app_err!("数据库连接锁已损坏，请重启 CGSwitch"))
+            .map_err(|_| app_err!("数据库连接锁已损坏，请重启 CGswitch"))
     }
 }
 

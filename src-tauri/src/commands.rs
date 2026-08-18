@@ -294,7 +294,7 @@ pub async fn apply_profile(
     state
         .apply_profile(&id)
         .map_err(|error| error.to_string())?;
-    // 认证优先级：档案 auth 覆盖 > 显式绑定账号 > 未托管的 Codex 官方认证 > CGSwitch 默认账号。
+    // 认证优先级：档案 auth 覆盖 > 显式绑定账号 > 未托管的 Codex 官方认证 > CGswitch 默认账号。
     let is_subscription = state
         .is_subscription_profile(&id)
         .map_err(|error| error.to_string())?;
@@ -409,7 +409,7 @@ pub async fn auth_get_status(
     oauth: State<'_, CodexOAuthState>,
 ) -> Result<AuthStatus, String> {
     let mut status = oauth.0.read().await.get_status().await;
-    // 只把不属于 CGSwitch 管理列表的 auth.json 识别为 Codex 官方外部认证。
+    // 只把不属于 CGswitch 管理列表的 auth.json 识别为 Codex 官方外部认证。
     if let Some(external) = unmanaged_external_codex_auth(&app, &oauth)
         .await
         .map_err(|error| error.to_string())?

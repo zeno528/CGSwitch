@@ -422,7 +422,7 @@ async function openPath(item: PathInfo) {
             </span>
             <div>
               <div class="text-sm font-semibold">开机自启</div>
-              <div class="muted mt-0.5 text-xs">登录系统后自动启动 CGSwitch</div>
+              <div class="muted mt-0.5 text-xs">登录系统后自动启动 CGswitch</div>
             </div>
           </div>
           <n-switch
@@ -548,9 +548,9 @@ async function openPath(item: PathInfo) {
 
     <div v-else class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
       <div class="flex items-center gap-3">
-        <img src="/logo.png" alt="CGSwitch" class="h-12 w-12 shrink-0 rounded-2xl" />
+              <img src="/logo.svg" alt="CGswitch" class="h-12 w-12 shrink-0 rounded-2xl" />
         <div>
-          <div class="apple-wordmark">CGSwitch</div>
+          <div class="apple-wordmark">CGswitch</div>
           <div class="app-version mt-1.5" :aria-label="`版本 ${version.trim()}`">
             <span>v{{ version.trim() }}</span>
           </div>

@@ -279,7 +279,7 @@ onMounted(async () => {
     subscriptionAuthed.value = status.authenticated;
     authAccounts.value = status.accounts;
     subscriptionSource.value = status.external ? "desktop" : status.accounts.length ? "oauth" : null;
-    // 桌面端当前认证才是实际生效来源；CGSwitch 默认账号仅作为没有外部认证时的回退。
+    // 桌面端当前认证才是实际生效来源；CGswitch 默认账号仅作为没有外部认证时的回退。
     subscriptionAccount.value =
       status.external?.login ??
       status.accounts.find((account) => account.id === status.default_account_id)?.login ??

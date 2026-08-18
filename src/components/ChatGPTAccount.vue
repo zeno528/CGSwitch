@@ -213,7 +213,7 @@ onMounted(refreshStatus);
 
       <div v-if="status.accounts.length" class="space-y-2">
         <div class="field-subtitle">ChatGPT 账号（设备码登录）</div>
-        <p class="muted text-xs">通过设备码登录添加，可在 CGSwitch 中管理多个账号。</p>
+        <p class="muted text-xs">通过设备码登录添加，可在 CGswitch 中管理多个账号。</p>
         <div
           v-for="account in status.accounts"
           :key="account.id"
@@ -224,7 +224,7 @@ onMounted(refreshStatus);
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 items-center gap-2">
               <span class="mono truncate text-sm font-medium">{{ account.login }}</span>
-              <n-tag v-if="account.is_default" size="small" type="success">CGSwitch 默认</n-tag>
+              <n-tag v-if="account.is_default" size="small" type="success">CGswitch 默认</n-tag>
             </div>
           </div>
           <div class="flex shrink-0 gap-1.5">
