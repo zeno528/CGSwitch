@@ -98,6 +98,7 @@ V1 安装包未签名。macOS Gatekeeper 拦截时，请确认安装包来源，
 本项目采用 `MIT` 协议。供应商图标来自 [thesvg.org](https://thesvg.org)，各 SVG 文件头已保留来源声明。
 
 
+
 ## 感谢
 
 项目目前处于测试阶段，欢迎[反馈问题与建议](https://github.com/zeno528/CGSwitch/issues)。

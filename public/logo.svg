@@ -2,6 +2,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
   <title id="title">CGswitch</title>
   <desc id="desc">Six curved leaves forming the CGswitch mark on a transparent background.</desc>
+  <metadata>
+    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cgswitch="https://github.com/zeno528/CGSwitch/ns#">
+      <rdf:Description rdf:about="">
+        <dc:title>CGswitch Logo</dc:title>
+        <dc:creator>zeno528 (Scott Z)</dc:creator>
+        <dc:description>AI-assisted design, selected and edited by zeno528 (Scott Z) using Photoshop and SVG tools.</dc:description>
+        <dc:rights>Brand asset usage is described in the CGswitch Logo usage policy.</dc:rights>
+        <dc:date>2026</dc:date>
+        <dc:language>zh-CN</dc:language>
+        <cgswitch:policy rdf:resource="https://github.com/zeno528/CGSwitch"/>
+      </rdf:Description>
+    </rdf:RDF>
+  </metadata>
   <defs>
     <linearGradient id="leafGradient" x1="0.12" y1="0.04" x2="0.82" y2="0.96">
       <stop offset="0" stop-color="#08090B"/>
