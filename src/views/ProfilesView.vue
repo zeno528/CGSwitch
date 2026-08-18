@@ -20,7 +20,7 @@ import { PhArrowClockwise, PhCamera, PhPlus } from "@phosphor-icons/vue";
 // 编辑页按需加载：只在打开编辑/新建时拉取，避免把 CodeMirror/预设数据带进启动入口
 const ProfileEdit = defineAsyncComponent(() => import("../components/ProfileEdit.vue"));
 
-const props = defineProps<{ state: AppState }>();
+const props = defineProps<{ state: AppState; navReset: number }>();
 const emit = defineEmits<{ refresh: [] }>();
 
 const message = useMessage();
@@ -37,6 +37,17 @@ const modalProfile = ref<ProfileSummary | null>(null);
 const subscriptionAuthed = ref(false);
 const subscriptionAccount = ref<string | null>(null);
 const subscriptionSource = ref<"desktop" | "oauth" | null>(null);
+
+watch(
+  () => props.navReset,
+  () => {
+    editingProfile.value = null;
+    creatingProfile.value = false;
+    modalVisible.value = false;
+    modalProfile.value = null;
+  },
+);
+
 // 手动排序：vuedraggable（SortableJS）实时重排，结束后持久化
 function onDragStart() {
   document.body.classList.add("drag-active");

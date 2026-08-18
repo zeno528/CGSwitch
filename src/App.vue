@@ -258,7 +258,7 @@ useModalEnterConfirm();
 
             <main class="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-[var(--app-bg)] pt-4 pb-7">
               <template v-if="state">
-                <ProfilesView v-if="view === 'profiles'" :key="profilesNavReset" :state="state" @refresh="refresh" />
+                <ProfilesView v-if="view === 'profiles'" :state="state" :nav-reset="profilesNavReset" @refresh="refresh" />
                 <SettingsView v-else :state="state" @preview-theme="previewTheme" @refresh="refresh" @saved="saveSettings" @home="goProfiles" />
               </template>
               <div v-else class="startup-skeleton" aria-busy="true">
