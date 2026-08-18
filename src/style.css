@@ -42,7 +42,7 @@
   --panel-border: rgba(255, 255, 255, 0.14);
   --panel-ring: rgba(255, 255, 255, 0.08);
   --panel-divider: rgba(255, 255, 255, 0.08);
-  --text-secondary: #9c9ca8;
+  --text-secondary: #ffffff;
   --sidebar-bg: #15151a;
   --selection-bg: rgba(94, 156, 255, 0.18);
   --scrollbar-thumb: color-mix(in srgb, var(--text-secondary) 25%, transparent);
@@ -80,7 +80,12 @@ body {
 }
 
 :root.dark body {
-  color: #ececec;
+  color: #ffffff;
+}
+
+:root.dark main {
+  --n-text-color: #ffffff;
+  color: #ffffff;
 }
 
 .panel {
@@ -185,7 +190,7 @@ body {
 }
 
 :root.dark .setting-description {
-  color: color-mix(in srgb, var(--text-secondary) 82%, #ececec 18%);
+  color: #ffffff;
 }
 
 /* 设置页图标容器：只保留边界，颜色由图标本身表达 */
@@ -285,7 +290,7 @@ main {
 }
 
 :root.dark .apple-wordmark {
-  color: #ececec;
+  color: #ffffff;
 }
 
 /* 首页供应商卡片动画：出现复刻侧边栏展开（高度 0→auto + 淡入），
@@ -426,6 +431,11 @@ body.drag-active * {
     padding 240ms cubic-bezier(0.22, 1, 0.36, 1),
     background-color 150ms ease-out,
     color 150ms ease-out;
+}
+
+:root.dark .apple-sidebar-nav-button .apple-sidebar-label,
+:root.dark .apple-sidebar-nav-button .apple-sidebar-flyout {
+  color: #ffffff;
 }
 
 .apple-sidebar--collapsed .apple-sidebar-label {

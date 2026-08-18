@@ -1,9 +1,7 @@
 <p align="center">
   <img src="public/logo.svg" width="120" alt="CGswitch" />
 </p>
-
 <h1 align="center">CGswitch</h1>
-
 <p align="center">一款管理 Codex / ChatGPT 桌面应用模型配置的 Windows/macOS 工具：一键切换模型，自动检测运行状态、一键重启应用，无需手动操作。</p>
 
 <p align="center">

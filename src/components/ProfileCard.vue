@@ -187,8 +187,8 @@ async function testConnection() {
 
 <template>
   <article
-    class="flex cursor-pointer select-none flex-col gap-4 px-5 py-[var(--gap-card)] transition-colors sm:flex-row sm:items-center sm:justify-between"
-    :class="active ? 'bg-[linear-gradient(90deg,var(--selection-bg),transparent_65%)]' : 'hover:bg-black/3 dark:hover:bg-white/4'"
+    class="group flex cursor-pointer select-none flex-col gap-4 px-5 py-[var(--gap-card)] transition-colors sm:flex-row sm:items-center sm:justify-between"
+    :class="active ? 'bg-[linear-gradient(90deg,color-mix(in_srgb,var(--selection-bg)_70%,transparent),transparent_65%)]' : 'hover:bg-black/3 dark:hover:bg-white/4'"
     title="单击编辑"
     @click="emit('edit')"
   >
@@ -276,7 +276,10 @@ async function testConnection() {
         </div>
       </div>
     </div>
-    <div class="flex shrink-0 items-center gap-2" @click.stop>
+    <div
+      class="pointer-events-none flex shrink-0 items-center gap-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+      @click.stop
+    >
       <n-button
         type="primary"
         size="small"
