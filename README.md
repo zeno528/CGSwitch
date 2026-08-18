@@ -38,6 +38,15 @@ CGSwitch 是一个面向 Codex / ChatGPT 桌面应用的配置管理工具。
       编辑、测试、切换、恢复
 ```
 
+## 界面预览
+
+<p align="center">
+  <img src="docs/screenshots/cgswitch-dark.jpg" width="49%" alt="CGSwitch 深色主题界面" />
+  <img src="docs/screenshots/cgswitch-light.jpg" width="49%" alt="CGSwitch 浅色主题界面" />
+</p>
+
+<p align="center"><sub>深色主题 · 浅色主题</sub></p>
+
 ## 功能
 
 ### 配置档案
