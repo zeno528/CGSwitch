@@ -162,6 +162,9 @@ jobs:
             RELEASE_STATE=true
           elif [ "$RELEASE_STATE" = true ]; then
             gh release edit "$TAG" --notes-file "$NOTES"
+          else
+            echo "发行 $TAG 已经公开，停止修改已发布内容；请先递增 VERSION。"
+            exit 1
           fi
 
           echo "release_state=$RELEASE_STATE" >> "$GITHUB_ENV"
