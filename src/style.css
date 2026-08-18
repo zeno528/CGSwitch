@@ -347,32 +347,22 @@ body.drag-active * {
   -webkit-user-select: none !important;
 }
 
-/* 供应商卡片行间分割线：两端截断 + 渐变淡化（与激活填充自然过渡），
-   0.5px 细线，不触达卡片边框 */
-.profile-card-divider {
-  position: relative;
-}
-
-.profile-card-divider::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 0.5px;
-  background: linear-gradient(
+/* 供应商卡片行间分割线：按相邻卡片绘制，不依赖 item index 或组件属性透传 */
+.profile-list > [data-draggable] + [data-draggable] {
+  border-top: 1px solid;
+  border-image: linear-gradient(
     90deg,
-    transparent,
-    var(--panel-divider) 32px,
-    var(--panel-divider) calc(100% - 32px),
-    transparent
-  );
-  pointer-events: none;
+    transparent 0%,
+    var(--panel-divider) 56px,
+    var(--panel-divider) calc(100% - 56px),
+    transparent 100%
+  ) 1;
 }
 
 /* 拖拽跟手克隆里的分割线隐藏，保持浮起卡片干净 */
-.sortable-fallback::before {
-  display: none;
+.sortable-fallback {
+  border-top: 0;
+  border-image: none;
 }
 
 .apple-sidebar-label {

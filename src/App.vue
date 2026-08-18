@@ -203,7 +203,7 @@ useModalEnterConfirm();
 <template>
   <n-config-provider :theme="naiveTheme" :theme-overrides="isDark ? darkThemeOverrides : themeOverrides" inline-theme-disabled>
     <n-dialog-provider>
-      <n-message-provider>
+      <n-message-provider :container-style="{ top: '44px' }">
         <n-layout class="h-full! rounded-none! bg-transparent!">
           <div class="flex h-screen flex-col">
             <div class="flex h-8 shrink-0 items-center bg-[var(--app-bg)]">

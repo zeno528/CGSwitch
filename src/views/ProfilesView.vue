@@ -377,7 +377,7 @@ onBeforeUnmount(() => {
       <template v-else>
         <draggable
           tag="div"
-          class="apple-group relative will-change-transform"
+          class="profile-list apple-group relative will-change-transform"
           :component-data="{ name: 'profile-list' }"
           :list="state.profiles"
           item-key="id"
@@ -391,9 +391,8 @@ onBeforeUnmount(() => {
           @start="onDragStart"
           @end="persistOrder"
         >
-          <template #item="{ element: profile, index }">
+          <template #item="{ element: profile }">
             <ProfileCard
-              :class="index === 0 ? '' : 'profile-card-divider'"
               :profile="profile"
               :active="profile.id === state.active_profile_id"
               :busy="busy"
