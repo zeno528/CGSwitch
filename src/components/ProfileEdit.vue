@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from "vue";
-import { NButton, NInput, NSelect, NSwitch, useMessage } from "naive-ui";
+import { computed, defineAsyncComponent, h, nextTick, onMounted, ref, watch } from "vue";
+import { NButton, NCheckbox, NInput, NSelect, NSwitch, useMessage } from "naive-ui";
+import type { SelectOption } from "naive-ui";
 import LoadingSpinner from "./LoadingSpinner.vue";
 import ProfileIconEdit from "./ProfileIconEdit.vue";
 import ProfileIconTile from "./ProfileIconTile.vue";
@@ -22,6 +23,8 @@ import {
   PhFloppyDisk,
   PhGearSix,
   PhInfo,
+  PhKey,
+  PhMonitor,
   PhPencilSimple,
 } from "@phosphor-icons/vue";
 
@@ -156,6 +159,7 @@ const baseUrl = ref("");
 const apiKey = ref("");
 const adminUrl = ref("");
 const authAccounts = ref<ManagedAccount[]>([]);
+const externalAccount = ref<ManagedAccount | null>(null);
 const boundAccountId = ref<string | null>(null);
 const selectedIcon = ref<string | null>(props.profile?.icon ?? null);
 const activeTab = ref<"config" | "auth" | "models">("config");
@@ -168,6 +172,8 @@ const authText = ref("");
 const configInitial = ref("");
 const catalogInitial = ref("");
 const authInitial = ref("");
+const longContextEnabled = ref(false);
+const patchingLongContext = ref(false);
 const showBalance = ref(false);
 const savingBalance = ref(false);
 // 初始数据装载完成后才允许双向同步，避免装载时产生假差异
@@ -199,6 +205,11 @@ const isOfficial = computed(() =>
     : detail.value?.provider === null,
 );
 const isCustom = computed(() => creating.value && presetKind.value === "custom");
+const showLongContextOverride = computed(() => isOfficial.value);
+const hasProfileAuthOverride = computed(() => {
+  if (creating.value || !detail.value?.raw_auth?.trim()) return false;
+  return !(authDirty.value && !authText.value.trim());
+});
 // 余额查询开关是否显示：由 presets.ts 的供应商表决定，新增供应商只需在那里加一行
 const supportsBalance = computed(() =>
   balanceQueryProviders.has(detail.value?.provider ?? ""),
@@ -209,12 +220,36 @@ const isOpenCode = computed(() =>
     : detail.value?.provider === "opencode-go",
 );
 const accountOptions = computed(() => [
-  { label: "跟随默认账号", value: "" },
+  {
+    label: externalAccount.value?.login ?? "跟随 CGSwitch 默认",
+    source: externalAccount.value ? "desktop" : "oauth",
+    value: "",
+  },
   ...authAccounts.value.map((account) => ({
     label: account.login,
+    source: "oauth",
     value: account.id,
   })),
 ]);
+
+function renderAuthOptionLabel(option: SelectOption) {
+  const source = option.source === "desktop" ? "桌面端认证" : "OAuth 认证";
+  const Icon = option.source === "desktop" ? PhMonitor : PhKey;
+  return h(
+    "span",
+    { class: "inline-flex min-w-0 items-center gap-2" },
+    [
+      h(Icon, {
+        class: "h-3.5 w-3.5 shrink-0 text-accent",
+        weight: "bold",
+        "aria-hidden": "true",
+      }),
+      h("span", { class: "shrink-0 text-xs font-medium text-[var(--text-secondary)]" }, source),
+      h("span", { class: "text-[var(--text-tertiary)]" }, "·"),
+      h("span", { class: "truncate" }, option.label as string),
+    ],
+  );
+}
 // 编辑态所有供应商都显示认证文件组件：第三方可保存自己的 auth.json 随应用写入
 const hasAuthTab = computed(() => !creating.value);
 
@@ -280,6 +315,27 @@ const canSave = computed(() => {
   return Boolean(preset);
 });
 
+function hasLongContextOverride(text: string): boolean {
+  return (
+    /^\s*model_context_window\s*=\s*(?:1000000|1_000_000)\s*(?:#.*)?$/m.test(text) &&
+    /^\s*model_auto_compact_token_limit\s*=\s*(?:900000|900_000)\s*(?:#.*)?$/m.test(text)
+  );
+}
+
+async function toggleLongContext(enabled: boolean) {
+  if (patchingLongContext.value) return;
+  patchingLongContext.value = true;
+  try {
+    configText.value = await api.patchChatgptContextConfig(configText.value, enabled);
+    longContextEnabled.value = enabled;
+  } catch (error) {
+    longContextEnabled.value = !enabled;
+    message.error(`更新长上下文配置失败：${String(error)}`);
+  } finally {
+    patchingLongContext.value = false;
+  }
+}
+
 function selectPreset(kind: string) {
   if (kind === "custom") {
     presetKind.value = kind;
@@ -294,6 +350,7 @@ function selectPreset(kind: string) {
     configInitial.value = customConfigTemplate;
     catalogInitial.value = customCatalogTemplate;
     authInitial.value = customAuthTemplate;
+    longContextEnabled.value = false;
     configTouched.value = false;
     catalogTouched.value = false;
     activeTab.value = "config";
@@ -309,6 +366,7 @@ function selectPreset(kind: string) {
   apiKey.value = "";
   configText.value = patchProviderFields(preset.fragment, baseUrl.value, apiKey.value);
   configInitial.value = configText.value;
+  longContextEnabled.value = kind === "chatgpt" && hasLongContextOverride(configText.value);
   selectedIcon.value = preset.icon;
   activeTab.value = "config";
   if (kind === "chatgpt") loadAuthStatus();
@@ -318,8 +376,10 @@ async function loadAuthStatus() {
   try {
     const status = await api.authGetStatus();
     authAccounts.value = status.accounts;
+    externalAccount.value = status.external;
   } catch {
     authAccounts.value = [];
+    externalAccount.value = null;
   }
 }
 
@@ -417,6 +477,9 @@ watch(configText, (text) => {
   if (creating.value && text !== liveConfigFragment.value) {
     configTouched.value = true;
   }
+  if (!patchingLongContext.value && showLongContextOverride.value) {
+    longContextEnabled.value = hasLongContextOverride(text);
+  }
 });
 
 onMounted(async () => {
@@ -429,6 +492,8 @@ onMounted(async () => {
       name.value = detail.value.name;
       configText.value = detail.value.raw_config ?? detail.value.config_fragment;
       catalogText.value = detail.value.raw_catalog ?? detail.value.catalog_content ?? "";
+      longContextEnabled.value =
+        detail.value.provider === null && hasLongContextOverride(configText.value);
       authText.value = detail.value.raw_auth ?? detail.value.auth_content ?? "";
       baseUrl.value = detail.value.base_url ?? "";
       apiKey.value = detail.value.api_key ?? "";
@@ -668,11 +733,23 @@ async function save() {
         </p>
       </div>
       <div v-if="isOfficial" class="mt-4">
-        <div class="field-subtitle mb-1.5">订阅账号</div>
+        <div class="field-subtitle mb-1.5">认证来源</div>
+        <div
+          v-if="hasProfileAuthOverride"
+          class="flex items-center justify-between gap-3 rounded-xl border border-[var(--panel-ring)] bg-black/3 px-3 py-2.5 dark:bg-white/4"
+        >
+          <div class="min-w-0">
+            <div class="text-sm font-medium">配置内 auth.json</div>
+            <div class="muted mt-0.5 text-xs">应用时优先使用当前档案的认证文件</div>
+          </div>
+          <span class="shrink-0 text-xs font-medium text-accent">优先使用</span>
+        </div>
         <n-select
+          v-else
           v-model:value="boundAccountId"
           :options="accountOptions"
-          placeholder="跟随默认账号"
+          :render-label="renderAuthOptionLabel"
+          :placeholder="externalAccount ? '桌面端认证' : '跟随 CGSwitch 默认'"
         />
       </div>
       <div v-if="!creating || selectedPreset?.base_url" class="mt-4">
@@ -725,6 +802,18 @@ async function save() {
             />
           </button>
         </div>
+        <n-checkbox
+          v-if="showLongContextOverride && activeTab === 'config'"
+          size="small"
+          :checked="longContextEnabled"
+          :disabled="patchingLongContext || saving"
+          class="rounded-[10px] border px-2.5 py-1 transition-colors"
+          :class="longContextEnabled ? 'border-accent/30 bg-accent/10 text-accent' : 'border-[var(--panel-ring)] hover:bg-black/4 dark:hover:bg-white/6'"
+          title="上下文窗口：1000000 tokens；自动压缩阈值：900000 tokens"
+          @update:checked="toggleLongContext"
+        >
+          <span class="whitespace-nowrap font-medium">1M 上下文窗口</span>
+        </n-checkbox>
       </div>
 
       <div class="mt-4 flex flex-col pr-1">
@@ -778,5 +867,6 @@ async function save() {
         保存
       </n-button>
     </div>
+
   </section>
 </template>

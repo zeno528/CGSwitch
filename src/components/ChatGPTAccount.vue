@@ -224,7 +224,7 @@ onMounted(refreshStatus);
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 items-center gap-2">
               <span class="mono truncate text-sm font-medium">{{ account.login }}</span>
-              <n-tag v-if="account.is_default" size="small" type="success">当前默认</n-tag>
+              <n-tag v-if="account.is_default" size="small" type="success">CGSwitch 默认</n-tag>
             </div>
           </div>
           <div class="flex shrink-0 gap-1.5">

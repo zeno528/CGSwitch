@@ -56,6 +56,7 @@ pub fn run() {
             commands::get_profile,
             commands::update_profile,
             commands::update_profile_config,
+            commands::patch_chatgpt_context_config,
             commands::delete_profile,
             commands::apply_profile,
             commands::restart_codex,

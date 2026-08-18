@@ -74,6 +74,22 @@ const webPaths = [
   { label: "数据库备份", path: "C:\\Users\\<user>\\.cgswitch\\backups\\database" },
 ];
 
+function patchContextOverrideForWeb(text: string, enabled: boolean): string {
+  const newline = text.includes("\r\n") ? "\r\n" : "\n";
+  const lines = text
+    .split(/\r?\n/)
+    .filter(
+      (line) =>
+        !/^\s*model_context_window\s*=/.test(line) &&
+        !/^\s*model_auto_compact_token_limit\s*=/.test(line),
+    );
+  if (enabled) {
+    const sectionIndex = lines.findIndex((line) => /^\s*\[/.test(line));
+    lines.splice(sectionIndex < 0 ? lines.length : sectionIndex, 0, "model_context_window = 1000000", "model_auto_compact_token_limit = 900000");
+  }
+  return lines.join(newline);
+}
+
 // 从 2xx 的 JSON 响应体里识别供应商级错误（OpenAI 风格 error 或智谱风格 code/success）。
 function connectionErrorFromBody(value: unknown): string | null {
   if (!value || typeof value !== "object") return null;
@@ -481,6 +497,11 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       }
       return webProfileDetail(profile.id) as T;
     }
+    case "patch_chatgpt_context_config":
+      return patchContextOverrideForWeb(
+        String(args?.configText ?? ""),
+        Boolean(args?.enabled),
+      ) as T;
     case "delete_profile": {
       const index = webProfiles.findIndex((item) => item.id === args?.id);
       if (index >= 0) webProfiles.splice(index, 1);
@@ -586,6 +607,8 @@ export const api = {
     catalogText: string | null,
     authText: string | null,
   ) => call<ProfileDetail>("update_profile_config", { id, configText, catalogText, authText }),
+  patchChatgptContextConfig: (configText: string, enabled: boolean) =>
+    call<string>("patch_chatgpt_context_config", { configText, enabled }),
   deleteProfile: (id: string) => call<void>("delete_profile", { id }),
   reorderProfiles: (ids: string[]) => call<void>("reorder_profiles", { ids }),
   applyProfile: (id: string) => call<void>("apply_profile", { id }),

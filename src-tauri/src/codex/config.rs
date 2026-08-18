@@ -11,6 +11,26 @@ pub fn parse_document(text: &str) -> AppResult<DocumentMut> {
         .map_err(|error| app_err!("Codex 配置不是有效 TOML: {error}"))
 }
 
+pub fn patch_context_override(text: &str, enabled: bool) -> AppResult<String> {
+    let mut document = parse_document(text)?;
+    if enabled {
+        document.as_table_mut().insert(
+            "model_context_window",
+            Item::Value(Value::from(1_000_000_i64)),
+        );
+        document.as_table_mut().insert(
+            "model_auto_compact_token_limit",
+            Item::Value(Value::from(900_000_i64)),
+        );
+    } else {
+        document.as_table_mut().remove("model_context_window");
+        document
+            .as_table_mut()
+            .remove("model_auto_compact_token_limit");
+    }
+    Ok(document.to_string())
+}
+
 pub fn read_profile(path: &Path) -> AppResult<ProfilePayload> {
     let text = std::fs::read_to_string(path)
         .map_err(|error| app_err!("无法读取 {}: {error}", path.display()))?;
@@ -177,6 +197,31 @@ experimental_bearer_token = "old"
         let cleared = update_provider_body(&updated, None, Some("")).unwrap();
         assert!(!cleared.contains("experimental_bearer_token"));
         assert!(cleared.contains(r#"base_url = "https://api.z.ai""#));
+    }
+
+    #[test]
+    fn patch_context_override_updates_only_the_two_root_keys() {
+        let source = r#"
+model = "gpt-5.6"
+model_context_window = 272000
+model_auto_compact_token_limit = 200000
+
+[features]
+# keep this comment
+goals = true
+"#;
+
+        let enabled = patch_context_override(source, true).unwrap();
+        assert!(enabled.contains("model_context_window = 1000000"));
+        assert!(enabled.contains("model_auto_compact_token_limit = 900000"));
+        assert!(enabled.contains("# keep this comment"));
+        assert_eq!(enabled.matches("model_context_window").count(), 1);
+        assert_eq!(enabled.matches("model_auto_compact_token_limit").count(), 1);
+
+        let disabled = patch_context_override(&enabled, false).unwrap();
+        assert!(!disabled.contains("model_context_window"));
+        assert!(!disabled.contains("model_auto_compact_token_limit"));
+        assert!(disabled.contains("# keep this comment"));
     }
 
     const SOURCE: &str = r#"

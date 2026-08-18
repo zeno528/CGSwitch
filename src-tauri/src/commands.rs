@@ -271,6 +271,11 @@ pub fn update_profile_config(
 }
 
 #[tauri::command]
+pub fn patch_chatgpt_context_config(config_text: String, enabled: bool) -> AppResult<String> {
+    crate::codex::config::patch_context_override(&config_text, enabled)
+}
+
+#[tauri::command]
 pub fn delete_profile(id: String, state: State<'_, AppContext>) -> AppResult<()> {
     state.delete_profile(&id)
 }
