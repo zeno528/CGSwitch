@@ -417,6 +417,7 @@ body.drag-active * {
 }
 
 .apple-sidebar-nav-button {
+  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei", sans-serif;
   gap: 0.5rem;
   /* 与收缩态一致（9px），展开/收缩图标 x 位置固定不动 */
   padding-inline: 9px;

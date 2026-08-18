@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, h, onActivated, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   NButton,
   NEmpty,
@@ -64,6 +64,30 @@ async function persistOrder() {
   }
 }
 const authAccounts = ref<ManagedAccount[]>([]);
+let subscriptionStatusLoaded = false;
+
+async function refreshSubscriptionStatus() {
+  try {
+    const status = await api.authGetStatus();
+    subscriptionAuthed.value = status.authenticated;
+    authAccounts.value = status.accounts;
+    subscriptionSource.value = status.external ? "desktop" : status.accounts.length ? "oauth" : null;
+    // 桌面端当前认证才是实际生效来源；CGswitch 默认账号仅作为没有外部认证时的回退。
+    subscriptionAccount.value =
+      status.external?.login ??
+      status.accounts.find((account) => account.id === status.default_account_id)?.login ??
+      null;
+  } catch {
+    if (!subscriptionStatusLoaded) {
+      subscriptionAuthed.value = false;
+      subscriptionAccount.value = null;
+      subscriptionSource.value = null;
+      authAccounts.value = [];
+    }
+  } finally {
+    subscriptionStatusLoaded = true;
+  }
+}
 
 let unlisten: (() => void) | null = null;
 
@@ -285,20 +309,11 @@ onMounted(async () => {
     restartStage.value = payload.stage;
     restartMessage.value = payload.message ?? "";
   });
-  try {
-    const status = await api.authGetStatus();
-    subscriptionAuthed.value = status.authenticated;
-    authAccounts.value = status.accounts;
-    subscriptionSource.value = status.external ? "desktop" : status.accounts.length ? "oauth" : null;
-    // 桌面端当前认证才是实际生效来源；CGswitch 默认账号仅作为没有外部认证时的回退。
-    subscriptionAccount.value =
-      status.external?.login ??
-      status.accounts.find((account) => account.id === status.default_account_id)?.login ??
-      null;
-  } catch {
-    subscriptionAuthed.value = false;
-    subscriptionSource.value = null;
-  }
+  await refreshSubscriptionStatus();
+});
+
+onActivated(() => {
+  if (subscriptionStatusLoaded) void refreshSubscriptionStatus();
 });
 
 function boundAccountLogin(profile: ProfileSummary): string | null {

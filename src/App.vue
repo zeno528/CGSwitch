@@ -240,7 +240,7 @@ useModalEnterConfirm();
             <aside class="apple-sidebar relative h-full shrink-0" :class="isSidebarCollapsed ? ['w-12', 'apple-sidebar--collapsed'] : 'w-[128px]'">
               <nav ref="sidebarNavRef" class="relative mx-1.5 mt-3 space-y-1">
                 <span class="apple-sidebar-indicator" :style="{ top: `${indicatorTop}px`, left: `${indicatorLeft}px` }" aria-hidden="true" />
-                <button ref="profilesNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="供应商配置" @click="goProfiles" @mouseenter="sidebarFlyoutArmed = true">
+                <button ref="profilesNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-normal hover:bg-black/5 dark:hover:bg-white/8'" aria-label="供应商配置" @click="goProfiles" @mouseenter="sidebarFlyoutArmed = true">
                   <PhStack class="h-[18px] w-[18px] shrink-0" weight="bold" aria-hidden="true" />
                   <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">供应商配置</span>
                   <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">供应商配置</span>
@@ -248,7 +248,7 @@ useModalEnterConfirm();
               </nav>
 
               <div class="absolute inset-x-1.5 bottom-4">
-                <button ref="settingsNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'settings' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-medium hover:bg-black/5 dark:hover:bg-white/8'" aria-label="设置" @click="view = 'settings'" @mouseenter="sidebarFlyoutArmed = true">
+                <button ref="settingsNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'settings' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-normal hover:bg-black/5 dark:hover:bg-white/8'" aria-label="设置" @click="view = 'settings'" @mouseenter="sidebarFlyoutArmed = true">
                   <PhGearSix class="h-[18px] w-[18px] shrink-0" weight="bold" aria-hidden="true" />
                   <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">设置</span>
                   <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">设置</span>
@@ -258,8 +258,10 @@ useModalEnterConfirm();
 
             <main class="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-[var(--app-bg)] pt-4 pb-7">
               <template v-if="state">
-                <ProfilesView v-if="view === 'profiles'" :state="state" :nav-reset="profilesNavReset" @refresh="refresh" />
-                <SettingsView v-else :state="state" @preview-theme="previewTheme" @refresh="refresh" @saved="saveSettings" @home="goProfiles" />
+                <KeepAlive>
+                  <ProfilesView v-if="view === 'profiles'" :state="state" :nav-reset="profilesNavReset" @refresh="refresh" />
+                  <SettingsView v-else :state="state" @preview-theme="previewTheme" @refresh="refresh" @saved="saveSettings" @home="goProfiles" />
+                </KeepAlive>
               </template>
               <div v-else class="startup-skeleton" aria-busy="true">
                 <div class="startup-skeleton__title" />
