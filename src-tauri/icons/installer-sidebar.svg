@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="164" height="314" viewBox="0 0 164 314" role="img" aria-labelledby="title desc">
+  <title id="title">CGswitch installer sidebar</title>
+  <desc id="desc">A dark graphite brand panel with the white CGswitch mark.</desc>
+  <defs>
+    <filter id="logo-white" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0"/>
+    </filter>
+  </defs>
+  <rect width="164" height="314" fill="#17181B"/>
+  <image x="47" y="84" width="70" height="70" preserveAspectRatio="xMidYMid meet" filter="url(#logo-white)" href="../../public/logo.svg" xlink:href="../../public/logo.svg"/>
+  <text x="82" y="185" fill="#F7F7F8" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="600" text-anchor="middle">CGswitch</text>
+</svg>

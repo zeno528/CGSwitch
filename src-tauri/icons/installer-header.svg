@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="150" height="57" viewBox="0 0 150 57" role="img" aria-labelledby="title desc">
+  <title id="title">CGswitch installer header</title>
+  <desc id="desc">A compact dark graphite CGswitch brand banner.</desc>
+  <defs>
+    <filter id="logo-white" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0"/>
+    </filter>
+  </defs>
+  <rect width="150" height="57" fill="#17181B"/>
+  <image x="13" y="15" width="27" height="27" preserveAspectRatio="xMidYMid meet" filter="url(#logo-white)" href="../../public/logo.svg" xlink:href="../../public/logo.svg"/>
+  <text x="49" y="36" fill="#F7F7F8" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600">CGswitch</text>
+</svg>
