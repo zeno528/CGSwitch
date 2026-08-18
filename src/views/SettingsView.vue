@@ -548,7 +548,7 @@ async function openPath(item: PathInfo) {
 
     <div v-else class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
       <div class="flex items-center gap-3">
-              <img src="/logo.svg" alt="CGswitch" class="h-12 w-12 shrink-0 rounded-2xl" />
+              <img src="/logo.svg" alt="CGswitch" class="h-12 w-12 shrink-0 dark:invert" />
         <div>
           <div class="apple-wordmark">CGswitch</div>
           <div class="app-version mt-1.5" :aria-label="`版本 ${version.trim()}`">

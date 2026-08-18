@@ -218,7 +218,7 @@ useModalEnterConfirm();
                   @mouseenter="sidebarFlyoutArmed = true"
                   @mouseleave="sidebarFlyoutArmed = false"
                 >
-                  <img src="/logo.svg" alt="CGswitch" class="h-6 w-6 shrink-0 rounded-md" draggable="false" />
+                  <img src="/logo.svg" alt="CGswitch" class="h-6 w-6 shrink-0 dark:invert" draggable="false" />
                   <span class="apple-sidebar-label apple-wordmark whitespace-nowrap">CGswitch</span>
                 </div>
                 <span v-if="sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">{{ isSidebarCollapsed ? "展开侧边栏" : "收缩侧边栏" }}</span>
