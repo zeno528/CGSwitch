@@ -319,7 +319,7 @@ async function openPath(item: PathInfo) {
 </script>
 
 <template>
-  <section class="mx-auto w-full max-w-none">
+  <section class="settings-page mx-auto w-full max-w-none">
     <div class="apple-page-bar sticky top-[-16px] z-10">
       <button
         type="button"
@@ -341,8 +341,8 @@ async function openPath(item: PathInfo) {
       <button
         type="button"
         data-section="general"
-        class="relative flex h-10 items-center gap-1.5 rounded-md px-3 text-sm transition-colors"
-        :class="section === 'general' ? 'font-semibold text-accent' : 'font-medium text-[var(--text-secondary)] hover:text-accent'"
+        class="settings-tab relative flex h-10 items-center gap-1.5 rounded-md px-3 transition-colors"
+        :class="section === 'general' ? 'text-accent' : 'text-[var(--text-secondary)] hover:text-accent'"
         :aria-current="section === 'general' ? 'page' : undefined"
         @click="section = 'general'"
       >
@@ -352,8 +352,8 @@ async function openPath(item: PathInfo) {
       <button
         type="button"
         data-section="codex"
-        class="relative flex h-10 items-center gap-1.5 rounded-md px-3 text-sm transition-colors"
-        :class="section === 'codex' ? 'font-semibold text-accent' : 'font-medium text-[var(--text-secondary)] hover:text-accent'"
+        class="settings-tab relative flex h-10 items-center gap-1.5 rounded-md px-3 transition-colors"
+        :class="section === 'codex' ? 'text-accent' : 'text-[var(--text-secondary)] hover:text-accent'"
         :aria-current="section === 'codex' ? 'page' : undefined"
         @click="section = 'codex'"
       >
@@ -363,8 +363,8 @@ async function openPath(item: PathInfo) {
       <button
         type="button"
         data-section="account"
-        class="relative flex h-10 items-center gap-1.5 rounded-md px-3 text-sm transition-colors"
-        :class="section === 'account' ? 'font-semibold text-accent' : 'font-medium text-[var(--text-secondary)] hover:text-accent'"
+        class="settings-tab relative flex h-10 items-center gap-1.5 rounded-md px-3 transition-colors"
+        :class="section === 'account' ? 'text-accent' : 'text-[var(--text-secondary)] hover:text-accent'"
         :aria-current="section === 'account' ? 'page' : undefined"
         @click="section = 'account'"
       >
@@ -374,8 +374,8 @@ async function openPath(item: PathInfo) {
       <button
         type="button"
         data-section="advanced"
-        class="relative flex h-10 items-center gap-1.5 rounded-md px-3 text-sm transition-colors"
-        :class="section === 'advanced' ? 'font-semibold text-accent' : 'font-medium text-[var(--text-secondary)] hover:text-accent'"
+        class="settings-tab relative flex h-10 items-center gap-1.5 rounded-md px-3 transition-colors"
+        :class="section === 'advanced' ? 'text-accent' : 'text-[var(--text-secondary)] hover:text-accent'"
         :aria-current="section === 'advanced' ? 'page' : undefined"
         @click="section = 'advanced'"
       >
@@ -385,8 +385,8 @@ async function openPath(item: PathInfo) {
       <button
         type="button"
         data-section="about"
-        class="relative flex h-10 items-center gap-1.5 rounded-md px-3 text-sm transition-colors"
-        :class="section === 'about' ? 'font-semibold text-accent' : 'font-medium text-[var(--text-secondary)] hover:text-accent'"
+        class="settings-tab relative flex h-10 items-center gap-1.5 rounded-md px-3 transition-colors"
+        :class="section === 'about' ? 'text-accent' : 'text-[var(--text-secondary)] hover:text-accent'"
         :aria-current="section === 'about' ? 'page' : undefined"
         @click="section = 'about'"
       >
@@ -396,7 +396,7 @@ async function openPath(item: PathInfo) {
     </div>
 
     <div v-if="section === 'general'" class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
-      <div class="field-subtitle mb-2">主题</div>
+      <div class="setting-title mb-2">主题</div>
       <div class="apple-group inline-flex gap-1 p-1">
         <button
           v-for="option in themeOptions"
@@ -417,12 +417,12 @@ async function openPath(item: PathInfo) {
       <div class="flex flex-col gap-5">
         <div class="flex items-center justify-between gap-4">
           <div class="flex items-start gap-3">
-            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#007aff]/10 text-[#007aff]">
+            <span class="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[#007aff]">
               <PhPower class="h-[18px] w-[18px]" weight="bold" aria-hidden="true" />
             </span>
             <div>
-              <div class="text-sm font-semibold">开机自启</div>
-              <div class="muted mt-0.5 text-xs">登录系统后自动启动 CGswitch</div>
+              <div class="setting-title">开机自启</div>
+              <div class="setting-description mt-0.5">登录系统后自动启动 CGswitch</div>
             </div>
           </div>
           <n-switch
@@ -432,12 +432,12 @@ async function openPath(item: PathInfo) {
         </div>
         <div class="flex items-center justify-between gap-4">
           <div class="flex items-start gap-3">
-            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#af52de]/10 text-[#af52de]">
+            <span class="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[#af52de]">
               <PhMoonStars class="h-[18px] w-[18px]" weight="bold" aria-hidden="true" />
             </span>
             <div>
-              <div class="text-sm font-semibold">静默启动</div>
-              <div class="muted mt-0.5 text-xs">启动时不显示主窗口，驻留系统托盘</div>
+              <div class="setting-title">静默启动</div>
+              <div class="setting-description mt-0.5">启动时不显示主窗口，驻留系统托盘</div>
             </div>
           </div>
           <n-switch
@@ -447,12 +447,12 @@ async function openPath(item: PathInfo) {
         </div>
         <div class="flex items-center justify-between gap-4">
           <div class="flex items-start gap-3">
-            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#ff9500]/10 text-[#ff9500]">
+            <span class="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[#ff9500]">
               <PhTrayArrowDown class="h-[18px] w-[18px]" weight="bold" aria-hidden="true" />
             </span>
             <div>
-              <div class="text-sm font-semibold">关闭时最小化到托盘</div>
-              <div class="muted mt-0.5 text-xs">点击关闭按钮时隐藏到托盘而不是退出</div>
+              <div class="setting-title">关闭时最小化到托盘</div>
+              <div class="setting-description mt-0.5">点击关闭按钮时隐藏到托盘而不是退出</div>
             </div>
           </div>
           <n-switch
@@ -465,12 +465,12 @@ async function openPath(item: PathInfo) {
 
     <div v-else-if="section === 'advanced'" class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
       <div class="flex items-center gap-3">
-        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">
+        <span class="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-xl text-accent">
           <PhDatabase class="h-[18px] w-[18px]" weight="bold" aria-hidden="true" />
         </span>
         <div>
-          <div class="field-subtitle">数据备份</div>
-          <div class="muted mt-0.5 text-xs">导入/导出供应商数据库</div>
+          <div class="setting-title">数据备份</div>
+          <div class="setting-description mt-0.5">导入/导出供应商数据库</div>
         </div>
       </div>
 
@@ -483,21 +483,21 @@ async function openPath(item: PathInfo) {
           :disabled="action.disabled()"
           @click="action.run()"
         >
-          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] text-white" :style="{ backgroundColor: action.color }">
+          <span class="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-[10px]" :style="{ color: action.color }">
             <PhDownloadSimple v-if="action.key === 'import'" class="h-4 w-4" weight="bold" aria-hidden="true" />
             <PhUploadSimple v-else-if="action.key === 'export'" class="h-4 w-4" weight="bold" aria-hidden="true" />
             <PhFolderOpen v-else class="h-4 w-4" weight="bold" aria-hidden="true" />
           </span>
           <span class="min-w-0 flex-1">
-            <span class="block text-sm font-semibold">{{ action.label }}</span>
-            <span class="muted block truncate text-xs">{{ action.desc }}</span>
+            <span class="setting-title block">{{ action.label }}</span>
+            <span class="setting-description block truncate">{{ action.desc }}</span>
           </span>
           <PhArrowRight class="h-4 w-4 shrink-0" :style="{ color: action.color }" weight="bold" aria-hidden="true" />
         </button>
       </div>
 
       <n-divider :style="{ marginTop: '16px' }" />
-      <div class="field-subtitle mb-2">备份记录</div>
+      <div class="setting-title mb-2">备份记录</div>
       <div v-if="backups.length" class="space-y-2">
         <div
           v-for="backup in backups"
@@ -505,7 +505,7 @@ async function openPath(item: PathInfo) {
           class="flex items-center justify-between gap-3 rounded-xl shadow-[0_0_0_1px_var(--panel-ring)] px-3 py-2.5"
         >
           <div class="flex min-w-0 items-center gap-2.5">
-            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent/10 text-accent">
+            <span class="settings-icon-tile grid h-8 w-8 shrink-0 place-items-center rounded-lg text-accent">
               <PhDatabase class="h-4 w-4" weight="bold" aria-hidden="true" />
             </span>
             <div class="min-w-0">
@@ -520,7 +520,7 @@ async function openPath(item: PathInfo) {
           </div>
         </div>
       </div>
-      <div v-else class="muted flex items-center gap-2 text-xs">
+      <div v-else class="setting-description flex items-center gap-2">
         <PhDatabase class="h-4 w-4 shrink-0" weight="bold" aria-hidden="true" />
         还没有导出过备份。
       </div>
@@ -529,8 +529,8 @@ async function openPath(item: PathInfo) {
     <div v-else-if="section === 'codex'" class="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]">
       <div class="flex items-center justify-between gap-4">
         <div>
-          <div class="text-sm font-semibold">应用配置后自动重启 Codex</div>
-          <div class="muted mt-0.5 text-xs">开启后应用配置会自动重启 Codex 生效；关闭则只保存配置，稍后可手动重启。</div>
+          <div class="setting-title">应用配置后自动重启 Codex</div>
+          <div class="setting-description mt-0.5">开启后应用配置会自动重启 Codex 生效；关闭则只保存配置，稍后可手动重启。</div>
         </div>
         <n-switch v-model:value="form.auto_restart" @update:value="updateAutoRestart" />
       </div>
@@ -552,19 +552,19 @@ async function openPath(item: PathInfo) {
         <div>
           <div class="apple-wordmark">CGswitch</div>
           <div class="app-version mt-1.5" :aria-label="`版本 ${version.trim()}`">
-            <span>v{{ version.trim() }}</span>
+            <span>版本 {{ version.trim() }}</span>
           </div>
         </div>
       </div>
       <n-divider :style="{ marginTop: '16px' }" />
-      <h2 class="text-[15px] font-semibold tracking-tight">数据与路径</h2>
-      <p class="muted mt-2 text-sm">所有本机数据固定保存在用户 Home 目录，不会进入 Git。</p>
+      <h2 class="setting-title">数据与路径</h2>
+      <p class="setting-description mt-2">应用数据与配置文件位置。</p>
       <n-divider />
       <n-list class="bg-transparent" :show-divider="true">
         <n-list-item v-for="item in state.paths" :key="item.label">
           <div class="flex items-center justify-between gap-4">
             <div class="min-w-0">
-              <div class="text-sm font-semibold">{{ item.label }}</div>
+              <div class="setting-title">{{ item.label }}</div>
               <div class="mono muted mt-1 break-all text-xs">{{ item.path }}</div>
             </div>
             <n-button size="small" secondary :loading="openingPath === item.path" :disabled="Boolean(openingPath)" title="在资源管理器中打开" @click="openPath(item)">

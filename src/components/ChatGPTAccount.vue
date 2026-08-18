@@ -7,9 +7,10 @@ import {
   PhArrowSquareOut,
   PhCheckCircle,
   PhCopy,
+  PhKey,
+  PhMonitor,
   PhPlus,
   PhShieldCheck,
-  PhUserCircle,
 } from "@phosphor-icons/vue";
 
 const message = useMessage();
@@ -135,8 +136,8 @@ onMounted(refreshStatus);
             <PhShieldCheck class="h-[18px] w-[18px]" weight="bold" aria-hidden="true" />
           </span>
           <div class="min-w-0">
-            <div class="text-sm font-semibold">ChatGPT 设备码登录</div>
-            <p class="muted mt-0.5 text-xs">完成 ChatGPT 登录后，认证结果会自动回到这里。</p>
+            <div class="setting-title">ChatGPT 设备码登录</div>
+            <p class="setting-description mt-0.5">完成 ChatGPT 登录后，认证结果会自动回到这里。</p>
           </div>
         </div>
         <n-tag size="small" type="warning">等待授权</n-tag>
@@ -182,45 +183,43 @@ onMounted(refreshStatus);
           <PhCheckCircle class="mt-2 h-6 w-6 shrink-0 text-success" weight="bold" aria-hidden="true" />
           <div class="min-w-0">
             <template v-if="status.external && status.accounts.length">
-              <div class="text-sm font-semibold">ChatGPT 已认证</div>
-              <p class="muted mt-0.5 text-xs">桌面端 Codex 与设备码登录均已连接。</p>
+              <div class="setting-title">ChatGPT 已认证</div>
+              <p class="setting-description mt-0.5">桌面端 Codex 与设备码登录均已连接。</p>
             </template>
             <template v-else-if="status.external">
-              <div class="text-sm font-semibold">ChatGPT 桌面端已登录</div>
-              <p class="muted mt-0.5 text-xs">来自 ChatGPT 桌面端的 Codex 登录状态。</p>
+              <div class="setting-title">ChatGPT 桌面端已登录</div>
+              <p class="setting-description mt-0.5">来自 ChatGPT 桌面端的 Codex 登录状态。</p>
             </template>
             <template v-else>
-              <div class="text-sm font-semibold">ChatGPT 设备码登录已生效</div>
-              <p class="muted mt-0.5 text-xs">当前使用通过设备码登录的 ChatGPT 账号。</p>
+              <div class="setting-title">ChatGPT 设备码登录已生效</div>
+              <p class="setting-description mt-0.5">当前使用通过设备码登录的 ChatGPT 账号。</p>
             </template>
           </div>
         </div>
       </div>
 
       <div v-if="status.external" class="space-y-2">
-        <div class="field-subtitle">ChatGPT 账号（桌面端 Codex）</div>
+        <div class="setting-title">桌面端登录</div>
         <div
           class="flex items-center gap-3 rounded-xl bg-info/8 px-3 py-2.5 shadow-[0_0_0_1px_var(--panel-ring)] dark:bg-info/12"
         >
-          <PhShieldCheck class="h-5 w-5 shrink-0 text-info" weight="bold" aria-hidden="true" />
+          <PhMonitor class="h-5 w-5 shrink-0 text-info" weight="bold" aria-hidden="true" />
           <div class="min-w-0 flex-1">
-            <div class="text-sm font-semibold">ChatGPT 账号</div>
-            <div class="mono muted truncate text-xs">{{ status.external.login }}</div>
+            <div class="mono truncate text-sm font-medium">{{ status.external.login }}</div>
           </div>
-          <n-tag size="small" type="info">桌面端</n-tag>
         </div>
       </div>
 
       <div v-if="status.accounts.length" class="space-y-2">
-        <div class="field-subtitle">ChatGPT 账号（设备码登录）</div>
-        <p class="muted text-xs">通过设备码登录添加，可在 CGswitch 中管理多个账号。</p>
+        <div class="setting-title">OAuth 设备码登录</div>
+        <p class="setting-description">通过设备码登录添加，可在 CGswitch 中管理多个账号。</p>
         <div
           v-for="account in status.accounts"
           :key="account.id"
           class="flex items-center gap-3 rounded-xl px-3 py-2.5 shadow-[0_0_0_1px_var(--panel-ring)]"
           :class="account.is_default ? 'bg-[var(--selection-bg)]' : ''"
         >
-          <PhUserCircle class="h-5 w-5 shrink-0 text-accent" weight="bold" aria-hidden="true" />
+          <PhKey class="h-5 w-5 shrink-0 text-accent" weight="bold" aria-hidden="true" />
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 items-center gap-2">
               <span class="mono truncate text-sm font-medium">{{ account.login }}</span>
@@ -248,8 +247,8 @@ onMounted(refreshStatus);
           <PhShieldCheck class="h-[18px] w-[18px]" weight="bold" aria-hidden="true" />
         </span>
         <div class="min-w-0">
-          <div class="text-sm font-semibold">尚未连接 ChatGPT</div>
-          <p class="muted mt-0.5 text-xs">登录后可管理多个 ChatGPT 账号。</p>
+          <div class="setting-title">尚未连接 ChatGPT</div>
+          <p class="setting-description mt-0.5">登录后可管理多个 ChatGPT 账号。</p>
         </div>
       </div>
       <div class="mt-6">

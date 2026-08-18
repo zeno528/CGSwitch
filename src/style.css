@@ -96,13 +96,14 @@ body {
 
 .app-version {
   align-items: center;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
   color: var(--text-secondary);
   display: inline-flex;
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 500;
   line-height: 1;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--selection-bg);
+  padding: 3px 6px;
 }
 
 /* 卡片第二行信息胶囊（模型/供应商/推理档位/余额用量）——全局统一，
@@ -144,11 +145,12 @@ body {
   font-family: Consolas, "Cascadia Mono", monospace;
 }
 
-/* 表单字段/区块标签：与正文同级重要，统一主色 + 中等字重，
-   不再使用浅色辅助文字样式 */
+/* 表单字段标签：比输入内容更明确，但不抢过区块标题 */
 .field-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.35;
 }
 
 /* 卡片内的小节标题（副标题），与表单字段标签 field-label 区分 */
@@ -156,6 +158,40 @@ body {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.01em;
+}
+
+/* 设置项标题：与 13px 的说明文字保持明确层级 */
+.setting-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+
+/* 设置页顶栏选项：五个分区统一使用清晰的中高字重 */
+.settings-tab {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+
+/* 设置项说明：与标题形成稳定的字号、字重和对比度层级 */
+.setting-description {
+  color: color-mix(in srgb, var(--text-secondary) 82%, #1c1c1e 18%);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+:root.dark .setting-description {
+  color: color-mix(in srgb, var(--text-secondary) 82%, #ececec 18%);
+}
+
+/* 设置页图标容器：只保留边界，颜色由图标本身表达 */
+.settings-icon-tile {
+  background: transparent;
+  border: 1px solid var(--panel-border);
 }
 
 /* 名称行：不用输入框外框，改用底部分割线作为输入框，聚焦时高亮 */
@@ -238,17 +274,18 @@ main {
   transition: width 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* 侧边栏应用名 wordmark：Windows 自带几何字体 Bahnschrift + 品牌蓝紫渐变 */
+/* 侧边栏应用名 wordmark：Windows 自带几何字体 Bahnschrift + 黑白品牌色 */
 .apple-wordmark {
-  background: linear-gradient(90deg, var(--accent) 0%, #5856d6 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  font-family: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", -apple-system, sans-serif;
+  color: #1c1c1e;
+  font-family: "Segoe UI Variable Display", "Bahnschrift", "Segoe UI", -apple-system, sans-serif;
   font-size: 16px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.01em;
   line-height: 1;
+}
+
+:root.dark .apple-wordmark {
+  color: #ececec;
 }
 
 /* 首页供应商卡片动画：出现复刻侧边栏展开（高度 0→auto + 淡入），
