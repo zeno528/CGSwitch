@@ -154,4 +154,8 @@ onBeforeUnmount(() => observer?.disconnect());
   font-size: 12px;
   line-height: 1.6;
 }
+:deep(.cm-lineNumbers .cm-gutterElement) {
+  min-width: 16px;
+  padding-left: 1px;
+}
 </style>

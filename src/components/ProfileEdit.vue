@@ -479,7 +479,8 @@ async function openOpenCodeRef() {
 }
 
 async function testConnection() {
-  if (testing.value || creating.value || !props.profile) return;
+  if (testing.value) return;
+  if (!creating.value && !props.profile) return;
   if (!baseUrl.value.trim()) {
     message.warning("请填写调用地址");
     return;
@@ -490,11 +491,14 @@ async function testConnection() {
   }
   testing.value = true;
   try {
-    const result = await api.testProfileConnection(
-      props.profile.id,
-      baseUrl.value.trim(),
-      apiKey.value.trim(),
-    );
+    // 输入框里填什么就测什么：创建态尚无 profile id，直接用表单值测端点
+    const result = creating.value
+      ? await api.testProviderConnection(baseUrl.value.trim(), apiKey.value.trim())
+      : await api.testProfileConnection(
+          props.profile!.id,
+          baseUrl.value.trim(),
+          apiKey.value.trim(),
+        );
     if (result.ok) {
       message.success(
         `连接正常${result.latency_ms != null ? ` · ${result.latency_ms}ms` : ""}`,
@@ -789,7 +793,6 @@ async function save() {
               获取 API 密钥
             </button>
             <button
-              v-if="!creating"
               type="button"
               class="apple-inline-btn"
               :disabled="!apiKey.trim() || !baseUrl.trim()"

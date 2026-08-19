@@ -172,6 +172,15 @@ pub async fn test_profile_connection(
         .await
 }
 
+// 创建态表单测试连通：供应商尚未保存，没有 profile id，地址/密钥实时传入
+#[tauri::command]
+pub async fn test_provider_connection(
+    base_url: String,
+    api_key: String,
+) -> AppResult<ProfileConnectionResult> {
+    crate::services::test_provider_connection(&base_url, &api_key).await
+}
+
 #[tauri::command]
 pub async fn get_profile_balance(
     id: String,

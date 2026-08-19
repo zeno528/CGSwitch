@@ -282,6 +282,94 @@ async fn query_deepseek_balance(
 
 /// MiniMax Coding Plan 用量查询：GET {base}/api/openplatform/coding_plan/remains。
 /// 接口形态以用户实测可用的 statusline.ps1 为准（国内版 Coding Plan）。
+/// GET {base}/models 带密钥的连通性测试核心，与 profile 无关（创建态表单直接复用）。
+async fn test_models_endpoint(base_url: &str, api_key: &str) -> AppResult<ProfileConnectionResult> {
+    let models_url = format!("{}/models", base_url.trim_end_matches('/'));
+    let client = http_client()?;
+
+    let start = std::time::Instant::now();
+    match client.get(&models_url).bearer_auth(api_key).send().await {
+        Ok(response) => {
+            let status = response.status();
+            let latency_ms = Some(start.elapsed().as_millis());
+            if status.is_success() {
+                // 部分服务端（如智谱 /api/v1/models）用 HTTP 200 包装认证失败，
+                // 只认状态码会把“密钥错误/地址错误”误判成连通成功，必须校验响应体。
+                let body = response.text().await.unwrap_or_default();
+                match serde_json::from_str::<serde_json::Value>(&body) {
+                    Ok(json) => {
+                        if let Some(error) = connection_error_from_body(&json) {
+                            Ok(ProfileConnectionResult {
+                                ok: false,
+                                latency_ms,
+                                status: Some(status.as_u16()),
+                                error: Some(error),
+                            })
+                        } else {
+                            Ok(ProfileConnectionResult {
+                                ok: true,
+                                latency_ms,
+                                status: Some(status.as_u16()),
+                                error: None,
+                            })
+                        }
+                    }
+                    Err(_) => Ok(ProfileConnectionResult {
+                        ok: false,
+                        latency_ms,
+                        status: Some(status.as_u16()),
+                        error: Some(format!(
+                            "接口返回 HTTP {status}，但响应不是有效的 JSON（请检查调用地址）"
+                        )),
+                    }),
+                }
+            } else if status == reqwest::StatusCode::UNAUTHORIZED
+                || status == reqwest::StatusCode::FORBIDDEN
+            {
+                Ok(ProfileConnectionResult {
+                    ok: false,
+                    latency_ms,
+                    status: Some(status.as_u16()),
+                    error: Some("API 密钥无效".to_string()),
+                })
+            } else {
+                Ok(ProfileConnectionResult {
+                    ok: false,
+                    latency_ms,
+                    status: Some(status.as_u16()),
+                    error: Some(format!("接口返回 HTTP {status}")),
+                })
+            }
+        }
+        Err(error) => {
+            let status = error.status().map(|status| status.as_u16());
+            let error_message = reqwest_error_message(&error);
+            Ok(ProfileConnectionResult {
+                ok: false,
+                latency_ms: None,
+                status,
+                error: Some(error_message),
+            })
+        }
+    }
+}
+
+/// 创建态表单的连通性测试：地址/密钥实时传入，无已存 profile 可回退，空值直接报错。
+pub async fn test_provider_connection(
+    base_url: &str,
+    api_key: &str,
+) -> AppResult<ProfileConnectionResult> {
+    let base_url = base_url.trim();
+    if base_url.is_empty() {
+        return Err(app_err!("请填写调用地址"));
+    }
+    let api_key = api_key.trim();
+    if api_key.is_empty() {
+        return Err(app_err!("请填写 API 密钥"));
+    }
+    test_models_endpoint(base_url, api_key).await
+}
+
 async fn query_minimax_balance(
     client: &reqwest::Client,
     base: &str,
@@ -650,74 +738,7 @@ impl AppContext {
                 .ok_or_else(|| app_err!("该供应商没有配置 API 密钥，请先填写后再测试"))?,
         };
 
-        let models_url = format!("{}/models", base_url.trim_end_matches('/'));
-        let client = http_client()?;
-
-        let start = std::time::Instant::now();
-        match client.get(&models_url).bearer_auth(api_key).send().await {
-            Ok(response) => {
-                let status = response.status();
-                let latency_ms = Some(start.elapsed().as_millis());
-                if status.is_success() {
-                    // 部分服务端（如智谱 /api/v1/models）用 HTTP 200 包装认证失败，
-                    // 只认状态码会把“密钥错误/地址错误”误判成连通成功，必须校验响应体。
-                    let body = response.text().await.unwrap_or_default();
-                    match serde_json::from_str::<serde_json::Value>(&body) {
-                        Ok(json) => {
-                            if let Some(error) = connection_error_from_body(&json) {
-                                Ok(ProfileConnectionResult {
-                                    ok: false,
-                                    latency_ms,
-                                    status: Some(status.as_u16()),
-                                    error: Some(error),
-                                })
-                            } else {
-                                Ok(ProfileConnectionResult {
-                                    ok: true,
-                                    latency_ms,
-                                    status: Some(status.as_u16()),
-                                    error: None,
-                                })
-                            }
-                        }
-                        Err(_) => Ok(ProfileConnectionResult {
-                            ok: false,
-                            latency_ms,
-                            status: Some(status.as_u16()),
-                            error: Some(format!(
-                                "接口返回 HTTP {status}，但响应不是有效的 JSON（请检查调用地址）"
-                            )),
-                        }),
-                    }
-                } else if status == reqwest::StatusCode::UNAUTHORIZED
-                    || status == reqwest::StatusCode::FORBIDDEN
-                {
-                    Ok(ProfileConnectionResult {
-                        ok: false,
-                        latency_ms,
-                        status: Some(status.as_u16()),
-                        error: Some("API 密钥无效".to_string()),
-                    })
-                } else {
-                    Ok(ProfileConnectionResult {
-                        ok: false,
-                        latency_ms,
-                        status: Some(status.as_u16()),
-                        error: Some(format!("接口返回 HTTP {status}")),
-                    })
-                }
-            }
-            Err(error) => {
-                let status = error.status().map(|status| status.as_u16());
-                let error_message = reqwest_error_message(&error);
-                Ok(ProfileConnectionResult {
-                    ok: false,
-                    latency_ms: None,
-                    status,
-                    error: Some(error_message),
-                })
-            }
-        }
+        test_models_endpoint(&base_url, &api_key).await
     }
 
     /// 验证 ChatGPT 订阅认证连通性：用当前 access_token 请求 Codex 官方后端用量端点

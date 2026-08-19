@@ -318,6 +318,27 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       if (!preset?.model_values.model_catalog_json) return null as T;
       return '{\n  "models": [\n    { "id": "preview", "name": "模型目录预览" }\n  ]\n}' as T;
     }
+    case "test_provider_connection": {
+      const apiKey = String(args?.apiKey ?? "");
+      const baseUrl = String(args?.baseUrl ?? "");
+      if (!apiKey.trim()) throw new Error("请填写 API 密钥");
+      if (!baseUrl.trim()) throw new Error("请填写调用地址");
+      const url = `${baseUrl.replace(/\/+$/, "")}/models`;
+      const start = Date.now();
+      try {
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${apiKey.trim()}` },
+        });
+        return {
+          ok: res.ok,
+          latency_ms: Date.now() - start,
+          status: res.status,
+          error: res.ok ? null : `接口返回 HTTP ${res.status}`,
+        } as T;
+      } catch {
+        throw new Error("网络请求被浏览器拦截，请在桌面版验证连通性");
+      }
+    }
     case "test_profile_connection": {
       const profile = webProfiles.find((item) => item.id === args?.id);
       if (!profile) throw new Error("供应商配置不存在");
@@ -581,6 +602,9 @@ export const api = {
   getBuiltinCatalog: (kind: string) => call<string | null>("get_builtin_catalog", { kind }),
   testProfileConnection: (id: string, baseUrl?: string, apiKey?: string) =>
     call<ProfileConnectionResult>("test_profile_connection", { id, baseUrl, apiKey }),
+  // 创建态表单测试：供应商尚未保存，直接用表单里的地址/密钥
+  testProviderConnection: (baseUrl: string, apiKey: string) =>
+    call<ProfileConnectionResult>("test_provider_connection", { baseUrl, apiKey }),
   getProfileBalance: (id: string) =>
     call<ProfileBalance>("get_profile_balance", { id }),
   exportDatabase: () => call<string>("export_database"),
