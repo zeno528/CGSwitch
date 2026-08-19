@@ -591,6 +591,10 @@ body.drag-active * {
 /* 全局弹窗进出场动画：覆盖 naive-ui 默认的 scale(0.5) 缩放淡入，
    改为轻量高级的 0.95 缩放 + 轻微下落 + 淡入（Apple/Radix 同款缓动），
    只用 transform/opacity，GPU 合成、无额外开销 */
+.n-modal-container .n-modal {
+  transform-origin: center !important;
+}
+
 .n-modal-container .n-modal.fade-in-scale-up-transition-enter-from {
   opacity: 0;
   transform: scale(0.95) translateY(10px);

@@ -161,4 +161,8 @@ onBeforeUnmount(() => observer?.disconnect());
   min-width: 20px;
   padding: 0;
 }
+:deep(.cm-activeLine),
+:deep(.cm-activeLineGutter) {
+  background-color: var(--selection-bg) !important;
+}
 </style>
