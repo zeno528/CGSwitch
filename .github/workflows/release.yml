@@ -8,6 +8,8 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # 手动触发（Actions UI → Run workflow 可选分支），用于在打 tag 前预演或重跑
+  workflow_dispatch:
 
 permissions:
   contents: read
