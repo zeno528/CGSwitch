@@ -1014,7 +1014,8 @@ impl AppContext {
                 let name = entry.file_name().to_string_lossy().into_owned();
                 if !((name.starts_with(DATABASE_BACKUP_PREFIX)
                     || name.starts_with(LEGACY_DATABASE_BACKUP_PREFIX))
-                    && name.ends_with(".db")) {
+                    && name.ends_with(".db"))
+                {
                     continue;
                 }
                 let size_bytes = entry.metadata().map(|metadata| metadata.len()).unwrap_or(0);

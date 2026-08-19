@@ -585,10 +585,16 @@ pub fn save_settings(
     settings: Settings,
     state: State<'_, AppContext>,
 ) -> AppResult<Settings> {
-    if !matches!(settings.auto_backup_interval_hours, 0 | 6 | 12 | 24 | 48 | 168) {
+    if !matches!(
+        settings.auto_backup_interval_hours,
+        0 | 6 | 12 | 24 | 48 | 168
+    ) {
         return Err(app_err!("不支持的自动备份间隔"));
     }
-    if !matches!(settings.database_backup_keep_count, 3 | 5 | 10 | 15 | 20 | 30) {
+    if !matches!(
+        settings.database_backup_keep_count,
+        3 | 5 | 10 | 15 | 20 | 30
+    ) {
         return Err(app_err!("不支持的备份保留数量"));
     }
     let saved = state.save_settings(&settings)?;

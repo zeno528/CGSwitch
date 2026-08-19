@@ -103,9 +103,7 @@ pub fn run() {
             let scheduler_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 loop {
-                    if let Err(error) = scheduler_handle
-                        .state::<AppContext>()
-                        .auto_backup_if_due()
+                    if let Err(error) = scheduler_handle.state::<AppContext>().auto_backup_if_due()
                     {
                         eprintln!("自动备份失败: {error}");
                     }
