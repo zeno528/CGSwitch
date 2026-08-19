@@ -15,7 +15,9 @@ import type {
   ProfileSummary,
   RestartStage,
   Settings,
+  TomlDiagnostic,
 } from "./types";
+import { stripTomlQuotes } from "./utils";
 
 export const isTauri = typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
 
@@ -262,7 +264,7 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
         account_id: preset.provider ? null : (typeof args?.accountId === "string" ? args.accountId : null),
         model: preset.model,
         provider: preset.provider,
-        reasoning_effort: preset.model_values.model_reasoning_effort?.replace(/^"|"$/g, "") ?? null,
+        reasoning_effort: stripTomlQuotes(preset.model_values.model_reasoning_effort) || null,
         has_key: preset.provider ? Boolean(rawKey.trim()) : false,
         admin_url: adminUrl,
         show_balance: false,
@@ -535,6 +537,9 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     case "save_settings":
       webSettings = { ...(args?.settings as Settings) };
       return { ...webSettings } as T;
+    // Web 调试模式无 Rust 侧解析器，TOML 校验一律视为通过（与既有 mock 桩风格一致）
+    case "validate_toml":
+      return [] as T;
     default:
       throw new Error(`Web 调试模式不支持命令：${command}`);
   }
@@ -605,6 +610,8 @@ export const api = {
   ) => call<ProfileDetail>("update_profile_config", { id, configText, catalogText, authText }),
   patchChatgptContextConfig: (configText: string, enabled: boolean) =>
     call<string>("patch_chatgpt_context_config", { configText, enabled }),
+  validateToml: (text: string) => call<TomlDiagnostic[]>("validate_toml", { text }),
+  formatToml: (text: string) => call<string>("format_toml", { text }),
   deleteProfile: (id: string) => call<void>("delete_profile", { id }),
   reorderProfiles: (ids: string[]) => call<void>("reorder_profiles", { ids }),
   applyProfile: (id: string) => call<void>("apply_profile", { id }),

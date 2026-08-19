@@ -36,6 +36,7 @@ reqwest = { version = "0.13.4", features = ["form", "json", "system-proxy"] }
 tokio = { version = "1.53.1", features = ["sync", "time", "macros", "rt"] }
 base64 = "0.23.1"
 chrono = "0.4"
+taplo = "0.14.0"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = [

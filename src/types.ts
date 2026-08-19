@@ -46,6 +46,17 @@ export interface ProfileConnectionResult {
   error: string | null;
 }
 
+export interface TomlDiagnostic {
+  from: number;
+  to: number;
+  message: string;
+}
+
+export interface EditorDiagnosticSummary {
+  count: number;
+  firstLine: number | null;
+}
+
 export interface ProfileBalanceInfo {
   currency: string;
   total_balance: string;

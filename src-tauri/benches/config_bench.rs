@@ -8,7 +8,9 @@ use std::hint::black_box;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use cgswitch_lib::codex::config::{apply_to_document, capture_from_document, parse_document};
+use cgswitch_lib::codex::config::{
+    apply_to_document, capture_from_document, format_document, parse_document, validate_document,
+};
 use cgswitch_lib::database::Database;
 use cgswitch_lib::models::{ProfilePayload, Settings};
 use cgswitch_lib::paths::from_home;
@@ -78,6 +80,21 @@ fn bench_config_toml_apply(c: &mut Criterion) {
     });
 }
 
+/// 编辑器 linter 热路径：每次防抖后触发一次，分别测有效文档（最常见）与含错文档（错误恢复）。
+fn bench_config_toml_validate_format(c: &mut Criterion) {
+    let broken = SAMPLE_CONFIG_TOML.replace("wire_api = \"responses\"", "wire_api =");
+
+    c.bench_function("config_toml_validate_valid", |b| {
+        b.iter(|| black_box(validate_document(black_box(SAMPLE_CONFIG_TOML)).len()))
+    });
+    c.bench_function("config_toml_validate_broken", |b| {
+        b.iter(|| black_box(validate_document(black_box(&broken)).len()))
+    });
+    c.bench_function("config_toml_format", |b| {
+        b.iter(|| black_box(format_document(black_box(SAMPLE_CONFIG_TOML))))
+    });
+}
+
 fn bench_db_profiles_query(c: &mut Criterion) {
     let dir = tempfile::tempdir().unwrap();
     let paths = from_home(dir.path()).unwrap();
@@ -102,6 +119,7 @@ criterion_group!(
     bench_settings_write,
     bench_config_toml_parse_capture,
     bench_config_toml_apply,
+    bench_config_toml_validate_format,
     bench_db_profiles_query,
 );
 criterion_main!(benches);

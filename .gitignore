@@ -40,3 +40,6 @@ logo_for_search.png
 github_hit.png
 google_lens_*.png
 yandex_results.png
+
+# 代码图谱工具（graphify）生成的可再生缓存
+graphify-out/

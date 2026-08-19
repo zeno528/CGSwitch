@@ -343,7 +343,7 @@ onBeforeUnmount(() => {
     @changed="emit('refresh')"
   />
   <section v-else class="mx-auto w-full max-w-none">
-    <header class="flex flex-wrap items-center justify-between gap-4 pb-2">
+    <header class="apple-page-bar apple-page-bar--roomy profiles-page-bar sticky top-[-16px] z-10 flex-wrap justify-between gap-4">
       <div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm">
         <span class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors" :class="state.codex.running ? 'border-success/25 bg-success/10 text-[#248a3d] dark:border-success/30 dark:bg-success/10 dark:text-[#6ee7a0]' : 'border-[var(--panel-border)] bg-black/4 text-zinc-500 dark:bg-white/6'">
           <span class="relative flex h-2 w-2">

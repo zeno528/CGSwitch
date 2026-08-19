@@ -488,6 +488,10 @@ body.drag-active * {
   padding-bottom: 0.75rem;
 }
 
+.profiles-page-bar {
+  padding-bottom: 0.625rem;
+}
+
 /* 表单行内小按钮（测试连通 / 获取 API 密钥 等同款样式全局复用） */
 .apple-inline-btn {
   display: inline-flex;

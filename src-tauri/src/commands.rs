@@ -317,6 +317,17 @@ pub fn patch_chatgpt_context_config(config_text: String, enabled: bool) -> AppRe
     crate::codex::config::patch_context_override(&config_text, enabled)
 }
 
+// async 让解析跑在 tokio 线程池而非主线程，避免大文档校验阻塞 UI
+#[tauri::command]
+pub async fn validate_toml(text: String) -> Vec<crate::codex::config::TomlDiagnostic> {
+    crate::codex::config::validate_document(&text)
+}
+
+#[tauri::command]
+pub fn format_toml(text: String) -> String {
+    crate::codex::config::format_document(&text)
+}
+
 #[tauri::command]
 pub fn delete_profile(id: String, state: State<'_, AppContext>) -> AppResult<()> {
     state.delete_profile(&id)
