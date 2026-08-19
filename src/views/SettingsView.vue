@@ -224,7 +224,7 @@ async function importBackupFromFile() {
 function restoreBackup(backup: DatabaseBackupInfo) {
   dialog.warning({
     title: "恢复数据库备份",
-    content: `确定用「${backup.name}」覆盖当前所有供应商数据吗？恢复后无法撤销。`,
+    content: `确定用「${backup.name}」覆盖当前所有供应商数据吗？恢复后无法撤销。数据库镜像中的 MCP 段会一并写回 ~/.codex/config.toml（覆盖当前 MCP 段）。`,
     positiveText: "恢复",
     negativeText: "取消",
     positiveButtonProps: { type: "error" },

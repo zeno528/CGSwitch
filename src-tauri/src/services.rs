@@ -11,8 +11,9 @@ use crate::database::{profile_summary, Database};
 use crate::error::{app_err, AppResult};
 use crate::fsutil::{atomic_write, backup_file, prune_backups};
 use crate::models::{
-    AppState, CodexAppStatus, McpServerSpec, PathInfo, ProfileBalanceInfo, ProfileDetail,
-    ProfileKind, ProfilePayload, ProfileSummary, Settings,
+    AppState, CodexAppStatus, McpServerSpec, McpSyncDiffEntry, McpSyncEntryKind, McpSyncFieldDiff,
+    McpSyncPreview, PathInfo, ProfileBalanceInfo, ProfileDetail, ProfileKind, ProfilePayload,
+    ProfileSummary, Settings,
 };
 use crate::paths::{now_ms, AppPaths};
 
@@ -1451,6 +1452,25 @@ impl AppContext {
         Ok(())
     }
 
+    /// 吸收外部改动进数据库镜像：只增改不删——live 缺失的条目保留为“仅数据库”差异，
+    /// 由 mcp_sync_preview 交用户裁决。live 侧内容与库中一致时跳过写库
+    /// （列表刷新挂在窗口激活上，避免每次激活都产生数据库写入）。
+    fn absorb_mcp_mirror(&self, fragments: &[(String, String)]) -> AppResult<()> {
+        let stored = self.database.mcp_server_fragments()?;
+        let existing: BTreeMap<&str, &str> = stored
+            .iter()
+            .map(|(name, toml)| (name.as_str(), toml.as_str()))
+            .collect();
+        let changed = fragments
+            .iter()
+            .any(|(name, toml)| existing.get(name.as_str()) != Some(&toml.as_str()));
+        if changed {
+            self.database
+                .upsert_mcp_server_fragments(fragments, &now_ms().to_string())?;
+        }
+        Ok(())
+    }
+
     /// 把数据库镜像的 MCP 段写进 live config.toml。
     /// live 解析失败（损坏/被重置）时从镜像重建整个文件；写前照常自动备份原文件。
     fn write_mcp_section_to_live(&self, fragments: &[(String, String)]) -> AppResult<()> {
@@ -1462,7 +1482,10 @@ impl AppContext {
         codex_config::replace_mcp_section_from_fragments(&mut document, fragments);
         let config_path = self.paths.codex_config();
         backup_file(&config_path, &self.paths.config_backup, "config")?;
-        atomic_write(&config_path, document.to_string().as_bytes())?;
+        atomic_write(
+            &config_path,
+            codex_config::consolidate_mcp_blocks(&document.to_string()).as_bytes(),
+        )?;
         Ok(())
     }
 
@@ -1478,13 +1501,123 @@ impl AppContext {
     /// 读取 live config.toml 中的全部 MCP 服务器（全局唯一事实源，不随供应商切换）。
     pub fn list_mcp_servers(&self) -> AppResult<Vec<McpServerSpec>> {
         let document = codex_config::parse_document(&self.read_live_config()?)?;
-        // 吸收外部改动（codex mcp add 等）进数据库；但 live 段整个消失时保留数据库
-        // 最后一份非空镜像作为恢复点——整段消失多半是配置被重置/误删，而非逐台卸载
+        // 吸收外部改动（codex mcp add 等）进数据库；外部删除的条目保留为“仅数据库”
+        // 差异，由 mcp_sync_preview 交用户裁决，不在这里静默清除
         let fragments = codex_config::mcp_server_fragments_from_document(&document);
-        if !fragments.is_empty() {
-            self.replace_mcp_mirror(&fragments)?;
-        }
+        self.absorb_mcp_mirror(&fragments)?;
         Ok(codex_config::mcp_servers_from_document(&document))
+    }
+
+    /// 对比 live config.toml 与数据库镜像的 MCP 差异（只读，不写任何一侧），
+    /// 供同步前人工裁决。live 无法解析时返回错误，前端进入“仅可从数据库恢复”降级模式。
+    pub fn mcp_sync_preview(&self) -> AppResult<McpSyncPreview> {
+        let _guard = self
+            .operation
+            .lock()
+            .map_err(|_| app_err!("操作锁已损坏"))?;
+        let document = codex_config::parse_document(&self.read_live_config()?)?;
+        let live_fragments = codex_config::mcp_server_fragments_from_document(&document);
+        let db_fragments = self.database.mcp_server_fragments()?;
+        let db_map: BTreeMap<&str, &str> = db_fragments
+            .iter()
+            .map(|(name, toml)| (name.as_str(), toml.as_str()))
+            .collect();
+        let live_specs: BTreeMap<String, McpServerSpec> =
+            codex_config::mcp_servers_from_document(&document)
+                .into_iter()
+                .map(|spec| (spec.name.clone(), spec))
+                .collect();
+
+        // 建模字段（除 name 外共 10 项）序列化后逐项比对，顺序即前端展示顺序
+        fn field_values(spec: &McpServerSpec) -> Vec<(&'static str, serde_json::Value)> {
+            fn value<T: serde::Serialize>(field: &T) -> serde_json::Value {
+                serde_json::to_value(field).unwrap_or(serde_json::Value::Null)
+            }
+            vec![
+                ("enabled", value(&spec.enabled)),
+                ("startup_timeout_sec", value(&spec.startup_timeout_sec)),
+                ("tool_timeout_sec", value(&spec.tool_timeout_sec)),
+                ("command", value(&spec.command)),
+                ("args", value(&spec.args)),
+                ("env", value(&spec.env)),
+                ("url", value(&spec.url)),
+                ("bearer_token_env_var", value(&spec.bearer_token_env_var)),
+                ("http_headers", value(&spec.http_headers)),
+                ("env_http_headers", value(&spec.env_http_headers)),
+            ]
+        }
+
+        let mut entries = Vec::new();
+        for (name, live_toml) in &live_fragments {
+            let live_spec = live_specs.get(name).cloned();
+            let Some(db_toml) = db_map.get(name.as_str()) else {
+                entries.push(McpSyncDiffEntry {
+                    name: name.clone(),
+                    kind: McpSyncEntryKind::LiveOnly,
+                    unmodeled_only: false,
+                    live_spec,
+                    db_spec: None,
+                    live_toml: Some(live_toml.clone()),
+                    db_toml: None,
+                    changed_fields: Vec::new(),
+                });
+                continue;
+            };
+            if live_toml.as_str() == *db_toml {
+                continue;
+            }
+            let db_spec = codex_config::spec_from_fragment(name, db_toml);
+            let mut changed_fields = Vec::new();
+            if let (Some(live), Some(db)) = (&live_spec, &db_spec) {
+                for ((field, live_value), (_, db_value)) in
+                    field_values(live).into_iter().zip(field_values(db))
+                {
+                    if live_value != db_value {
+                        changed_fields.push(McpSyncFieldDiff {
+                            field: field.to_string(),
+                            live: live_value,
+                            db: db_value,
+                        });
+                    }
+                }
+            }
+            let unmodeled_only =
+                changed_fields.is_empty() && live_spec.is_some() && db_spec.is_some();
+            entries.push(McpSyncDiffEntry {
+                name: name.clone(),
+                kind: McpSyncEntryKind::Changed,
+                unmodeled_only,
+                live_spec,
+                db_spec,
+                live_toml: Some(live_toml.clone()),
+                db_toml: Some((*db_toml).to_string()),
+                changed_fields,
+            });
+        }
+        let live_names: std::collections::BTreeSet<&str> = live_fragments
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect();
+        for (name, db_toml) in &db_fragments {
+            if live_names.contains(name.as_str()) {
+                continue;
+            }
+            entries.push(McpSyncDiffEntry {
+                name: name.clone(),
+                kind: McpSyncEntryKind::DbOnly,
+                unmodeled_only: false,
+                live_spec: None,
+                db_spec: codex_config::spec_from_fragment(name, db_toml),
+                live_toml: None,
+                db_toml: Some(db_toml.clone()),
+                changed_fields: Vec::new(),
+            });
+        }
+        Ok(McpSyncPreview {
+            entries,
+            live_count: live_fragments.len(),
+            db_count: db_fragments.len(),
+        })
     }
 
     /// 用户显式操作：数据库镜像写回 live config.toml（配置损坏/段丢失后的恢复）。
@@ -1596,7 +1729,10 @@ impl AppContext {
         codex_config::upsert_mcp_server(&mut document, &spec)?;
         let config_path = self.paths.codex_config();
         backup_file(&config_path, &self.paths.config_backup, "config")?;
-        atomic_write(&config_path, document.to_string().as_bytes())?;
+        atomic_write(
+            &config_path,
+            codex_config::consolidate_mcp_blocks(&document.to_string()).as_bytes(),
+        )?;
         self.replace_mcp_mirror(&codex_config::mcp_server_fragments_from_document(&document))?;
         Ok(())
     }
@@ -1611,7 +1747,10 @@ impl AppContext {
         codex_config::remove_mcp_server(&mut document, name)?;
         let config_path = self.paths.codex_config();
         backup_file(&config_path, &self.paths.config_backup, "config")?;
-        atomic_write(&config_path, document.to_string().as_bytes())?;
+        atomic_write(
+            &config_path,
+            codex_config::consolidate_mcp_blocks(&document.to_string()).as_bytes(),
+        )?;
         self.replace_mcp_mirror(&codex_config::mcp_server_fragments_from_document(&document))?;
         Ok(())
     }
@@ -2519,7 +2658,12 @@ experimental_bearer_token = "old-key"
         let home = tempfile::tempdir().unwrap();
         let context = AppContext::new(crate::paths::from_home(home.path()).unwrap()).unwrap();
 
-        assert!(context.is_managed_path(&context.paths.database.display().to_string()));
+        // 设置页只暴露三处：应用数据目录 / Codex 配置 / 备份目录（见 path_info）
+        assert!(context.is_managed_path(&context.paths.root.display().to_string()));
+        assert!(context.is_managed_path(&context.paths.codex_config().display().to_string()));
+        assert!(context.is_managed_path(&context.paths.root.join("backups").display().to_string()));
+        // 未单独暴露的具体文件路径不在白名单内，open_path 应拒绝
+        assert!(!context.is_managed_path(&context.paths.database.display().to_string()));
         assert!(!context.is_managed_path("C:\\unmanaged-path"));
     }
 
@@ -3270,7 +3414,7 @@ CODEX_HOME = "C:\\.codex"
         context.list_mcp_servers().unwrap();
         assert_eq!(context.database.mcp_server_fragments().unwrap().len(), 1);
 
-        // live 段整个消失（配置被重置/误删）：数据库保留最后一份非空镜像作为恢复点
+        // live 段整个消失（配置被重置/误删）：吸收只增改不删，镜像保留为“仅数据库”差异
         std::fs::write(context.paths.codex_config(), "model = \"gpt-5.6\"\n").unwrap();
         let servers = context.list_mcp_servers().unwrap();
         assert!(servers.is_empty());
@@ -3279,6 +3423,12 @@ CODEX_HOME = "C:\\.codex"
             1,
             "整段消失不应清空数据库镜像"
         );
+
+        // 预览把它呈现为“仅数据库”差异，由用户裁决（不再静默保留/清除）
+        let preview = context.mcp_sync_preview().unwrap();
+        assert_eq!(preview.entries.len(), 1);
+        assert_eq!(preview.entries[0].kind, McpSyncEntryKind::DbOnly);
+        assert_eq!(preview.entries[0].name, "tavily");
 
         // 一键恢复：镜像写回 live
         let count = context.restore_mcp_from_database().unwrap();
@@ -3296,7 +3446,7 @@ CODEX_HOME = "C:\\.codex"
         context.delete_mcp_server("tavily").unwrap();
         assert!(context.database.mcp_server_fragments().unwrap().is_empty());
 
-        // 外部逐台移除同理：live 非空时以 live 为准镜像
+        // 应用内的保存/删除持续整表对齐镜像（外部改动的增改吸收与差异裁决另见 upsert 语义）
         context
             .save_mcp_server(
                 None,
@@ -3350,6 +3500,170 @@ CODEX_HOME = "C:\\.codex"
         let config = read_config_text(&context);
         assert!(config.contains("mcp_servers.tavily"), "{config}");
         codex_config::parse_document(&config).unwrap();
+    }
+
+    #[test]
+    fn mcp_list_absorb_keeps_externally_deleted_rows() {
+        let (context, _home) = mcp_test_context(
+            "[mcp_servers.a]\nurl = \"https://a/mcp\"\n\n[mcp_servers.b]\nurl = \"https://b/mcp\"\n",
+        );
+        context.list_mcp_servers().unwrap();
+
+        // 外部（codex mcp remove）删掉 a：吸收只增改不删，a 保留为“仅数据库”差异
+        std::fs::write(
+            context.paths.codex_config(),
+            "[mcp_servers.b]\nurl = \"https://b/mcp\"\n",
+        )
+        .unwrap();
+        context.list_mcp_servers().unwrap();
+        assert_eq!(context.database.mcp_server_fragments().unwrap().len(), 2);
+
+        // 显式“以配置文件为准”才收敛：a 从数据库清除，预览归零
+        let count = context.import_mcp_from_live().unwrap();
+        assert_eq!(count, 1);
+        let fragments = context.database.mcp_server_fragments().unwrap();
+        assert_eq!(fragments.len(), 1);
+        assert_eq!(fragments[0].0, "b");
+        let preview = context.mcp_sync_preview().unwrap();
+        assert!(preview.entries.is_empty(), "{:?}", preview.entries);
+    }
+
+    #[test]
+    fn mcp_preview_flags_live_only_db_only_and_changed() {
+        let (context, _home) = mcp_test_context("[mcp_servers.a]\nurl = \"https://a/mcp\"\n");
+        context.list_mcp_servers().unwrap();
+
+        // 外部改 a 的 url、新增 b，且不再触发 list：预览应报“内容不同”与“仅配置文件”
+        std::fs::write(
+            context.paths.codex_config(),
+            "[mcp_servers.a]\nurl = \"https://a/v2\"\n\n[mcp_servers.b]\nurl = \"https://b/mcp\"\n",
+        )
+        .unwrap();
+        let preview = context.mcp_sync_preview().unwrap();
+        assert_eq!(preview.live_count, 2);
+        assert_eq!(preview.db_count, 1);
+        assert_eq!(preview.entries.len(), 2, "{:?}", preview.entries);
+
+        let changed = preview
+            .entries
+            .iter()
+            .find(|entry| entry.name == "a")
+            .unwrap();
+        assert_eq!(changed.kind, McpSyncEntryKind::Changed);
+        assert!(!changed.unmodeled_only);
+        assert_eq!(changed.changed_fields.len(), 1);
+        assert_eq!(changed.changed_fields[0].field, "url");
+        assert_eq!(
+            changed.changed_fields[0].live,
+            serde_json::json!("https://a/v2")
+        );
+        assert_eq!(
+            changed.changed_fields[0].db,
+            serde_json::json!("https://a/mcp")
+        );
+
+        let live_only = preview
+            .entries
+            .iter()
+            .find(|entry| entry.name == "b")
+            .unwrap();
+        assert_eq!(live_only.kind, McpSyncEntryKind::LiveOnly);
+
+        // live 整段换成 c：a 变成“仅数据库”
+        std::fs::write(
+            context.paths.codex_config(),
+            "[mcp_servers.c]\nurl = \"https://c/mcp\"\n",
+        )
+        .unwrap();
+        let preview = context.mcp_sync_preview().unwrap();
+        let db_only = preview
+            .entries
+            .iter()
+            .find(|entry| entry.name == "a")
+            .unwrap();
+        assert_eq!(db_only.kind, McpSyncEntryKind::DbOnly);
+    }
+
+    #[test]
+    fn mcp_preview_marks_comment_only_difference_unmodeled() {
+        let (context, _home) = mcp_test_context("[mcp_servers.a]\nurl = \"https://a/mcp\"\n");
+        context.list_mcp_servers().unwrap();
+
+        // 只在条目内加一行注释：建模字段全等，差异标记为“仅格式差异”
+        std::fs::write(
+            context.paths.codex_config(),
+            "[mcp_servers.a]\n# 手动维护\nurl = \"https://a/mcp\"\n",
+        )
+        .unwrap();
+        let preview = context.mcp_sync_preview().unwrap();
+        assert_eq!(preview.entries.len(), 1, "{:?}", preview.entries);
+        let entry = &preview.entries[0];
+        assert_eq!(entry.kind, McpSyncEntryKind::Changed);
+        assert!(entry.unmodeled_only);
+        assert!(entry.changed_fields.is_empty());
+    }
+
+    #[test]
+    fn mcp_preview_empty_when_mirror_matches_live() {
+        let (context, _home) = mcp_test_context("[mcp_servers.a]\nurl = \"https://a/mcp\"\n");
+        context.list_mcp_servers().unwrap();
+
+        let preview = context.mcp_sync_preview().unwrap();
+        assert!(preview.entries.is_empty(), "{:?}", preview.entries);
+        assert_eq!(preview.live_count, 1);
+        assert_eq!(preview.db_count, 1);
+    }
+
+    #[test]
+    fn mcp_preview_fails_when_live_unparseable() {
+        let (context, _home) = mcp_test_context("[mcp_servers.a]\nurl = \"https://a/mcp\"\n");
+        context.list_mcp_servers().unwrap();
+
+        // live 无法解析：预览报错，前端进入“仅可从数据库恢复”降级模式
+        std::fs::write(context.paths.codex_config(), "not [ valid").unwrap();
+        assert!(context.mcp_sync_preview().is_err());
+    }
+
+    #[test]
+    fn mcp_save_consolidates_scattered_live_section() {
+        // 复刻 Codex 官方应用写入器留下的散落布局：保存后 mcp 必须收拢为连续块
+        let (context, _home) = mcp_test_context(concat!(
+            "[plugins.a]\nenabled = true\n\n",
+            "[mcp_servers.old]\nurl = \"https://old\"\n\n",
+            "[plugins.b]\nenabled = true\n\n",
+            "[features]\njs = false\n",
+        ));
+        context
+            .save_mcp_server(
+                None,
+                McpServerSpec {
+                    name: "fresh".into(),
+                    url: Some("https://fresh/mcp".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        let config = read_config_text(&context);
+        let pos = |needle: &str| {
+            config
+                .find(needle)
+                .unwrap_or_else(|| panic!("缺少 {needle}：\n{config}"))
+        };
+        // 非 mcp 表保持原相对顺序
+        assert!(pos("[plugins.a]") < pos("[plugins.b]"));
+        assert!(
+            pos("[mcp_servers.old]") < pos("[mcp_servers.fresh]"),
+            "{config}"
+        );
+        // mcp 收拢为连续块：首尾 mcp 之间没有其他表混入
+        let mcp_span = &config[pos("[mcp_servers.old]")..pos("[mcp_servers.fresh]")];
+        assert!(
+            !mcp_span.contains("[plugins.") && !mcp_span.contains("[features]"),
+            "{config}"
+        );
+        // 未建模内容逐字保留
+        assert!(config.contains("[plugins.b]"), "{config}");
     }
 
     #[test]

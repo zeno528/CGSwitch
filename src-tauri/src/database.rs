@@ -361,6 +361,36 @@ impl Database {
         Ok(())
     }
 
+    /// 增量吸收 MCP 片段：只新增/更新传入的行，不删除库里多余的行——
+    /// 外部（如 codex mcp remove）删掉的服务保留为“仅数据库”差异，由同步预览交用户裁决。
+    pub fn upsert_mcp_server_fragments(
+        &self,
+        fragments: &[(String, String)],
+        timestamp: &str,
+    ) -> AppResult<()> {
+        let mut connection = self.lock()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| app_err!("无法开始 MCP 写入事务: {error}"))?;
+        for (index, (name, toml)) in fragments.iter().enumerate() {
+            transaction
+                .execute(
+                    "INSERT INTO mcp_servers(name, toml, sort_order, updated_at)
+                     VALUES(?1, ?2, ?3, ?4)
+                     ON CONFLICT(name) DO UPDATE SET
+                       toml=excluded.toml,
+                       sort_order=excluded.sort_order,
+                       updated_at=excluded.updated_at",
+                    params![name, toml, index as i64, timestamp],
+                )
+                .map_err(|error| app_err!("无法保存 MCP 服务器: {error}"))?;
+        }
+        transaction
+            .commit()
+            .map_err(|error| app_err!("无法提交 MCP 写入事务: {error}"))?;
+        Ok(())
+    }
+
     /// 读取单行应用状态：返回 (active_profile_id, default_account_id)。
     pub fn app_state(&self) -> AppResult<(Option<String>, Option<String>)> {
         let connection = self.lock()?;
@@ -745,6 +775,42 @@ mod tests {
         )];
         db.replace_mcp_server_fragments(&replaced, "2").unwrap();
         assert_eq!(db.mcp_server_fragments().unwrap(), replaced);
+    }
+
+    #[test]
+    fn mcp_upsert_fragments_keeps_absent_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(dir.path()).unwrap();
+        let db = Database::open(&paths).unwrap();
+
+        let a = (
+            "a".to_string(),
+            "[mcp_servers.a]\nurl = \"https://a\"\n".to_string(),
+        );
+        let b = (
+            "b".to_string(),
+            "[mcp_servers.b]\nurl = \"https://b\"\n".to_string(),
+        );
+        db.replace_mcp_server_fragments(&[a.clone(), b.clone()], "1")
+            .unwrap();
+
+        // upsert 只增改传入的行：b 更新、c 新增、未参与的 a 原样保留
+        let b2 = (
+            "b".to_string(),
+            "[mcp_servers.b]\nurl = \"https://b/v2\"\n".to_string(),
+        );
+        let c = (
+            "c".to_string(),
+            "[mcp_servers.c]\nurl = \"https://c\"\n".to_string(),
+        );
+        db.upsert_mcp_server_fragments(&[b2.clone(), c.clone()], "2")
+            .unwrap();
+
+        let fragments = db.mcp_server_fragments().unwrap();
+        assert_eq!(fragments.len(), 3);
+        assert!(fragments.contains(&a), "{fragments:?}");
+        assert!(fragments.contains(&b2), "{fragments:?}");
+        assert!(fragments.contains(&c), "{fragments:?}");
     }
 
     #[test]

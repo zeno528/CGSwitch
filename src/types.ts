@@ -64,6 +64,33 @@ export interface McpServerSpec {
   env_http_headers: Record<string, string>;
 }
 
+/** MCP 同步预览的一条差异（live = config.toml，db = 数据库镜像）。 */
+export type McpSyncEntryKind = "live_only" | "db_only" | "changed";
+
+export interface McpSyncFieldDiff {
+  field: string;
+  live: unknown;
+  db: unknown;
+}
+
+export interface McpSyncDiffEntry {
+  name: string;
+  kind: McpSyncEntryKind;
+  /** true = 建模字段全等，差异只在注释/格式/未建模键。 */
+  unmodeled_only: boolean;
+  live_spec: McpServerSpec | null;
+  db_spec: McpServerSpec | null;
+  live_toml: string | null;
+  db_toml: string | null;
+  changed_fields: McpSyncFieldDiff[];
+}
+
+export interface McpSyncPreview {
+  entries: McpSyncDiffEntry[];
+  live_count: number;
+  db_count: number;
+}
+
 export interface TomlDiagnostic {
   from: number;
   to: number;

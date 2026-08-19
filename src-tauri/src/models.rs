@@ -87,6 +87,47 @@ pub struct McpServerSpec {
     pub env_http_headers: BTreeMap<String, String>,
 }
 
+/// MCP 同步预览的一条差异（live = ~/.codex/config.toml，db = 数据库镜像）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum McpSyncEntryKind {
+    /// 仅配置文件有（导入数据库会新增；恢复到配置会被删除）。
+    LiveOnly,
+    /// 仅数据库有（恢复到配置会加回；导入数据库会被清除）。
+    DbOnly,
+    /// 两侧都有但内容不同。
+    Changed,
+}
+
+/// 建模字段的逐项差异（值经 serde_json 序列化，前端直接展示）。
+#[derive(Debug, Clone, Serialize)]
+pub struct McpSyncFieldDiff {
+    pub field: String,
+    pub live: serde_json::Value,
+    pub db: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct McpSyncDiffEntry {
+    pub name: String,
+    pub kind: McpSyncEntryKind,
+    /// true = 建模字段全部相等，差异只在注释/格式/未建模键（同步按该侧整段替换文本）。
+    pub unmodeled_only: bool,
+    pub live_spec: Option<McpServerSpec>,
+    pub db_spec: Option<McpServerSpec>,
+    /// 两侧的原始 TOML 片段（单侧独有时另一侧为 None），展开明细时展示。
+    pub live_toml: Option<String>,
+    pub db_toml: Option<String>,
+    pub changed_fields: Vec<McpSyncFieldDiff>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct McpSyncPreview {
+    pub entries: Vec<McpSyncDiffEntry>,
+    pub live_count: usize,
+    pub db_count: usize,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ProfileSummary {
     pub id: String,

@@ -9,6 +9,7 @@ import type {
   DeviceCodeResponse,
   ManagedAccount,
   McpServerSpec,
+  McpSyncPreview,
   ProfileBalance,
   ProfileBalanceInfo,
   ProfileDetail,
@@ -630,6 +631,52 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       return webMcpServers.length as T;
     case "import_mcp_from_live":
       return webMcpServers.length as T;
+    case "mcp_sync_preview": {
+      // web 调试探样例：一条“内容不同”+ 一条“仅配置文件”，便于在 pnpm dev 里走查差异弹窗
+      const first = webMcpServers[0];
+      const changed = first
+        ? {
+            name: first.name,
+            kind: "changed" as const,
+            unmodeled_only: false,
+            live_spec: first,
+            db_spec: { ...first, url: first.url ? first.url + "-old" : first.url },
+            live_toml: null,
+            db_toml: null,
+            changed_fields: [
+              { field: "url", live: first.url, db: first.url ? first.url + "-old" : null },
+            ],
+          }
+        : null;
+      const liveOnly = {
+        name: "web-demo-live-only",
+        kind: "live_only" as const,
+        unmodeled_only: false,
+        live_spec: {
+          name: "web-demo-live-only",
+          enabled: null,
+          startup_timeout_sec: null,
+          tool_timeout_sec: null,
+          command: "npx",
+          args: ["-y", "web-demo"],
+          env: {},
+          url: null,
+          bearer_token_env_var: null,
+          http_headers: {},
+          env_http_headers: {},
+        },
+        db_spec: null,
+        live_toml: null,
+        db_toml: null,
+        changed_fields: [],
+      };
+      const entries = [changed, liveOnly].filter((entry) => entry !== null);
+      return {
+        entries,
+        live_count: webMcpServers.length + 1,
+        db_count: webMcpServers.length,
+      } as T;
+    }
     case "save_mcp_server": {
       const spec = args?.spec as McpServerSpec;
       const original = typeof args?.originalName === "string" ? args.originalName : null;
@@ -726,6 +773,8 @@ export const api = {
   restoreMcpFromDatabase: () => call<number>("restore_mcp_from_database"),
   // 显式导入：live 当前 MCP 段强制镜像进数据库，返回导入数量
   importMcpFromLive: () => call<number>("import_mcp_from_live"),
+  // 同步预览：对比 live 与数据库镜像的 MCP 差异（只读），供同步前人工裁决
+  mcpSyncPreview: () => call<McpSyncPreview>("mcp_sync_preview"),
   saveMcpServer: (originalName: string | null, spec: McpServerSpec) =>
     call<void>("save_mcp_server", { originalName, spec }),
   deleteMcpServer: (name: string) => call<void>("delete_mcp_server", { name }),

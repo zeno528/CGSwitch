@@ -4,12 +4,13 @@ import { NButton, NEmpty, useDialog, useMessage } from "naive-ui";
 import AppSwitch from "../components/AppSwitch.vue";
 import TrashIcon from "../components/TrashIcon.vue";
 import McpIcon from "../components/McpIcon.vue";
+import McpSyncDialog from "../components/McpSyncDialog.vue";
 import { api } from "../api";
-import type { McpServerSpec } from "../types";
+import type { McpServerSpec, McpSyncPreview } from "../types";
+import { mcpTransportText } from "../utils";
 import { useWindowActivation } from "../composables/useWindowActivation";
 import {
-  PhArrowCircleDown,
-  PhArrowCircleUp,
+  PhArrowsDownUp,
   PhCircleDashed,
   PhGlobe,
   PhNotePencil,
@@ -30,7 +31,11 @@ const loaded = ref(false);
 const editingServer = ref<McpServerSpec | null>(null);
 const creatingServer = ref(false);
 const togglingName = ref("");
-const syncing = ref(false);
+// 同步差异预览：live 与数据库镜像不一致时横幅提示，弹窗内按明细选择方向
+const syncPreview = ref<McpSyncPreview | null>(null);
+const previewError = ref("");
+const syncDialogOpen = ref(false);
+const applying = ref(false);
 
 watch(
   () => props.navReset,
@@ -48,6 +53,18 @@ async function refresh() {
     loadError.value = String(error);
   } finally {
     loaded.value = true;
+  }
+  void loadPreview();
+}
+
+async function loadPreview() {
+  try {
+    syncPreview.value = await api.mcpSyncPreview();
+    previewError.value = "";
+  } catch (error) {
+    // live 无法解析等场景：弹窗进入“仅可从数据库恢复”降级模式
+    previewError.value = String(error);
+    syncPreview.value = null;
   }
 }
 
@@ -75,15 +92,6 @@ function transportIconOf(server: McpServerSpec) {
     http: PhGlobe,
     stdio: PhTerminalWindow,
     unknown: PhCircleDashed,
-  };
-  return map[transportOf(server)];
-}
-
-function transportTextOf(server: McpServerSpec): string {
-  const map: Record<Transport, string> = {
-    http: "HTTP",
-    stdio: "STDIO",
-    unknown: "未知",
   };
   return map[transportOf(server)];
 }
@@ -141,52 +149,39 @@ function removeServer(server: McpServerSpec) {
   });
 }
 
-// 显式双向同步：配置文件 → 数据库（强制对齐，含清空已移除条目）
-function importFromLive() {
-  if (syncing.value) return;
-  dialog.warning({
-    title: "从配置文件导入数据库",
-    content:
-      "把当前 ~/.codex/config.toml 里的 MCP 段强制镜像进数据库（覆盖现有镜像，live 里没有的条目会从数据库清掉）。",
-    positiveText: "导入",
-    negativeText: "取消",
-    onPositiveClick: async () => {
-      syncing.value = true;
-      try {
-        const count = await api.importMcpFromLive();
-        message.success(`已从配置文件导入 ${count} 台服务器到数据库`);
-        void refresh();
-      } catch (error) {
-        message.error(String(error));
-      } finally {
-        syncing.value = false;
-      }
-    },
-  });
+// 双向同步入口：先看差异再选方向；两个 header 按钮与差异横幅共用
+function openSyncDialog() {
+  if (applying.value) return;
+  if (previewError.value) {
+    syncDialogOpen.value = true;
+    return;
+  }
+  if (syncPreview.value && syncPreview.value.entries.length === 0) {
+    message.info("配置文件与数据库镜像一致，无需同步");
+    return;
+  }
+  syncDialogOpen.value = true;
 }
 
-// 显式双向同步：数据库 → 配置文件（配置损坏/段丢失后的恢复）
-function restoreToLive() {
-  if (syncing.value) return;
-  dialog.warning({
-    title: "从数据库恢复到配置文件",
-    content:
-      "把数据库里的 MCP 镜像写回 ~/.codex/config.toml（覆盖现有 MCP 段，其余内容不动；配置文件无法解析时将按镜像重建，写前自动备份原文件）。",
-    positiveText: "恢复",
-    negativeText: "取消",
-    onPositiveClick: async () => {
-      syncing.value = true;
-      try {
-        const count = await api.restoreMcpFromDatabase();
-        message.success(`已恢复 ${count} 台服务器到配置文件`);
-        void refresh();
-      } catch (error) {
-        message.error(String(error));
-      } finally {
-        syncing.value = false;
-      }
-    },
-  });
+async function onApply(direction: "live-to-db" | "db-to-live") {
+  if (applying.value) return;
+  applying.value = true;
+  try {
+    if (direction === "live-to-db") {
+      const count = await api.importMcpFromLive();
+      message.success(`已从配置文件导入 ${count} 台服务器到数据库`);
+    } else {
+      const count = await api.restoreMcpFromDatabase();
+      message.success(`已恢复 ${count} 台服务器到配置文件`);
+    }
+    syncDialogOpen.value = false;
+    await refresh();
+  } catch (error) {
+    // 失败保留弹窗，用户可重试或取消
+    message.error(String(error));
+  } finally {
+    applying.value = false;
+  }
 }
 </script>
 
@@ -207,32 +202,12 @@ function restoreToLive() {
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <div class="apple-page-action relative">
-          <button
-            type="button"
-            class="apple-icon-button text-zinc-500 hover:bg-[var(--sidebar-bg)] hover:text-accent dark:text-zinc-400"
-            :disabled="syncing"
-            title="从配置导入"
-            aria-label="从配置导入"
-            @click="importFromLive"
-          >
-            <PhArrowCircleDown class="h-4 w-4" weight="bold" aria-hidden="true" />
-          </button>
-          <span class="apple-sidebar-flyout" aria-hidden="true">从配置导入</span>
-        </div>
-        <div class="apple-page-action relative">
-          <button
-            type="button"
-            class="apple-icon-button text-zinc-500 hover:bg-[var(--sidebar-bg)] hover:text-accent dark:text-zinc-400"
-            :disabled="syncing"
-            title="恢复到配置"
-            aria-label="恢复到配置"
-            @click="restoreToLive"
-          >
-            <PhArrowCircleUp class="h-4 w-4" weight="bold" aria-hidden="true" />
-          </button>
-          <span class="apple-sidebar-flyout" aria-hidden="true">恢复到配置</span>
-        </div>
+        <n-button secondary :disabled="applying" @click="openSyncDialog">
+          <template #icon>
+            <PhArrowsDownUp class="h-4 w-4" weight="bold" aria-hidden="true" />
+          </template>
+          同步配置
+        </n-button>
         <n-button type="primary" @click="creatingServer = true">
           <template #icon>
             <PhPlus class="h-4 w-4" weight="bold" aria-hidden="true" />
@@ -243,10 +218,20 @@ function restoreToLive() {
     </header>
 
     <p v-if="loadError" class="muted mt-4 text-sm">
-      {{ loadError }}<span v-if="loaded">配置文件无法解析时，可点「恢复到配置」用数据库镜像修复。</span>
+      {{ loadError }}<span v-if="loaded">配置文件无法解析时，可点「同步配置」用数据库镜像修复。</span>
     </p>
 
     <div class="mt-[var(--gap-page)]">
+      <!-- live 与数据库镜像有差异时提示；live 全空但库里有残留行时也要显示，避免空列表误导 -->
+      <div v-if="syncPreview && syncPreview.entries.length" class="apple-list-row mb-2">
+        <span class="flex min-w-0 items-center gap-2">
+          <span class="apple-chip chip-warn">MCP 差异</span>
+          <span class="muted truncate text-sm">
+            配置文件与数据库镜像有 {{ syncPreview.entries.length }} 项不同
+          </span>
+        </span>
+        <button type="button" class="apple-inline-btn" @click="openSyncDialog">查看并处理</button>
+      </div>
       <n-empty
         v-if="loaded && servers.length === 0"
         description="还没有 MCP 服务器。点击“添加服务器”把第一个 MCP 服务写进 config.toml。"
@@ -266,7 +251,7 @@ function restoreToLive() {
               <div class="flex items-center gap-2">
                 <span class="truncate text-[var(--font-size-base)] font-semibold">{{ server.name }}</span>
                 <span class="shrink-0 rounded-md bg-black/5 px-1.5 py-px text-[10px] font-medium tracking-wide text-zinc-500 dark:bg-white/10 dark:text-zinc-400">
-                  {{ transportTextOf(server) }}
+                  {{ mcpTransportText(server) }}
                 </span>
               </div>
               <div class="mono muted truncate text-[11px]">{{ metaOf(server) }}</div>
@@ -301,5 +286,14 @@ function restoreToLive() {
         </div>
       </div>
     </div>
+
+    <McpSyncDialog
+      :show="syncDialogOpen"
+      :preview="syncPreview"
+      :preview-error="previewError"
+      :busy="applying"
+      @update:show="syncDialogOpen = $event"
+      @apply="onApply"
+    />
   </section>
 </template>

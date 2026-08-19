@@ -772,6 +772,12 @@ body.drag-active * {
   box-shadow: 0 0 0 1px var(--panel-ring);
 }
 
+/* 抬升表面（弹窗卡片等近白底）上的列表行：--panel-ring 发丝线在那里几乎不可见，
+   换用更实的 --panel-border 勾出边界；主列表页（灰底）不需要 */
+.apple-list-row--outlined {
+  box-shadow: 0 0 0 1px var(--panel-border);
+}
+
 .apple-icon-button {
   display: grid;
   width: var(--icon-button-size);

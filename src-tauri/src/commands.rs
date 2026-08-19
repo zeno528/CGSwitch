@@ -6,8 +6,8 @@ use crate::auth::codex_oauth::{
 };
 use crate::error::{app_err, AppResult};
 use crate::models::{
-    AppState, CodexAppStatus, McpServerSpec, ProfileBalanceInfo, ProfileDetail, ProfileSummary,
-    Settings,
+    AppState, CodexAppStatus, McpServerSpec, McpSyncPreview, ProfileBalanceInfo, ProfileDetail,
+    ProfileSummary, Settings,
 };
 use crate::services::{AppContext, DatabaseBackupInfo, ProfileBalance, ProfileConnectionResult};
 
@@ -448,6 +448,12 @@ pub fn restore_mcp_from_database(state: State<'_, AppContext>) -> AppResult<usiz
 #[tauri::command]
 pub fn import_mcp_from_live(state: State<'_, AppContext>) -> AppResult<usize> {
     state.import_mcp_from_live()
+}
+
+/// 对比 live config.toml 与数据库镜像的 MCP 差异（只读不写），供同步前人工裁决。
+#[tauri::command]
+pub fn mcp_sync_preview(state: State<'_, AppContext>) -> AppResult<McpSyncPreview> {
+    state.mcp_sync_preview()
 }
 
 #[tauri::command]

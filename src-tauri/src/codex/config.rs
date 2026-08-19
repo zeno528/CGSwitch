@@ -385,10 +385,65 @@ pub fn merge_mcp_section(raw: &str, live: &DocumentMut) -> String {
     match parse_document(raw) {
         Ok(mut incoming) => {
             replace_mcp_section(&mut incoming, live);
-            incoming.to_string()
+            consolidate_mcp_blocks(&incoming.to_string())
         }
         Err(_) => raw.to_string(),
     }
+}
+
+/// 把渲染后的 TOML 文本中散落各处的 [mcp_servers.*] 块收拢成一个连续块，
+/// 锚定在原本最后一个 mcp 块的位置。Codex 官方应用自己的写入器会把各段
+/// 散插在 plugins / features 等表之间；toml_edit 按原始字节位置渲染、忠实
+/// 保留这种散落，所以我们每次落盘 config.toml 前都做一次文本级整理：
+/// 块内容（注释、空行、键值）逐字保留，只搬动块的位置，让 mcp 段模块化。
+pub fn consolidate_mcp_blocks(text: &str) -> String {
+    // 按表头行切块：(\[\[ 开头的数组表也算)。首个表头之前的根级键值归入无名首块
+    let mut blocks: Vec<(bool, Vec<&str>)> = Vec::new();
+    for line in text.lines() {
+        let is_header = line.starts_with('[')
+            && line[1..].starts_with(|c: char| {
+                c.is_ascii_alphanumeric() || c == '_' || c == '"' || c == '\''
+            });
+        if is_header {
+            let is_mcp = line.starts_with("[mcp_servers.") || line == "[mcp_servers]";
+            blocks.push((is_mcp, Vec::new()));
+        }
+        match blocks.last_mut() {
+            Some((_, lines)) => lines.push(line),
+            None => blocks.push((false, vec![line])),
+        }
+    }
+    let mcp_count = blocks.iter().filter(|(is_mcp, _)| *is_mcp).count();
+    // 没有 mcp，或只有一块（已连续）：无需整理
+    if mcp_count <= 1 {
+        return text.to_string();
+    }
+    // 锚点 = 最后一个 mcp 块的位置：收拢后 mcp 连续块落在这里，
+    // 之前的非 mcp 表（如全部 plugins）自然连成一组，与 cc-switch 的模块化布局一致
+    let anchor = blocks
+        .iter()
+        .rposition(|(is_mcp, _)| *is_mcp)
+        .expect("mcp_count > 1 必有锚点");
+    let mut mcp_lines: Vec<&str> = Vec::new();
+    for (is_mcp, lines) in &blocks {
+        if *is_mcp {
+            mcp_lines.extend(lines.iter().copied());
+        }
+    }
+    let mut out: Vec<&str> = Vec::new();
+    for (index, (is_mcp, lines)) in blocks.iter().enumerate() {
+        if index == anchor {
+            out.extend(mcp_lines.iter().copied());
+        }
+        if !*is_mcp {
+            out.extend(lines.iter().copied());
+        }
+    }
+    let mut result = out.join("\n");
+    if text.ends_with('\n') {
+        result.push('\n');
+    }
+    result
 }
 
 /// 提取 [mcp_servers.*] 每个服务器的独立片段（含 [mcp_servers.<名称>] 表头、注释、子表，
@@ -414,6 +469,15 @@ pub fn mcp_server_fragments_from_document(document: &DocumentMut) -> Vec<(String
             Some((name.to_string(), piece.to_string()))
         })
         .collect()
+}
+
+/// 把单个镜像片段回解成建模配置（片段由本模块生成，正常必然可解析；
+/// 解析失败返回 None，调用方按整段文本差异展示）。
+pub fn spec_from_fragment(name: &str, fragment: &str) -> Option<McpServerSpec> {
+    let document = parse_document(fragment).ok()?;
+    mcp_servers_from_document(&document)
+        .into_iter()
+        .find(|spec| spec.name == name)
 }
 
 /// 用片段按序重建 [mcp_servers] 段（数据库备份恢复写回 live 用）；解析失败的片段跳过。
@@ -991,5 +1055,50 @@ url = "https://mcp.tavily.com/mcp"
         assert!(text.contains("[mcp_servers.github.env]"), "{text}");
         assert!(text.contains("[mcp_servers.tavily]"), "{text}");
         assert!(!text.contains("stale"), "{text}");
+    }
+
+    #[test]
+    fn consolidate_mcp_blocks_gathers_scattered_sections() {
+        // Codex 官方应用写入器留下的布局：mcp 子表散插在 plugins / features 等表之间
+        let scattered = concat!(
+            "model = \"gpt-5.6\"\n\n",
+            "[plugins.a]\nenabled = true\n\n",
+            "[mcp_servers.one]\nurl = \"https://one\"\n\n",
+            "[plugins.b]\nenabled = true\n\n",
+            "[features]\njs = false\n\n",
+            "[mcp_servers.one.env]\n# 手动维护\nTOKEN = \"t\"\n\n",
+            "[mcp_servers.two]\ncommand = \"x\"\n\n",
+            "[shell_environment_policy.set]\nK = \"v\"\n",
+        );
+        let text = consolidate_mcp_blocks(scattered);
+        let pos = |needle: &str| {
+            text.find(needle)
+                .unwrap_or_else(|| panic!("缺少 {needle}：\n{text}"))
+        };
+        // mcp 收拢为连续块：one → one.env → two 之间没有其他表
+        assert!(pos("[mcp_servers.one]") < pos("[mcp_servers.one.env]"));
+        assert!(pos("[mcp_servers.one.env]") < pos("[mcp_servers.two]"));
+        assert!(
+            !text[pos("[mcp_servers.one]")..pos("[mcp_servers.two]")].contains("[plugins."),
+            "{text}"
+        );
+        // 锚定在最后一个 mcp 块的位置：plugins 收在 mcp 之前，其余表保持原相对顺序
+        assert!(pos("[plugins.a]") < pos("[plugins.b]"));
+        assert!(pos("[plugins.b]") < pos("[mcp_servers.one]"));
+        assert!(pos("[mcp_servers.two]") < pos("[shell_environment_policy.set]"));
+        // 注释与键值逐字保留，根级键值仍在最前
+        assert!(text.contains("# 手动维护"), "{text}");
+        assert!(text.contains("TOKEN = \"t\""), "{text}");
+        assert!(pos("model =") < pos("[plugins.a]"));
+    }
+
+    #[test]
+    fn consolidate_mcp_blocks_keeps_tidy_text_untouched() {
+        // 已连续的多块 mcp 与没有 mcp 的文本：逐字节原样返回
+        let tidy =
+            "[a]\nx = 1\n\n[mcp_servers.one]\nurl = \"u\"\n\n[mcp_servers.two]\nurl = \"v\"\n";
+        assert_eq!(consolidate_mcp_blocks(tidy), tidy);
+        let no_mcp = "[a]\nx = 1\n";
+        assert_eq!(consolidate_mcp_blocks(no_mcp), no_mcp);
     }
 }
