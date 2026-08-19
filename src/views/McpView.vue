@@ -6,7 +6,14 @@ import McpIcon from "../components/McpIcon.vue";
 import { api } from "../api";
 import type { McpServerSpec } from "../types";
 import { useWindowActivation } from "../composables/useWindowActivation";
-import { PhCircleDashed, PhGlobe, PhPlus, PhTerminalWindow } from "@phosphor-icons/vue";
+import {
+  PhCircleDashed,
+  PhDownloadSimple,
+  PhGlobe,
+  PhPlus,
+  PhTerminalWindow,
+  PhUploadSimple,
+} from "@phosphor-icons/vue";
 
 // 编辑页按需加载：只在打开编辑/新建时拉取
 const McpEdit = defineAsyncComponent(() => import("../components/McpEdit.vue"));
@@ -21,6 +28,7 @@ const loaded = ref(false);
 const editingServer = ref<McpServerSpec | null>(null);
 const creatingServer = ref(false);
 const togglingName = ref("");
+const syncing = ref(false);
 
 watch(
   () => props.navReset,
@@ -130,6 +138,54 @@ function removeServer(server: McpServerSpec) {
     },
   });
 }
+
+// 显式双向同步：配置文件 → 数据库（强制对齐，含清空已移除条目）
+function importFromLive() {
+  if (syncing.value) return;
+  dialog.warning({
+    title: "从配置文件导入数据库",
+    content:
+      "把当前 ~/.codex/config.toml 里的 MCP 段强制镜像进数据库（覆盖现有镜像，live 里没有的条目会从数据库清掉）。",
+    positiveText: "导入",
+    negativeText: "取消",
+    onPositiveClick: async () => {
+      syncing.value = true;
+      try {
+        const count = await api.importMcpFromLive();
+        message.success(`已从配置文件导入 ${count} 台服务器到数据库`);
+        void refresh();
+      } catch (error) {
+        message.error(String(error));
+      } finally {
+        syncing.value = false;
+      }
+    },
+  });
+}
+
+// 显式双向同步：数据库 → 配置文件（配置损坏/段丢失后的恢复）
+function restoreToLive() {
+  if (syncing.value) return;
+  dialog.warning({
+    title: "从数据库恢复到配置文件",
+    content:
+      "把数据库里的 MCP 镜像写回 ~/.codex/config.toml（覆盖现有 MCP 段，其余内容不动；配置文件无法解析时将按镜像重建，写前自动备份原文件）。",
+    positiveText: "恢复",
+    negativeText: "取消",
+    onPositiveClick: async () => {
+      syncing.value = true;
+      try {
+        const count = await api.restoreMcpFromDatabase();
+        message.success(`已恢复 ${count} 台服务器到配置文件`);
+        void refresh();
+      } catch (error) {
+        message.error(String(error));
+      } finally {
+        syncing.value = false;
+      }
+    },
+  });
+}
 </script>
 
 <template>
@@ -147,6 +203,18 @@ function removeServer(server: McpServerSpec) {
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        <n-button quaternary :disabled="syncing" title="把当前配置文件里的 MCP 段强制镜像进数据库" @click="importFromLive">
+          <template #icon>
+            <PhDownloadSimple class="h-4 w-4" weight="bold" aria-hidden="true" />
+          </template>
+          从配置导入
+        </n-button>
+        <n-button quaternary :disabled="syncing" title="把数据库里的 MCP 镜像写回配置文件（配置损坏/段丢失后恢复）" @click="restoreToLive">
+          <template #icon>
+            <PhUploadSimple class="h-4 w-4" weight="bold" aria-hidden="true" />
+          </template>
+          恢复到配置
+        </n-button>
         <n-button type="primary" @click="creatingServer = true">
           <template #icon>
             <PhPlus class="h-4 w-4" weight="bold" aria-hidden="true" />
@@ -156,7 +224,9 @@ function removeServer(server: McpServerSpec) {
       </div>
     </header>
 
-    <p v-if="loadError" class="muted mt-4 text-sm">{{ loadError }}</p>
+    <p v-if="loadError" class="muted mt-4 text-sm">
+      {{ loadError }}<span v-if="loaded">配置文件无法解析时，可点「恢复到配置」用数据库镜像修复。</span>
+    </p>
 
     <div class="mt-[var(--gap-page)]">
       <n-empty

@@ -1360,14 +1360,27 @@ impl AppContext {
         }
     }
 
-    /// live 是操作事实源；把 MCP 段无损片段镜像进数据库，让备份/恢复能携带。
-    /// 有差异才写库，读路径不产生无谓事务。
-    fn mirror_mcp_to_database(&self, document: &toml_edit::DocumentMut) -> AppResult<()> {
-        let fragments = codex_config::mcp_server_fragments_from_document(document);
+    /// 强制替换数据库镜像（应用自身的管理操作走这里，允许清空到零）。
+    fn replace_mcp_mirror(&self, fragments: &[(String, String)]) -> AppResult<()> {
         if self.database.mcp_server_fragments()? != fragments {
             self.database
-                .replace_mcp_server_fragments(&fragments, &now_ms().to_string())?;
+                .replace_mcp_server_fragments(fragments, &now_ms().to_string())?;
         }
+        Ok(())
+    }
+
+    /// 把数据库镜像的 MCP 段写进 live config.toml。
+    /// live 解析失败（损坏/被重置）时从镜像重建整个文件；写前照常自动备份原文件。
+    fn write_mcp_section_to_live(&self, fragments: &[(String, String)]) -> AppResult<()> {
+        let live_text = self.read_live_config()?;
+        let mut document = match codex_config::parse_document(&live_text) {
+            Ok(document) => document,
+            Err(_) => toml_edit::DocumentMut::new(),
+        };
+        codex_config::replace_mcp_section_from_fragments(&mut document, fragments);
+        let config_path = self.paths.codex_config();
+        backup_file(&config_path, &self.paths.config_backup, "config")?;
+        atomic_write(&config_path, document.to_string().as_bytes())?;
         Ok(())
     }
 
@@ -1377,19 +1390,49 @@ impl AppContext {
         if fragments.is_empty() {
             return Ok(());
         }
-        let mut document = codex_config::parse_document(&self.read_live_config()?)?;
-        codex_config::replace_mcp_section_from_fragments(&mut document, &fragments);
-        let config_path = self.paths.codex_config();
-        backup_file(&config_path, &self.paths.config_backup, "config")?;
-        atomic_write(&config_path, document.to_string().as_bytes())?;
-        Ok(())
+        self.write_mcp_section_to_live(&fragments)
     }
 
     /// 读取 live config.toml 中的全部 MCP 服务器（全局唯一事实源，不随供应商切换）。
     pub fn list_mcp_servers(&self) -> AppResult<Vec<McpServerSpec>> {
         let document = codex_config::parse_document(&self.read_live_config()?)?;
-        self.mirror_mcp_to_database(&document)?;
+        // 吸收外部改动（codex mcp add 等）进数据库；但 live 段整个消失时保留数据库
+        // 最后一份非空镜像作为恢复点——整段消失多半是配置被重置/误删，而非逐台卸载
+        let fragments = codex_config::mcp_server_fragments_from_document(&document);
+        if !fragments.is_empty() {
+            self.replace_mcp_mirror(&fragments)?;
+        }
         Ok(codex_config::mcp_servers_from_document(&document))
+    }
+
+    /// 用户显式操作：数据库镜像写回 live config.toml（配置损坏/段丢失后的恢复）。
+    /// 返回恢复的服务器数量。
+    pub fn restore_mcp_from_database(&self) -> AppResult<usize> {
+        let _guard = self
+            .operation
+            .lock()
+            .map_err(|_| app_err!("操作锁已损坏"))?;
+        let fragments = self.database.mcp_server_fragments()?;
+        if fragments.is_empty() {
+            return Err(app_err!("数据库中没有 MCP 镜像可恢复"));
+        }
+        let count = fragments.len();
+        self.write_mcp_section_to_live(&fragments)?;
+        Ok(count)
+    }
+
+    /// 用户显式操作：把 live 当前 MCP 段强制导入数据库（含清空镜像以对齐 live）。
+    /// 返回导入的服务器数量。
+    pub fn import_mcp_from_live(&self) -> AppResult<usize> {
+        let _guard = self
+            .operation
+            .lock()
+            .map_err(|_| app_err!("操作锁已损坏"))?;
+        let document = codex_config::parse_document(&self.read_live_config()?)?;
+        let fragments = codex_config::mcp_server_fragments_from_document(&document);
+        let count = fragments.len();
+        self.replace_mcp_mirror(&fragments)?;
+        Ok(count)
     }
 
     /// 创建表单预填用：当前全局 MCP 段的 TOML 文本（live 无 MCP 返回空串）。
@@ -1472,7 +1515,7 @@ impl AppContext {
         let config_path = self.paths.codex_config();
         backup_file(&config_path, &self.paths.config_backup, "config")?;
         atomic_write(&config_path, document.to_string().as_bytes())?;
-        self.mirror_mcp_to_database(&document)?;
+        self.replace_mcp_mirror(&codex_config::mcp_server_fragments_from_document(&document))?;
         Ok(())
     }
 
@@ -1487,7 +1530,7 @@ impl AppContext {
         let config_path = self.paths.codex_config();
         backup_file(&config_path, &self.paths.config_backup, "config")?;
         atomic_write(&config_path, document.to_string().as_bytes())?;
-        self.mirror_mcp_to_database(&document)?;
+        self.replace_mcp_mirror(&codex_config::mcp_server_fragments_from_document(&document))?;
         Ok(())
     }
 
@@ -3134,6 +3177,95 @@ CODEX_HOME = "C:\\.codex"
         let detail = context.get_profile(&builtin.id).unwrap();
         let stored = detail.raw_config.expect("内置快照应有 raw_config");
         assert!(stored.contains("mcp_servers.tavily"), "{stored}");
+    }
+
+    #[test]
+    fn mcp_absorb_keeps_database_when_live_section_lost() {
+        let (context, _home) =
+            mcp_test_context("[mcp_servers.tavily]\nurl = \"https://mcp.tavily.com/mcp\"\n");
+        context.list_mcp_servers().unwrap();
+        assert_eq!(context.database.mcp_server_fragments().unwrap().len(), 1);
+
+        // live 段整个消失（配置被重置/误删）：数据库保留最后一份非空镜像作为恢复点
+        std::fs::write(context.paths.codex_config(), "model = \"gpt-5.6\"\n").unwrap();
+        let servers = context.list_mcp_servers().unwrap();
+        assert!(servers.is_empty());
+        assert_eq!(
+            context.database.mcp_server_fragments().unwrap().len(),
+            1,
+            "整段消失不应清空数据库镜像"
+        );
+
+        // 一键恢复：镜像写回 live
+        let count = context.restore_mcp_from_database().unwrap();
+        assert_eq!(count, 1);
+        let config = read_config_text(&context);
+        assert!(config.contains("mcp_servers.tavily"), "{config}");
+    }
+
+    #[test]
+    fn mcp_delete_via_app_clears_database_mirror() {
+        let (context, _home) =
+            mcp_test_context("[mcp_servers.tavily]\nurl = \"https://mcp.tavily.com/mcp\"\n");
+
+        // 应用内的删除是明确意图：live 与数据库镜像一起清空
+        context.delete_mcp_server("tavily").unwrap();
+        assert!(context.database.mcp_server_fragments().unwrap().is_empty());
+
+        // 外部逐台移除同理：live 非空时以 live 为准镜像
+        context
+            .save_mcp_server(
+                None,
+                McpServerSpec {
+                    name: "a".into(),
+                    url: Some("https://a/mcp".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        context
+            .save_mcp_server(
+                None,
+                McpServerSpec {
+                    name: "b".into(),
+                    url: Some("https://b/mcp".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        context.delete_mcp_server("a").unwrap();
+        let fragments = context.database.mcp_server_fragments().unwrap();
+        assert_eq!(fragments.len(), 1);
+        assert_eq!(fragments[0].0, "b");
+    }
+
+    #[test]
+    fn mcp_import_from_live_forces_mirror() {
+        let (context, _home) =
+            mcp_test_context("[mcp_servers.tavily]\nurl = \"https://mcp.tavily.com/mcp\"\n");
+        context.list_mcp_servers().unwrap();
+
+        // 外部清空 live 后，显式「从配置导入」让数据库接受空态（放弃保留的镜像）
+        std::fs::write(context.paths.codex_config(), "model = \"gpt-5.6\"\n").unwrap();
+        let count = context.import_mcp_from_live().unwrap();
+        assert_eq!(count, 0);
+        assert!(context.database.mcp_server_fragments().unwrap().is_empty());
+        assert!(context.restore_mcp_from_database().is_err());
+    }
+
+    #[test]
+    fn restore_mcp_rebuilds_corrupt_config() {
+        let (context, _home) =
+            mcp_test_context("[mcp_servers.tavily]\nurl = \"https://mcp.tavily.com/mcp\"\n");
+        context.list_mcp_servers().unwrap();
+
+        // 配置文件彻底损坏（无法解析）：恢复按镜像重建整个文件，原文件已自动备份
+        std::fs::write(context.paths.codex_config(), "not [ valid").unwrap();
+        let count = context.restore_mcp_from_database().unwrap();
+        assert_eq!(count, 1);
+        let config = read_config_text(&context);
+        assert!(config.contains("mcp_servers.tavily"), "{config}");
+        codex_config::parse_document(&config).unwrap();
     }
 
     #[test]

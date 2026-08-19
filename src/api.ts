@@ -615,6 +615,10 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       }
       return lines.join("\n") as T;
     }
+    case "restore_mcp_from_database":
+      return webMcpServers.length as T;
+    case "import_mcp_from_live":
+      return webMcpServers.length as T;
     case "save_mcp_server": {
       const spec = args?.spec as McpServerSpec;
       const original = typeof args?.originalName === "string" ? args.originalName : null;
@@ -706,6 +710,10 @@ export const api = {
   listMcpServers: () => call<McpServerSpec[]>("list_mcp_servers"),
   // 创建表单预填用：当前全局 MCP 段的 TOML 文本（无 MCP 返回空串）
   getMcpSectionToml: () => call<string>("get_mcp_section_toml"),
+  // 显式恢复：数据库镜像写回 live config.toml，返回恢复数量
+  restoreMcpFromDatabase: () => call<number>("restore_mcp_from_database"),
+  // 显式导入：live 当前 MCP 段强制镜像进数据库，返回导入数量
+  importMcpFromLive: () => call<number>("import_mcp_from_live"),
   saveMcpServer: (originalName: string | null, spec: McpServerSpec) =>
     call<void>("save_mcp_server", { originalName, spec }),
   deleteMcpServer: (name: string) => call<void>("delete_mcp_server", { name }),

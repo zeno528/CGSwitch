@@ -433,6 +433,18 @@ pub fn get_mcp_section_toml(state: State<'_, AppContext>) -> AppResult<String> {
     state.mcp_section_toml()
 }
 
+/// 用户显式恢复：数据库镜像写回 live config.toml，返回恢复的服务器数量。
+#[tauri::command]
+pub fn restore_mcp_from_database(state: State<'_, AppContext>) -> AppResult<usize> {
+    state.restore_mcp_from_database()
+}
+
+/// 用户显式导入：live 当前 MCP 段强制镜像进数据库，返回导入的服务器数量。
+#[tauri::command]
+pub fn import_mcp_from_live(state: State<'_, AppContext>) -> AppResult<usize> {
+    state.import_mcp_from_live()
+}
+
 #[tauri::command]
 pub fn set_window_theme(dark: bool, app: AppHandle) -> AppResult<()> {
     #[cfg(not(windows))]
