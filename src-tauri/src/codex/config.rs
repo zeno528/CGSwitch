@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::Serialize;
-use toml_edit::{DocumentMut, Item, Table, Value};
+use toml_edit::{Decor, DocumentMut, Item, Table, Value};
 
 use crate::error::{app_err, AppResult};
 use crate::models::ProfilePayload;
@@ -100,7 +100,11 @@ pub fn capture_from_document(document: &DocumentMut) -> AppResult<ProfilePayload
     let mut model_values = BTreeMap::new();
     for (key, item) in document.as_table().iter() {
         if is_model_key(key) && item.is_value() {
-            model_values.insert(key.to_string(), item.to_string());
+            // 清掉源码装饰（前导空格、行内注释等）只留纯 "value" 形式：
+            // apply 侧 parse_value 依赖它 re-parse，前端显示依赖 stripTomlQuotes 剥引号
+            let mut value = item.as_value().expect("is_value 已检查").clone();
+            *value.decor_mut() = Decor::default();
+            model_values.insert(key.to_string(), value.to_string());
         }
     }
 
@@ -419,6 +423,25 @@ name = "Old"
                 .all(|d| d.from < source.len() && d.to <= source.len()),
             "位置应落在文档内：{diagnostics:?}"
         );
+    }
+
+    #[test]
+    fn capture_model_values_strips_decor_and_roundtrips() {
+        // 行内注释/前导空格属于源码装饰，不能进入 model_values（apply re-parse 与前端显示都会被污染）
+        let source = r#"model = "glm-5.3" # 主模型
+model_catalog_json = "~/.codex/a.json" # 目录
+model_reasoning_effort = "high""#;
+        let payload = capture_from_document(&parse_document(source).unwrap()).unwrap();
+        assert_eq!(
+            payload.model_values.get("model_catalog_json").unwrap(),
+            "\"~/.codex/a.json\""
+        );
+        assert_eq!(payload.model_values.get("model").unwrap(), "\"glm-5.3\"");
+
+        // round-trip：capture 的值必须能被 parse_value 重新解析（apply 回写路径）
+        for raw in payload.model_values.values() {
+            parse_value(raw).unwrap_or_else(|error| panic!("{} 无法 re-parse: {error}", raw));
+        }
     }
 
     #[test]

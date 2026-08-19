@@ -13,7 +13,6 @@ import {
   customCatalogTemplate,
   customConfigTemplate,
 } from "../presets";
-import { stripTomlQuotes } from "../utils";
 import type {
   EditorDiagnosticSummary,
   ManagedAccount,
@@ -279,15 +278,17 @@ function renderAuthOptionLabel(option: SelectOption) {
 // 编辑态所有供应商都显示认证文件组件：第三方可保存自己的 auth.json 随应用写入
 const hasAuthTab = computed(() => !creating.value);
 
-const catalogPath = computed(() => {
-  const raw = creating.value
-    ? selectedPreset.value?.model_values.model_catalog_json
-    : detail.value?.model_values.model_catalog_json;
-  return stripTomlQuotes(raw);
+// 模型目录引用随草稿 config.toml 实时联动（readProviderFields 同款模式）：
+// 贴上路径标签即出现，删掉即消失，避免已删引用的幽灵 tab 把目录内容存成孤儿文件
+const liveCatalogPath = computed(() => {
+  const m = /^\s*model_catalog_json\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/m.exec(
+    configText.value,
+  );
+  return m ? (m[1] ?? m[2] ?? m[3] ?? "") : "";
 });
 
 // 标签随实际文件名显示（models.json / custom-catalog.json 等），无路径数据时回退通用名
-const catalogFileName = computed(() => catalogPath.value.split(/[\\/]/).pop() || "models.json");
+const catalogFileName = computed(() => liveCatalogPath.value.split(/[\\/]/).pop() || "models.json");
 
 const tabs = computed(() => {
   if (creating.value) {
@@ -295,10 +296,11 @@ const tabs = computed(() => {
       { id: "config", label: "config.toml" },
     ];
     if (isCustom.value) {
-      list.push({ id: "models", label: catalogFileName.value, title: catalogPath.value });
+      if (liveCatalogPath.value)
+        list.push({ id: "models", label: catalogFileName.value, title: liveCatalogPath.value });
       list.push({ id: "auth", label: "auth.json" });
-    } else if (selectedPreset.value?.model_values.model_catalog_json) {
-      list.push({ id: "models", label: catalogFileName.value, title: catalogPath.value });
+    } else if (liveCatalogPath.value) {
+      list.push({ id: "models", label: catalogFileName.value, title: liveCatalogPath.value });
     }
     return list;
   }
@@ -306,8 +308,8 @@ const tabs = computed(() => {
     { id: "config", label: "config.toml" },
   ];
   if (hasAuthTab.value) list.push({ id: "auth", label: "auth.json" });
-  if (detail.value?.model_values.model_catalog_json)
-    list.push({ id: "models", label: catalogFileName.value, title: catalogPath.value });
+  if (liveCatalogPath.value)
+    list.push({ id: "models", label: catalogFileName.value, title: liveCatalogPath.value });
   return list;
 });
 
@@ -646,7 +648,7 @@ async function save() {
           baseUrl.value.trim() || undefined,
           apiKey.value.trim() || undefined,
           adminUrl.value.trim() || undefined,
-          catalogText.value.trim() ? catalogText.value : null,
+          liveCatalogPath.value && catalogText.value.trim() ? catalogText.value : null,
           authText.value.trim() ? authText.value : null,
         );
         message.success("自定义供应商已添加");
@@ -662,7 +664,7 @@ async function save() {
           await api.updateProfileConfig(
             created.id,
             configText.value,
-            selectedPreset.value?.model_values.model_catalog_json ? catalogText.value || null : null,
+            liveCatalogPath.value ? catalogText.value || null : null,
             null,
           );
         }
@@ -681,9 +683,7 @@ async function save() {
       await api.updateProfileConfig(
         props.profile.id,
         configText.value,
-        detail.value?.model_values.model_catalog_json && catalogDirty.value
-          ? catalogText.value || null
-          : null,
+        liveCatalogPath.value && catalogDirty.value ? catalogText.value || null : null,
         hasAuthTab.value && authDirty.value ? authText.value : null,
       );
       if (isOfficial.value) {
