@@ -5,8 +5,6 @@ import {
   NButton,
   NDivider,
   NInput,
-  NList,
-  NListItem,
   NModal,
   NSelect,
   NSwitch,
@@ -21,6 +19,7 @@ import type { AppState, DatabaseBackupInfo, PathInfo, Settings } from "../types"
 import {
   PhArrowLeft,
   PhArrowClockwise,
+  PhCircleNotch,
   PhDatabase,
   PhDownloadSimple,
   PhFloppyDisk,
@@ -112,7 +111,6 @@ const backupKeepCountOptions = [3, 5, 10, 15, 20, 30].map((value) => ({
   label: `${value} 个`,
   value,
 }));
-
 async function loadBackups() {
   try {
     backups.value = await api.listDatabaseBackups();
@@ -281,7 +279,7 @@ function formatTimestamp(seconds: number) {
 }
 
 function openBackupFolder() {
-  const item = props.state.paths.find((path) => path.label === "数据库备份");
+  const item = props.state.paths.find((path) => path.label === "备份目录");
   if (!item) {
     message.warning("找不到备份目录");
     return;
@@ -658,24 +656,30 @@ async function openPath(item: PathInfo) {
       </div>
       <n-divider :style="{ marginTop: '16px' }" />
       <h2 class="setting-title">数据与路径</h2>
-      <p class="setting-description mt-2">应用数据与配置文件位置。</p>
-      <n-divider />
-      <n-list class="bg-transparent" :show-divider="true">
-        <n-list-item v-for="item in state.paths" :key="item.label">
-          <div class="flex items-center justify-between gap-4">
-            <div class="min-w-0">
-              <div class="setting-title">{{ item.label }}</div>
-              <div class="mono muted mt-1 break-all text-xs">{{ item.path }}</div>
-            </div>
-            <n-button size="small" secondary :loading="openingPath === item.path" :disabled="Boolean(openingPath)" title="在资源管理器中打开" @click="openPath(item)">
-              <template #icon>
-                <PhFolderOpen class="h-4 w-4" weight="bold" aria-hidden="true" />
-              </template>
-              打开
-            </n-button>
+      <p class="setting-description mt-1.5">常用数据位置，点击文件夹图标即可打开。</p>
+      <div class="mt-4 grid gap-2 sm:grid-cols-3">
+        <div
+          v-for="item in state.paths"
+          :key="item.label"
+          class="flex min-w-0 items-center justify-between gap-3 rounded-[var(--radius-control-sm)] border border-[var(--panel-ring)] px-3 py-2.5"
+        >
+          <div class="min-w-0">
+            <div class="text-sm font-medium">{{ item.label }}</div>
+            <div class="mono muted mt-0.5 truncate text-[11px]" :title="item.path">{{ item.path }}</div>
           </div>
-        </n-list-item>
-      </n-list>
+          <button
+            type="button"
+            class="apple-icon-button shrink-0 text-zinc-500 hover:bg-[var(--sidebar-bg)] hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="Boolean(openingPath)"
+            :title="`打开${item.label}`"
+            :aria-label="`打开${item.label}`"
+            @click="openPath(item)"
+          >
+            <PhCircleNotch v-if="openingPath === item.path" class="h-4 w-4 animate-spin" weight="bold" aria-hidden="true" />
+            <PhFolderOpen v-else class="h-4 w-4" weight="bold" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
     </div>
 
     <n-modal

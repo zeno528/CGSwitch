@@ -107,6 +107,16 @@ body {
   line-height: 1.6;
 }
 
+/* 输入框占位提示统一用微软雅黑，避免 Windows 中文字体回退到宋体；不改变实际输入内容的字体 */
+input::placeholder,
+textarea::placeholder {
+  font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+
+.n-input .n-input__placeholder {
+  font-family: "Microsoft YaHei", "Segoe UI", sans-serif !important;
+}
+
 :root.dark body {
   color: #ffffff;
 }

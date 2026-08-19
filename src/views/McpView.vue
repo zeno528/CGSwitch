@@ -263,7 +263,7 @@ function restoreToLive() {
             </span>
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <span class="truncate text-xs font-semibold">{{ server.name }}</span>
+                <span class="truncate text-[var(--font-size-base)] font-semibold">{{ server.name }}</span>
                 <span class="shrink-0 rounded-md bg-black/5 px-1.5 py-px text-[10px] font-medium tracking-wide text-zinc-500 dark:bg-white/10 dark:text-zinc-400">
                   {{ transportTextOf(server) }}
                 </span>

@@ -70,11 +70,9 @@ const webProfiles: ProfileSummary[] = [
 ];
 
 const webPaths = [
-  { label: "数据库", path: "C:\\Users\\<user>\\.cgswitch\\cgswitch.db" },
-  { label: "设置文件", path: "C:\\Users\\<user>\\.cgswitch\\settings.json" },
+  { label: "应用数据目录", path: "C:\\Users\\<user>\\.cgswitch" },
   { label: "Codex 配置", path: "C:\\Users\\<user>\\.codex\\config.toml" },
-  { label: "配置备份", path: "C:\\Users\\<user>\\.cgswitch\\backups\\config" },
-  { label: "数据库备份", path: "C:\\Users\\<user>\\.cgswitch\\backups\\database" },
+  { label: "备份目录", path: "C:\\Users\\<user>\\.cgswitch\\backups" },
 ];
 
 function patchContextOverrideForWeb(text: string, enabled: boolean): string {

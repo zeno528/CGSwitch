@@ -2050,24 +2050,16 @@ impl AppContext {
     fn path_info(&self) -> Vec<PathInfo> {
         vec![
             PathInfo {
-                label: "数据库".into(),
-                path: self.paths.database.display().to_string(),
-            },
-            PathInfo {
-                label: "设置文件".into(),
-                path: self.paths.settings.display().to_string(),
+                label: "应用数据目录".into(),
+                path: self.paths.root.display().to_string(),
             },
             PathInfo {
                 label: "Codex 配置".into(),
                 path: self.paths.codex_config().display().to_string(),
             },
             PathInfo {
-                label: "配置备份".into(),
-                path: self.paths.config_backup.display().to_string(),
-            },
-            PathInfo {
-                label: "数据库备份".into(),
-                path: self.paths.database_backup.display().to_string(),
+                label: "备份目录".into(),
+                path: self.paths.root.join("backups").display().to_string(),
             },
         ]
     }
