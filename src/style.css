@@ -471,25 +471,27 @@ body.drag-active * {
 }
 
 /* 页面顶部返回栏：全宽出血越过 main 的 px-8、负上边距顶到窗口顶部，
-   设置页 / 编辑供应商 / 选择图标 共用同一布局定义 */
+   设置页 / 编辑供应商 / 选择图标 共用同一布局定义。
+   统一最小高度：各页左侧内容高度不同（状态胶囊 28 / 返回按钮 32 / 图标座 36），
+   固定后右侧操作按钮在所有页面落在同一水平线上 */
 .apple-page-bar {
   align-items: center;
   background: var(--app-bg);
   display: flex;
   margin-inline: -2rem;
   margin-top: -1rem;
+  min-height: 3.25rem;
   /* 内容区中心对齐侧边栏 wordmark（实测差 6px），按钮仍在容器内垂直居中 */
   padding: 0.875rem 2rem 0.125rem;
 }
 
-/* 新建/编辑供应商页标题栏：底部留白 12px，避免与下方内容贴太近；
-   设置页保持 2px 不走这条路 */
+/* 标题栏与下方内容的间距走外边距：不再用内边距，避免压缩统一高度的垂直居中空间 */
 .apple-page-bar--roomy {
-  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
 .profiles-page-bar {
-  padding-bottom: 0.625rem;
+  margin-bottom: 0.625rem;
 }
 
 /* 表单行内小按钮（测试连通 / 获取 API 密钥 等同款样式全局复用） */
