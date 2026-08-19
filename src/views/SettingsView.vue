@@ -536,7 +536,7 @@ async function openPath(item: PathInfo) {
         </button>
       </div>
 
-      <div class="mt-[var(--gap-section)] rounded-2xl bg-[color-mix(in_srgb,var(--sidebar-bg)_30%,var(--panel-bg))] p-3.5 shadow-[0_0_0_1px_var(--panel-ring)]">
+      <div class="mt-[var(--gap-section)] rounded-[var(--radius-card)] bg-[color-mix(in_srgb,var(--sidebar-bg)_30%,var(--panel-bg))] p-3.5 shadow-[0_0_0_1px_var(--panel-ring)]">
         <div class="text-[15px] font-semibold tracking-tight">自动备份</div>
         <div class="mt-3 grid gap-3 sm:grid-cols-2">
           <div>

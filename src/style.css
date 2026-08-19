@@ -34,6 +34,8 @@
   --toolbar-height: 3.625rem;
   /* 窗口标题栏高度：品牌区与窗口控制按钮共用同一垂直中心 */
   --window-chrome-height: 2.5rem;
+  /* 卡片、高亮分区和配置编辑器容器统一圆角 */
+  --radius-card: 1rem;
   /* 右侧滚动条占位宽度，启动时由 JS 实测写入，保证左右视觉间距完全一致 */
   --scrollbar-size: 0px;
 }
@@ -96,6 +98,7 @@ body {
 
 .panel {
   background: var(--panel-bg);
+  border-radius: var(--radius-card);
   box-shadow: 0 0 0 1px var(--panel-ring);
 }
 
@@ -605,7 +608,7 @@ body.drag-active * {
 
 .apple-group {
   overflow: hidden;
-  border-radius: 18px;
+  border-radius: var(--radius-card);
   background: var(--panel-bg);
   box-shadow: 0 0 0 1px var(--panel-ring);
 }
@@ -740,7 +743,7 @@ body.drag-active * {
 
 .startup-skeleton__panel,
 .startup-skeleton__list {
-  border-radius: 18px;
+  border-radius: var(--radius-card);
   height: 86px;
   margin-top: 32px;
   width: 100%;

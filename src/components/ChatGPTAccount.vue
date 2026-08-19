@@ -132,7 +132,7 @@ onMounted(refreshStatus);
         <n-tag size="small" type="warning">等待授权</n-tag>
       </div>
 
-      <div class="rounded-2xl bg-accent/6 p-4 shadow-[0_0_0_1px_var(--panel-ring)] dark:bg-accent/10">
+      <div class="rounded-[var(--radius-card)] bg-accent/6 p-4 shadow-[0_0_0_1px_var(--panel-ring)] dark:bg-accent/10">
         <div class="text-center">
           <div class="field-label">授权码：请在浏览器中输入此码</div>
           <div class="mt-1 flex items-center justify-center gap-2">
@@ -167,7 +167,7 @@ onMounted(refreshStatus);
     </div>
 
     <div v-else-if="status?.authenticated" class="space-y-4">
-      <div class="flex items-start justify-between gap-3 rounded-2xl bg-success/10 p-3 shadow-[0_0_0_1px_rgba(52,199,89,0.16)]">
+      <div class="flex items-start justify-between gap-3 rounded-[var(--radius-card)] bg-success/10 p-3 shadow-[0_0_0_1px_rgba(52,199,89,0.16)]">
         <div class="flex min-w-0 items-start gap-3">
           <PhCheckCircle class="mt-2 h-6 w-6 shrink-0 text-success" weight="bold" aria-hidden="true" />
           <div class="min-w-0">
@@ -227,7 +227,7 @@ onMounted(refreshStatus);
       </n-button>
     </div>
 
-    <div v-else class="rounded-2xl border border-[var(--panel-border)] bg-black/2 p-4 dark:bg-white/4">
+    <div v-else class="rounded-[var(--radius-card)] border border-[var(--panel-border)] bg-black/2 p-4 dark:bg-white/4">
       <div class="flex items-start gap-3">
         <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">
           <PhShieldCheck class="h-[18px] w-[18px]" weight="bold" aria-hidden="true" />
