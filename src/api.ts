@@ -198,6 +198,8 @@ let webSettings: Settings = {
   autostart_enabled: false,
   silent_start: false,
   minimize_to_tray: false,
+  auto_backup_interval_hours: 0,
+  database_backup_keep_count: 5,
 };
 
 let webBackups: DatabaseBackupInfo[] = [];
@@ -233,6 +235,11 @@ let webMcpServers: McpServerSpec[] = [
 // 与后端一致：激活状态只由“应用/捕获”显式建立，添加供应商不激活
 let webActiveProfileId: string | null = null;
 const webBalanceCache: Record<string, ProfileBalanceInfo> = {};
+
+function databaseBackupName(date = new Date()): string {
+  const pad = (value: number, length = 2) => String(value).padStart(length, "0");
+  return `cgswitch-export-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}-${pad(date.getMilliseconds(), 3)}.db`;
+}
 
 function webState(): AppState {
   return {
@@ -464,9 +471,14 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       } as T;
     }
     case "export_database": {
-      const name = `cgswitch-export-${Date.now()}.db`;
+      const name = databaseBackupName();
       webBackups.unshift({ name, size_bytes: 20480, created_at: Math.floor(Date.now() / 1000) });
       return `C:\\Users\\<user>\\.cgswitch\\backups\\database\\${name}` as T;
+    }
+    case "export_database_to": {
+      const name = databaseBackupName();
+      const directory = String(args?.directory ?? "C:\\Users\\<user>\\Downloads");
+      return `${directory}\\${name}` as T;
     }
     case "import_database":
       return undefined as T;
@@ -676,6 +688,7 @@ export const api = {
   getProfileBalance: (id: string) =>
     call<ProfileBalance>("get_profile_balance", { id }),
   exportDatabase: () => call<string>("export_database"),
+  exportDatabaseTo: (directory: string) => call<string>("export_database_to", { directory }),
   importDatabase: (path: string) => call<void>("import_database", { path }),
   listDatabaseBackups: () => call<DatabaseBackupInfo[]>("list_database_backups"),
   restoreDatabase: (name: string) => call<void>("restore_database", { name }),

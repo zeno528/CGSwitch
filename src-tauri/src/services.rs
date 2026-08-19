@@ -16,6 +16,29 @@ use crate::models::{
 };
 use crate::paths::{now_ms, AppPaths};
 
+fn now_seconds() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or_default()
+}
+
+fn database_backup_name() -> String {
+    let now = chrono::Local::now();
+    format!(
+        "cgswitch-export-{}-{:03}.db",
+        now.format("%Y%m%d-%H%M%S"),
+        now.timestamp_subsec_millis()
+    )
+}
+
+fn backup_keep_count(value: u32) -> usize {
+    match value {
+        3 | 5 | 10 | 15 | 20 | 30 => value as usize,
+        _ => 5,
+    }
+}
+
 struct ProviderDetail {
     base_url: Option<String>,
     api_key: Option<String>,
@@ -886,13 +909,36 @@ impl AppContext {
     }
 
     pub fn export_database(&self) -> AppResult<PathBuf> {
+        let _guard = self
+            .operation
+            .lock()
+            .map_err(|_| app_err!("操作锁已损坏"))?;
+        self.export_database_unlocked()
+    }
+
+    pub fn export_database_to(&self, directory: &str) -> AppResult<PathBuf> {
+        let _guard = self
+            .operation
+            .lock()
+            .map_err(|_| app_err!("操作锁已损坏"))?;
+        let directory = PathBuf::from(directory);
+        if !directory.is_dir() {
+            return Err(app_err!("导出目录不存在"));
+        }
+        let target = directory.join(database_backup_name());
+        self.database.export_database(&target)?;
+        Ok(target)
+    }
+
+    fn export_database_unlocked(&self) -> AppResult<PathBuf> {
         let directory = &self.paths.database_backup;
         std::fs::create_dir_all(directory)
             .map_err(|error| app_err!("无法创建备份目录: {error}"))?;
-        let name = format!("cgswitch-export-{}.db", now_ms());
+        let name = database_backup_name();
         let target = directory.join(&name);
         self.database.export_database(&target)?;
-        prune_backups(directory, "cgswitch-export-", ".db", 20);
+        let keep = backup_keep_count(self.settings()?.database_backup_keep_count);
+        prune_backups(directory, "cgswitch-export-", ".db", keep);
         self.database.record_event(
             None,
             "export",
@@ -901,6 +947,32 @@ impl AppContext {
             &now_ms().to_string(),
         )?;
         Ok(target)
+    }
+
+    pub fn auto_backup_if_due(&self) -> AppResult<bool> {
+        let _guard = self
+            .operation
+            .lock()
+            .map_err(|_| app_err!("操作锁已损坏"))?;
+        let settings = self.settings()?;
+        if settings.auto_backup_interval_hours == 0 {
+            return Ok(false);
+        }
+
+        let due = match self.list_database_backups()?.first() {
+            None => true,
+            Some(latest) => {
+                let created_at = latest.created_at.max(0) as u64;
+                now_seconds().saturating_sub(created_at)
+                    >= settings.auto_backup_interval_hours.saturating_mul(3600)
+            }
+        };
+        if !due {
+            return Ok(false);
+        }
+
+        self.export_database_unlocked()?;
+        Ok(true)
     }
 
     /// 从用户选择的备份文件导入并恢复。
@@ -1937,6 +2009,10 @@ impl AppContext {
     }
 
     pub fn save_settings(&self, settings: &Settings) -> AppResult<Settings> {
+        let _guard = self
+            .operation
+            .lock()
+            .map_err(|_| app_err!("操作锁已损坏"))?;
         let mut settings = settings.clone();
         settings.theme = settings.theme.trim().to_lowercase();
         if !["system", "light", "dark"].contains(&settings.theme.as_str()) {
@@ -1945,6 +2021,12 @@ impl AppContext {
         let text =
             serde_json::to_string_pretty(&settings).map_err(|_| app_err!("设置序列化失败"))?;
         atomic_write(&self.paths.settings, text.as_bytes())?;
+        prune_backups(
+            &self.paths.database_backup,
+            "cgswitch-export-",
+            ".db",
+            backup_keep_count(settings.database_backup_keep_count),
+        );
         Ok(settings)
     }
 

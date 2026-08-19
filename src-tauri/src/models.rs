@@ -159,10 +159,18 @@ pub struct Settings {
     pub silent_start: bool,
     #[serde(default)]
     pub minimize_to_tray: bool,
+    #[serde(default)]
+    pub auto_backup_interval_hours: u64,
+    #[serde(default = "default_database_backup_keep_count")]
+    pub database_backup_keep_count: u32,
 }
 
 fn default_theme() -> String {
     "system".into()
+}
+
+fn default_database_backup_keep_count() -> u32 {
+    5
 }
 
 impl Default for Settings {
@@ -173,6 +181,8 @@ impl Default for Settings {
             autostart_enabled: false,
             silent_start: false,
             minimize_to_tray: false,
+            auto_backup_interval_hours: 0,
+            database_backup_keep_count: default_database_backup_keep_count(),
         }
     }
 }

@@ -8,6 +8,7 @@ import {
   NList,
   NListItem,
   NModal,
+  NSelect,
   NSwitch,
   useDialog,
   useMessage,
@@ -19,13 +20,15 @@ import TrashIcon from "../components/TrashIcon.vue";
 import type { AppState, DatabaseBackupInfo, PathInfo, Settings } from "../types";
 import {
   PhArrowLeft,
-  PhArrowRight,
+  PhArrowClockwise,
   PhDatabase,
   PhDownloadSimple,
+  PhFloppyDisk,
   PhFolderOpen,
   PhInfo,
   PhMoon,
   PhMoonStars,
+  PhPencilSimple,
   PhMonitor,
   PhPower,
   PhSlidersHorizontal,
@@ -60,27 +63,33 @@ function backupTitle(name: string) {
   return name.replace(/^cgswitch-export-/, "").replace(/\.db$/, "");
 }
 
-const backupActions = [
+const backupFileActions = [
   {
     key: "import",
-    label: "导入备份",
-    desc: "从备份文件恢复供应商数据库",
+    label: "导入数据库",
     color: "var(--accent)",
     disabled: () => importing.value,
     run: () => importBackupFromFile(),
   },
   {
     key: "export",
-    label: "导出备份",
-    desc: "导出全部供应商配置",
+    label: "导出数据库",
     color: "#34c759",
     disabled: () => exporting.value,
     run: () => exportBackupToFile(),
   },
+];
+const backupUtilityActions = [
+  {
+    key: "immediate",
+    label: "立即备份",
+    color: "var(--accent)",
+    disabled: () => exporting.value,
+    run: () => createImmediateBackup(),
+  },
   {
     key: "folder",
-    label: "打开备份文件夹",
-    desc: "查看本地备份文件",
+    label: "备份文件夹",
     color: "#ff9500",
     disabled: () => false,
     run: () => openBackupFolder(),
@@ -91,6 +100,18 @@ const themeOptions: { label: string; value: Settings["theme"] }[] = [
   { label: "深色", value: "dark" },
   { label: "跟随系统", value: "system" },
 ];
+const autoBackupIntervalOptions = [
+  { label: "关闭", value: 0 },
+  { label: "6 小时", value: 6 },
+  { label: "12 小时", value: 12 },
+  { label: "24 小时", value: 24 },
+  { label: "48 小时", value: 48 },
+  { label: "7 天", value: 168 },
+];
+const backupKeepCountOptions = [3, 5, 10, 15, 20, 30].map((value) => ({
+  label: `${value} 个`,
+  value,
+}));
 
 async function loadBackups() {
   try {
@@ -113,10 +134,32 @@ async function loadSettings() {
 async function exportBackupToFile() {
   if (exporting.value) return;
   exporting.value = true;
+  let directory: string | null = null;
   try {
-    // 导出到预设备份目录，不弹路径选择；导出后备份记录自动刷新可见
-    const path = await api.exportDatabase();
-    message.success(`数据库已导出：${path}`);
+    if (isTauri) {
+      const result = await openDialog({
+        title: "选择导出目录",
+        directory: true,
+        multiple: false,
+      });
+      directory = typeof result === "string" ? result : null;
+      if (!directory) return;
+    }
+    const path = await api.exportDatabaseTo(directory ?? "mock-export");
+    message.success(`数据文件已导出：${path}`);
+  } catch (error) {
+    message.error(String(error));
+  } finally {
+    exporting.value = false;
+  }
+}
+
+async function createImmediateBackup() {
+  if (exporting.value) return;
+  exporting.value = true;
+  try {
+    await api.exportDatabase();
+    message.success("已创建内部备份");
     await loadBackups();
   } catch (error) {
     message.error(String(error));
@@ -161,7 +204,7 @@ async function importBackupFromFile() {
     let picked: string | null = null;
     if (isTauri) {
       const result = await openDialog({
-        title: "选择数据库备份",
+        title: "选择数据库文件",
         multiple: false,
         filters: [{ name: "SQLite 数据库", extensions: ["db"] }],
       });
@@ -274,6 +317,8 @@ async function saveGeneral() {
       autostart_enabled: form.autostart_enabled,
       silent_start: form.silent_start,
       minimize_to_tray: form.minimize_to_tray,
+      auto_backup_interval_hours: form.auto_backup_interval_hours,
+      database_backup_keep_count: form.database_backup_keep_count,
     });
     emit("saved", settings);
   } catch (error) {
@@ -282,6 +327,8 @@ async function saveGeneral() {
     form.autostart_enabled = previous.autostart_enabled;
     form.silent_start = previous.silent_start;
     form.minimize_to_tray = previous.minimize_to_tray;
+    form.auto_backup_interval_hours = previous.auto_backup_interval_hours;
+    form.database_backup_keep_count = previous.database_backup_keep_count;
     emit("previewTheme", previous.theme);
     message.error(String(error));
   } finally {
@@ -470,30 +517,59 @@ async function openPath(item: PathInfo) {
         </span>
         <div>
           <div class="setting-title">数据备份</div>
-          <div class="setting-description mt-0.5">导入/导出供应商数据库</div>
+          <div class="setting-description mt-0.5">管理本地数据库备份，支持导入、导出和自动备份</div>
         </div>
       </div>
 
-      <div class="mt-4 flex flex-col gap-2">
+      <div class="mt-4 grid grid-cols-2 gap-2">
         <button
-          v-for="action in backupActions"
+          v-for="action in backupFileActions"
           :key="action.key"
           type="button"
-          class="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-white/8"
+          class="inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-[var(--panel-ring)] px-3 text-sm font-medium transition-colors hover:bg-[var(--sidebar-bg)] disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="action.disabled()"
           @click="action.run()"
         >
-          <span class="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-[10px]" :style="{ color: action.color }">
-            <PhDownloadSimple v-if="action.key === 'import'" class="h-4 w-4" weight="bold" aria-hidden="true" />
-            <PhUploadSimple v-else-if="action.key === 'export'" class="h-4 w-4" weight="bold" aria-hidden="true" />
-            <PhFolderOpen v-else class="h-4 w-4" weight="bold" aria-hidden="true" />
-          </span>
-          <span class="min-w-0 flex-1">
-            <span class="setting-title block">{{ action.label }}</span>
-            <span class="setting-description block truncate">{{ action.desc }}</span>
-          </span>
-          <PhArrowRight class="h-4 w-4 shrink-0" :style="{ color: action.color }" weight="bold" aria-hidden="true" />
+          <PhDownloadSimple v-if="action.key === 'import'" class="h-4 w-4" :style="{ color: action.color }" weight="bold" aria-hidden="true" />
+          <PhUploadSimple v-else class="h-4 w-4" :style="{ color: action.color }" weight="bold" aria-hidden="true" />
+          {{ action.label }}
         </button>
+      </div>
+
+      <div class="mt-[var(--gap-section)] rounded-2xl bg-[color-mix(in_srgb,var(--sidebar-bg)_30%,var(--panel-bg))] p-3.5 shadow-[0_0_0_1px_var(--panel-ring)]">
+        <div class="text-[15px] font-semibold tracking-tight">自动备份</div>
+        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <div class="field-label muted mb-1.5">备份间隔</div>
+            <n-select
+              v-model:value="form.auto_backup_interval_hours"
+              :options="autoBackupIntervalOptions"
+              @update:value="saveGeneral"
+            />
+          </div>
+          <div>
+            <div class="field-label muted mb-1.5">最多保留</div>
+            <n-select
+              v-model:value="form.database_backup_keep_count"
+              :options="backupKeepCountOptions"
+              @update:value="saveGeneral"
+            />
+          </div>
+        </div>
+        <div class="mt-3 grid grid-cols-2 gap-2">
+          <button
+            v-for="action in backupUtilityActions"
+            :key="action.key"
+            type="button"
+            class="inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-[var(--panel-ring)] px-3 text-sm font-medium transition-colors hover:bg-[var(--sidebar-bg)] disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="action.disabled()"
+            @click="action.run()"
+          >
+            <PhFloppyDisk v-if="action.key === 'immediate'" class="h-4 w-4" :style="{ color: action.color }" weight="bold" aria-hidden="true" />
+            <PhFolderOpen v-else class="h-4 w-4" :style="{ color: action.color }" weight="bold" aria-hidden="true" />
+            {{ action.label }}
+          </button>
+        </div>
       </div>
 
       <n-divider :style="{ marginTop: '16px' }" />
@@ -514,9 +590,33 @@ async function openPath(item: PathInfo) {
             </div>
           </div>
           <div class="flex shrink-0 gap-1.5">
-            <n-button size="tiny" quaternary @click="openRename(backup)">编辑</n-button>
-            <n-button size="tiny" secondary type="primary" @click="restoreBackup(backup)">恢复</n-button>
-            <n-button size="tiny" quaternary type="error" @click="deleteBackup(backup)">删除</n-button>
+            <button
+              type="button"
+              class="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 transition-colors hover:bg-[var(--sidebar-bg)] hover:text-accent"
+              title="编辑备份名称"
+              aria-label="编辑备份名称"
+              @click="openRename(backup)"
+            >
+              <PhPencilSimple class="h-4 w-4" weight="bold" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              class="grid h-8 w-8 place-items-center rounded-lg text-accent transition-colors hover:bg-accent/10"
+              title="恢复数据库"
+              aria-label="恢复数据库"
+              @click="restoreBackup(backup)"
+            >
+              <PhArrowClockwise class="h-4 w-4" weight="bold" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              class="grid h-8 w-8 place-items-center rounded-lg text-[#ff3b30]/70 transition-colors hover:bg-[#ff3b30]/10 hover:text-[#ff3b30]"
+              title="删除备份"
+              aria-label="删除备份"
+              @click="deleteBackup(backup)"
+            >
+              <TrashIcon />
+            </button>
           </div>
         </div>
       </div>

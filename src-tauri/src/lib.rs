@@ -42,6 +42,7 @@ pub fn run() {
             commands::test_provider_connection,
             commands::get_profile_balance,
             commands::export_database,
+            commands::export_database_to,
             commands::import_database,
             commands::list_database_backups,
             commands::restore_database,
@@ -98,6 +99,19 @@ pub fn run() {
                     eprintln!("同步开机自启设置失败: {error}");
                 }
             }
+
+            let scheduler_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    if let Err(error) = scheduler_handle
+                        .state::<AppContext>()
+                        .auto_backup_if_due()
+                    {
+                        eprintln!("自动备份失败: {error}");
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                }
+            });
 
             let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出 CGswitch", true, None::<&str>)?;
