@@ -260,10 +260,10 @@ useModalEnterConfirm();
                   <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">供应商配置</span>
                   <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">供应商配置</span>
                 </button>
-                <button ref="mcpNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'mcp' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-normal hover:bg-black/5 dark:hover:bg-white/8'" aria-label="MCP 服务器" @click="goMcp" @mouseenter="sidebarFlyoutArmed = true">
+                <button ref="mcpNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'mcp' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-normal hover:bg-black/5 dark:hover:bg-white/8'" aria-label="MCP 管理" @click="goMcp" @mouseenter="sidebarFlyoutArmed = true">
                   <McpIcon class="h-[18px] w-[18px] shrink-0" />
-                  <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">MCP 服务器</span>
-                  <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">MCP 服务器</span>
+                  <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">MCP 管理</span>
+                  <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">MCP 管理</span>
                 </button>
               </nav>
 

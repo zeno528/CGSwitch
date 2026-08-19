@@ -401,9 +401,22 @@ body.drag-active * {
 }
 
 .apple-sidebar--collapsed .apple-sidebar-nav-button:hover .apple-sidebar-flyout,
-.apple-sidebar--collapsed .apple-sidebar-nav-button:focus-visible .apple-sidebar-flyout {
+.apple-sidebar--collapsed .apple-sidebar-nav-button:focus-visible .apple-sidebar-flyout,
+.apple-page-action:hover .apple-sidebar-flyout,
+.apple-page-action:focus-within .apple-sidebar-flyout {
   opacity: 1;
   transform: translate(0, -50%);
+}
+
+.apple-page-action .apple-sidebar-flyout {
+  left: 50%;
+  top: calc(100% + 0.6rem);
+  transform: translate(-50%, -4px);
+}
+
+.apple-page-action:hover .apple-sidebar-flyout,
+.apple-page-action:focus-within .apple-sidebar-flyout {
+  transform: translate(-50%, 0);
 }
 
 /* 标题栏品牌按钮浮标：锚定标题栏左侧色块（随侧边栏宽度自适应），
@@ -480,7 +493,7 @@ body.drag-active * {
   display: flex;
   margin-inline: -2rem;
   margin-top: -1rem;
-  min-height: 3.5rem;
+  min-height: 3.625rem;
   /* 内容区中心对齐侧边栏 wordmark（实测差 6px），按钮仍在容器内垂直居中 */
   padding: 0.875rem 2rem 0.125rem;
 }

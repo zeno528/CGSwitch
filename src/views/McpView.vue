@@ -7,12 +7,12 @@ import { api } from "../api";
 import type { McpServerSpec } from "../types";
 import { useWindowActivation } from "../composables/useWindowActivation";
 import {
+  PhArrowCircleDown,
+  PhArrowCircleUp,
   PhCircleDashed,
-  PhDownloadSimple,
   PhGlobe,
   PhPlus,
   PhTerminalWindow,
-  PhUploadSimple,
 } from "@phosphor-icons/vue";
 
 // 编辑页按需加载：只在打开编辑/新建时拉取
@@ -198,23 +198,29 @@ function restoreToLive() {
           <McpIcon class="h-[22px] w-[22px]" />
         </span>
         <div class="min-w-0">
-          <div class="apple-title">MCP 服务器管理</div>
-          <div class="muted truncate text-xs">直接读写 ~/.codex/config.toml，对所有供应商全局生效；重启 Codex 后加载。</div>
+          <div class="flex items-center gap-2">
+            <div class="apple-title">MCP 服务器管理</div>
+            <span v-if="loaded" class="apple-chip" :aria-label="servers.length + ' 台服务器'">{{ servers.length }}</span>
+          </div>
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <n-button quaternary :disabled="syncing" title="把当前配置文件里的 MCP 段强制镜像进数据库" @click="importFromLive">
-          <template #icon>
-            <PhDownloadSimple class="h-4 w-4" weight="bold" aria-hidden="true" />
-          </template>
-          从配置导入
-        </n-button>
-        <n-button quaternary :disabled="syncing" title="把数据库里的 MCP 镜像写回配置文件（配置损坏/段丢失后恢复）" @click="restoreToLive">
-          <template #icon>
-            <PhUploadSimple class="h-4 w-4" weight="bold" aria-hidden="true" />
-          </template>
-          恢复到配置
-        </n-button>
+        <div class="apple-page-action relative">
+          <n-button quaternary :disabled="syncing" aria-label="从配置导入" @click="importFromLive">
+            <template #icon>
+              <PhArrowCircleDown class="h-4 w-4" weight="bold" aria-hidden="true" />
+            </template>
+          </n-button>
+          <span class="apple-sidebar-flyout" aria-hidden="true">从配置导入</span>
+        </div>
+        <div class="apple-page-action relative">
+          <n-button quaternary :disabled="syncing" aria-label="恢复到配置" @click="restoreToLive">
+            <template #icon>
+              <PhArrowCircleUp class="h-4 w-4" weight="bold" aria-hidden="true" />
+            </template>
+          </n-button>
+          <span class="apple-sidebar-flyout" aria-hidden="true">恢复到配置</span>
+        </div>
         <n-button type="primary" @click="creatingServer = true">
           <template #icon>
             <PhPlus class="h-4 w-4" weight="bold" aria-hidden="true" />
@@ -263,7 +269,20 @@ function restoreToLive() {
               @update:value="toggleEnabled(server, $event)"
             />
             <n-button size="tiny" quaternary @click="editingServer = server">编辑</n-button>
-            <n-button size="tiny" quaternary type="error" @click="removeServer(server)">删除</n-button>
+            <div class="apple-page-action relative">
+              <n-button
+                size="tiny"
+                quaternary
+                type="error"
+                :aria-label="'删除 ' + server.name"
+                @click="removeServer(server)"
+              >
+                <template #icon>
+                  <TrashIcon />
+                </template>
+              </n-button>
+              <span class="apple-sidebar-flyout" aria-hidden="true">删除</span>
+            </div>
           </div>
         </div>
       </div>

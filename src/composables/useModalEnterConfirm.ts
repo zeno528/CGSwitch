@@ -6,6 +6,15 @@ import { onBeforeUnmount, onMounted } from "vue";
  * - 输入框与弹窗内按钮不抢（各有回车语义），输入法组词中不触发。
  */
 export function useModalEnterConfirm() {
+  function blurFocusOutsideModal() {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || active === document.body) return;
+    const visibleModal = [...document.querySelectorAll<HTMLElement>(".n-modal-container")]
+      .reverse()
+      .find((element) => element.getClientRects().length > 0);
+    if (!visibleModal || !visibleModal.contains(active)) active.blur();
+  }
+
   function findConfirmButton(overlay: HTMLElement) {
     return (
       overlay.querySelector<HTMLButtonElement>(
@@ -52,9 +61,29 @@ export function useModalEnterConfirm() {
             );
           }
         }
+        if (
+          [...mutation.removedNodes].some(
+            (node) => node instanceof HTMLElement && node.classList.contains("n-modal-container"),
+          )
+        ) {
+          blurFocusOutsideModal();
+        }
+        if (
+          mutation.type === "attributes" &&
+          mutation.target instanceof HTMLElement &&
+          mutation.target.closest(".n-modal-container")
+        ) {
+          // VFocusTrap 会在 leave 动画开始前恢复触发按钮焦点，必须同步清掉，避免闪一帧。
+          blurFocusOutsideModal();
+        }
       }
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class", "style"],
+      childList: true,
+      subtree: true,
+    });
   });
 
   onBeforeUnmount(() => {
