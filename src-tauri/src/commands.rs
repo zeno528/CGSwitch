@@ -6,7 +6,8 @@ use crate::auth::codex_oauth::{
 };
 use crate::error::{app_err, AppResult};
 use crate::models::{
-    AppState, CodexAppStatus, ProfileBalanceInfo, ProfileDetail, ProfileSummary, Settings,
+    AppState, CodexAppStatus, McpServerSpec, ProfileBalanceInfo, ProfileDetail, ProfileSummary,
+    Settings,
 };
 use crate::services::{AppContext, DatabaseBackupInfo, ProfileBalance, ProfileConnectionResult};
 
@@ -404,6 +405,26 @@ pub async fn apply_profile(
 #[tauri::command]
 pub fn restart_codex(app: AppHandle, state: State<'_, AppContext>) -> AppResult<()> {
     state.restart_codex(&app)
+}
+
+/// MCP 服务器管理：直接读写 live ~/.codex/config.toml 的 [mcp_servers.*] 段。
+#[tauri::command]
+pub fn list_mcp_servers(state: State<'_, AppContext>) -> AppResult<Vec<McpServerSpec>> {
+    state.list_mcp_servers()
+}
+
+#[tauri::command]
+pub fn save_mcp_server(
+    original_name: Option<String>,
+    spec: McpServerSpec,
+    state: State<'_, AppContext>,
+) -> AppResult<()> {
+    state.save_mcp_server(original_name.as_deref(), spec)
+}
+
+#[tauri::command]
+pub fn delete_mcp_server(name: String, state: State<'_, AppContext>) -> AppResult<()> {
+    state.delete_mcp_server(&name)
 }
 
 #[tauri::command]

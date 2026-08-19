@@ -15,18 +15,22 @@ import { useModalEnterConfirm } from "./composables/useModalEnterConfirm";
 import { darkThemeOverrides, themeOverrides } from "./theme";
 import type { AppState, Settings } from "./types";
 import { PhGearSix, PhMinus, PhSquare, PhStack, PhX } from "@phosphor-icons/vue";
+import McpIcon from "./components/McpIcon.vue";
 
-// 设置页按需加载：进入设置时才拉取，不拖累启动入口
+// 设置页/MCP 页按需加载：进入时才拉取，不拖累启动入口
 const SettingsView = defineAsyncComponent(() => import("./views/SettingsView.vue"));
+const McpView = defineAsyncComponent(() => import("./views/McpView.vue"));
 
-type View = "profiles" | "settings";
+type View = "profiles" | "mcp" | "settings";
 
 const view = ref<View>("profiles");
 const profilesNavReset = ref(0);
+const mcpNavReset = ref(0);
 // 侧边栏折叠状态：默认收缩，选择记忆在 localStorage（WebView2 应用专属存储），重启后还原
 const sidebarCollapsed = ref(localStorage.getItem("cgswitch.sidebar-collapsed") !== "0");
 const sidebarFlyoutArmed = ref(true);
 const profilesNavBtn = ref<HTMLElement | null>(null);
+const mcpNavBtn = ref<HTMLElement | null>(null);
 const settingsNavBtn = ref<HTMLElement | null>(null);
 const sidebarNavRef = ref<HTMLElement | null>(null);
 const indicatorTop = ref(8);
@@ -89,7 +93,12 @@ function windowClose() {
 }
 
 function updateSidebarIndicator() {
-  const target = view.value === "profiles" ? profilesNavBtn.value : settingsNavBtn.value;
+  const target =
+    view.value === "profiles"
+      ? profilesNavBtn.value
+      : view.value === "mcp"
+        ? mcpNavBtn.value
+        : settingsNavBtn.value;
   const nav = sidebarNavRef.value;
   if (target && nav) {
     indicatorTop.value = target.getBoundingClientRect().top - nav.getBoundingClientRect().top + 8;
@@ -111,6 +120,12 @@ function toggleSidebar() {
 function goProfiles() {
   profilesNavReset.value++;
   view.value = "profiles";
+}
+
+// 点击侧边栏“MCP 服务器”同样回到列表（退出添加/编辑子页）
+function goMcp() {
+  mcpNavReset.value++;
+  view.value = "mcp";
 }
 
 async function refresh() {
@@ -245,6 +260,11 @@ useModalEnterConfirm();
                   <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">供应商配置</span>
                   <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">供应商配置</span>
                 </button>
+                <button ref="mcpNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'mcp' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-normal hover:bg-black/5 dark:hover:bg-white/8'" aria-label="MCP 服务器" @click="goMcp" @mouseenter="sidebarFlyoutArmed = true">
+                  <McpIcon class="h-[18px] w-[18px] shrink-0" />
+                  <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">MCP 服务器</span>
+                  <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">MCP 服务器</span>
+                </button>
               </nav>
 
               <div class="absolute inset-x-1.5 bottom-4">
@@ -260,6 +280,7 @@ useModalEnterConfirm();
               <template v-if="state">
                 <KeepAlive>
                   <ProfilesView v-if="view === 'profiles'" :state="state" :nav-reset="profilesNavReset" @refresh="refresh" />
+                  <McpView v-else-if="view === 'mcp'" :nav-reset="mcpNavReset" />
                   <SettingsView v-else :state="state" @preview-theme="previewTheme" @refresh="refresh" @saved="saveSettings" @home="goProfiles" />
                 </KeepAlive>
               </template>

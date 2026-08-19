@@ -11,8 +11,8 @@ use crate::database::{profile_summary, Database};
 use crate::error::{app_err, AppResult};
 use crate::fsutil::{atomic_write, backup_file, prune_backups};
 use crate::models::{
-    AppState, CodexAppStatus, PathInfo, ProfileBalanceInfo, ProfileDetail, ProfileKind,
-    ProfilePayload, ProfileSummary, Settings,
+    AppState, CodexAppStatus, McpServerSpec, PathInfo, ProfileBalanceInfo, ProfileDetail,
+    ProfileKind, ProfilePayload, ProfileSummary, Settings,
 };
 use crate::paths::{now_ms, AppPaths};
 
@@ -1338,6 +1338,110 @@ impl AppContext {
         Ok(())
     }
 
+    /// 读取 live config.toml；文件不存在视作空文档（首个 MCP 服务器创建前允许没有配置文件）。
+    fn read_live_config(&self) -> AppResult<String> {
+        let path = self.paths.codex_config();
+        match std::fs::read_to_string(&path) {
+            Ok(text) => Ok(text),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+            Err(error) => Err(app_err!("无法读取 {}: {error}", path.display())),
+        }
+    }
+
+    /// 读取 live config.toml 中的全部 MCP 服务器（全局唯一事实源，不随供应商切换）。
+    pub fn list_mcp_servers(&self) -> AppResult<Vec<McpServerSpec>> {
+        let document = codex_config::parse_document(&self.read_live_config()?)?;
+        Ok(codex_config::mcp_servers_from_document(&document))
+    }
+
+    /// 新增/编辑/重命名一个 MCP 服务器：就地修改 live config.toml，未建模键与注释原样保留；
+    /// 激活供应商的快照在下次 get_state 时自动吸收（与地址/密钥回写 live 同机制）。
+    pub fn save_mcp_server(
+        &self,
+        original_name: Option<&str>,
+        spec: McpServerSpec,
+    ) -> AppResult<()> {
+        let _guard = self
+            .operation
+            .lock()
+            .map_err(|_| app_err!("操作锁已损坏"))?;
+
+        let name = spec.name.trim().to_string();
+        if name.is_empty() {
+            return Err(app_err!("MCP 名称不能为空"));
+        }
+        if name.len() > 64 {
+            return Err(app_err!("MCP 名称过长（最多 64 字符）"));
+        }
+        if !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            // 点号会让 [mcp_servers.a.b] 变成嵌套表，空格/引号等也会破坏键名
+            return Err(app_err!("MCP 名称只能包含字母、数字、下划线和连字符"));
+        }
+        if spec.startup_timeout_sec.is_some_and(|timeout| timeout <= 0) {
+            return Err(app_err!("启动超时必须为正数（秒）"));
+        }
+        if spec.tool_timeout_sec.is_some_and(|timeout| timeout <= 0) {
+            return Err(app_err!("工具调用超时必须为正数（秒）"));
+        }
+        let url = spec.url.as_deref().map(str::trim).filter(|v| !v.is_empty());
+        let command = spec
+            .command
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty());
+        match (url, command) {
+            (Some(_), Some(_)) => return Err(app_err!("不能同时填写启动命令和服务地址")),
+            (None, None) => {
+                return Err(app_err!(
+                    "必须填写启动命令（stdio）或服务地址（http）其中之一"
+                ))
+            }
+            (Some(url), None) if !url.starts_with("http://") && !url.starts_with("https://") => {
+                return Err(app_err!("服务地址必须以 http:// 或 https:// 开头"));
+            }
+            _ => {}
+        }
+
+        let mut spec = spec;
+        spec.name = name;
+        let mut document = codex_config::parse_document(&self.read_live_config()?)?;
+        // 重命名 = 先删旧条目再以新名写入；查重随之按新名判定
+        if let Some(original) = original_name.filter(|original| original != &spec.name) {
+            codex_config::remove_mcp_server(&mut document, original)?;
+        }
+        let name_taken = document
+            .as_table()
+            .get("mcp_servers")
+            .and_then(toml_edit::Item::as_table)
+            .is_some_and(|servers| servers.contains_key(&spec.name));
+        if name_taken && original_name != Some(spec.name.as_str()) {
+            return Err(app_err!("已存在同名 MCP 服务器"));
+        }
+
+        codex_config::upsert_mcp_server(&mut document, &spec)?;
+        let config_path = self.paths.codex_config();
+        backup_file(&config_path, &self.paths.config_backup, "config")?;
+        atomic_write(&config_path, document.to_string().as_bytes())?;
+        Ok(())
+    }
+
+    /// 删除一个 MCP 服务器（含其全部子表）。
+    pub fn delete_mcp_server(&self, name: &str) -> AppResult<()> {
+        let _guard = self
+            .operation
+            .lock()
+            .map_err(|_| app_err!("操作锁已损坏"))?;
+        let mut document = codex_config::parse_document(&self.read_live_config()?)?;
+        codex_config::remove_mcp_server(&mut document, name)?;
+        let config_path = self.paths.codex_config();
+        backup_file(&config_path, &self.paths.config_backup, "config")?;
+        atomic_write(&config_path, document.to_string().as_bytes())?;
+        Ok(())
+    }
+
     pub fn apply_profile(&self, id: &str) -> AppResult<()> {
         let _guard = self
             .operation
@@ -1353,11 +1457,13 @@ impl AppContext {
 
         let payload = self.database.profile(id)?.payload;
         if payload.builtin.is_some() {
-            self.apply_builtin_profile(id, &payload, "apply")?;
+            self.apply_builtin_profile(id, &payload, "apply", &document)?;
         } else if let Some(raw) = &payload.raw_config {
-            // 完整快照供应商：直接回填完整原文（含 MCP、插件、注释等全部内容）
+            // 完整快照供应商：回填完整原文（插件、注释等全部内容）；
+            // MCP 段跟随 live 携带（全局生效，不属于任何供应商）
+            let content = codex_config::merge_mcp_section(raw, &document);
             backup_file(&config_path, &self.paths.config_backup, "config")?;
-            atomic_write(&config_path, raw.as_bytes())?;
+            atomic_write(&config_path, content.as_bytes())?;
             self.write_raw_catalog(&payload)?;
             self.write_raw_auth(&payload)?;
             self.database.record_event(
@@ -1481,7 +1587,7 @@ impl AppContext {
             .set_profile_account(id, account_id, &now_ms().to_string())
     }
 
-    /// 内置官方供应商：整文件替换为模板原文（仅替换密钥占位符），
+    /// 内置官方供应商：整文件替换为模板原文（仅替换密钥占位符；MCP 段跟随 live 携带），
     /// 并写入本供应商自带的关联文件（deepseek/智谱各自独立的 models.json、minimax 的 custom-catalog.json），
     /// 写生产文件前都先备份旧文件。
     fn apply_builtin_profile(
@@ -1489,6 +1595,7 @@ impl AppContext {
         profile_id: &str,
         payload: &ProfilePayload,
         action: &str,
+        live: &toml_edit::DocumentMut,
     ) -> AppResult<()> {
         let kind = payload
             .builtin
@@ -1509,6 +1616,11 @@ impl AppContext {
         let rendered = match &payload.raw_config {
             Some(raw) => template.substitute_key(raw.as_bytes().to_vec(), api_key.as_deref())?,
             None => template.render_config(api_key.as_deref())?,
+        };
+        // MCP 段全局生效：模板（或用户编辑过的内置原文）里的段替换为 live 当前段
+        let rendered = match String::from_utf8(rendered) {
+            Ok(text) => codex_config::merge_mcp_section(&text, live).into_bytes(),
+            Err(error) => error.into_bytes(),
         };
 
         let config_path = self.paths.codex_config();
@@ -2700,12 +2812,19 @@ experimental_bearer_token = "secret"
             .unwrap();
         context.apply_profile(&profile.id).unwrap();
 
-        // 整文件替换，模板之外的键全部清掉，仅密钥占位符被替换
+        // 整文件替换，模板之外的键全部清掉，仅密钥占位符被替换；
+        // MCP 段例外——跟随 live 携带（全局生效，不随供应商模板丢失）
         let config = std::fs::read(context.paths.codex_config()).unwrap();
-        let expected = crate::builtin::template("deepseek")
+        let rendered = crate::builtin::template("deepseek")
             .unwrap()
             .render_config(Some("sk-test"))
             .unwrap();
+        let live = codex_config::parse_document(
+            "model = \"other\"\n[mcp_servers.keep]\ncommand = \"node\"\n",
+        )
+        .unwrap();
+        let expected = codex_config::merge_mcp_section(&String::from_utf8_lossy(&rendered), &live)
+            .into_bytes();
         assert_eq!(config, expected);
         assert!(!String::from_utf8_lossy(&config).contains("<你的 DeepSeek API Key>"));
         // 关联文件按本供应商字节写入，旧文件已备份
@@ -2719,6 +2838,170 @@ experimental_bearer_token = "secret"
             .path();
         assert_eq!(std::fs::read(backup).unwrap(), old_models);
         assert!(context.paths.config_backup.read_dir().unwrap().count() > 0);
+    }
+
+    fn mcp_test_context(live_config: &str) -> (AppContext, tempfile::TempDir) {
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        if !live_config.is_empty() {
+            std::fs::write(paths.codex_config(), live_config).unwrap();
+        }
+        (AppContext::new(paths).unwrap(), home)
+    }
+
+    fn read_config_text(context: &AppContext) -> String {
+        String::from_utf8(std::fs::read(context.paths.codex_config()).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn mcp_save_edit_preserves_unmodeled_keys_and_subtables() {
+        let (context, _home) = mcp_test_context(
+            r#"[mcp_servers.node_repl]
+command = "node_repl.exe"
+args = []
+startup_timeout_sec = 120
+cwd = "C:\\bin"
+
+# 勿动：桌面版自动维护
+[mcp_servers.node_repl.env]
+CODEX_HOME = "C:\\.codex"
+"#,
+        );
+
+        context
+            .save_mcp_server(
+                Some("node_repl"),
+                McpServerSpec {
+                    name: "node_repl".into(),
+                    command: Some("node_repl.exe".into()),
+                    args: vec!["--verbose".into()],
+                    env: BTreeMap::from([("CODEX_HOME".into(), "C:\\.codex".into())]),
+                    startup_timeout_sec: Some(120),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        let config = read_config_text(&context);
+        assert!(config.contains("cwd = \"C:\\\\bin\""), "{config}");
+        assert!(config.contains("# 勿动：桌面版自动维护"), "{config}");
+        assert!(config.contains("startup_timeout_sec = 120"), "{config}");
+        assert!(config.contains("\"--verbose\""), "{config}");
+        assert!(context.paths.config_backup.read_dir().unwrap().count() > 0);
+
+        let servers = context.list_mcp_servers().unwrap();
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].args, ["--verbose"]);
+        assert_eq!(servers[0].startup_timeout_sec, Some(120));
+    }
+
+    #[test]
+    fn mcp_save_renames_server() {
+        let (context, _home) =
+            mcp_test_context("[mcp_servers.old]\nurl = \"https://mcp.example/mcp\"\n");
+
+        context
+            .save_mcp_server(
+                Some("old"),
+                McpServerSpec {
+                    name: "fresh".into(),
+                    url: Some("https://mcp.example/mcp".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        let config = read_config_text(&context);
+        assert!(!config.contains("mcp_servers.old"), "{config}");
+        assert!(config.contains("mcp_servers.fresh"), "{config}");
+    }
+
+    #[test]
+    fn mcp_save_rejects_invalid_input() {
+        let (context, _home) =
+            mcp_test_context("[mcp_servers.tavily]\nurl = \"https://mcp.tavily.com/mcp\"\n");
+
+        let spec = |name: &str, url: Option<&str>, command: Option<&str>| McpServerSpec {
+            name: name.into(),
+            url: url.map(str::to_string),
+            command: command.map(str::to_string),
+            ..Default::default()
+        };
+
+        // 重名（新建）
+        assert!(context
+            .save_mcp_server(None, spec("tavily", Some("https://other/mcp"), None))
+            .is_err());
+        // 非法名称：点号嵌套 / 空格 / 中文 / 空
+        assert!(context
+            .save_mcp_server(None, spec("a.b", None, Some("node")))
+            .is_err());
+        assert!(context
+            .save_mcp_server(None, spec("a b", None, Some("node")))
+            .is_err());
+        assert!(context
+            .save_mcp_server(None, spec("中文", None, Some("node")))
+            .is_err());
+        assert!(context
+            .save_mcp_server(None, spec("", None, Some("node")))
+            .is_err());
+        // 传输互斥与必填
+        assert!(context
+            .save_mcp_server(None, spec("x", Some("https://a/mcp"), Some("node")))
+            .is_err());
+        assert!(context
+            .save_mcp_server(None, spec("x", None, None))
+            .is_err());
+        assert!(context
+            .save_mcp_server(None, spec("x", Some("ftp://a"), None))
+            .is_err());
+        // 超时为正
+        assert!(context
+            .save_mcp_server(
+                None,
+                McpServerSpec {
+                    name: "x".into(),
+                    command: Some("node".into()),
+                    startup_timeout_sec: Some(0),
+                    ..Default::default()
+                }
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn mcp_delete_removes_only_target() {
+        let (context, _home) = mcp_test_context(
+            "[mcp_servers.a]\nurl = \"https://a/mcp\"\n\n[mcp_servers.b]\nurl = \"https://b/mcp\"\n",
+        );
+
+        context.delete_mcp_server("a").unwrap();
+
+        let config = read_config_text(&context);
+        assert!(!config.contains("mcp_servers.a"), "{config}");
+        assert!(config.contains("mcp_servers.b"), "{config}");
+        // 不存在的服务器报错（外部并发修改时让用户看见）
+        assert!(context.delete_mcp_server("nothere").is_err());
+    }
+
+    #[test]
+    fn apply_raw_profile_carries_live_mcp_section() {
+        let (context, _home) =
+            mcp_test_context("[mcp_servers.tavily]\nurl = \"https://mcp.tavily.com/mcp\"\n");
+        let raw = "model = \"glm-5.3\"\nmodel_provider = \"ZAI\"\n\n[mcp_servers.stale]\ncommand = \"old\"\n\n[model_providers.ZAI]\nname = \"ZAI\"\nbase_url = \"https://api.z.ai\"\nwire_api = \"responses\"\n";
+        let profile = context
+            .add_custom_profile("智谱", raw, None, None, None, None, None)
+            .unwrap();
+
+        context.apply_profile(&profile.id).unwrap();
+
+        let config = read_config_text(&context);
+        // live 的 MCP 段被携带进快照供应商；快照里的陈旧段被替换
+        assert!(config.contains("mcp_servers.tavily"), "{config}");
+        assert!(!config.contains("mcp_servers.stale"), "{config}");
+        assert!(config.contains("model = \"glm-5.3\""), "{config}");
     }
 
     #[test]
@@ -2908,10 +3191,14 @@ experimental_bearer_token = "sk-in-editor"
         context.apply_profile(&profile.id).unwrap();
 
         let config = std::fs::read(context.paths.codex_config()).unwrap();
-        let expected = crate::builtin::template("minimax")
+        let rendered = crate::builtin::template("minimax")
             .unwrap()
             .render_config(Some("mm-key"))
             .unwrap();
+        // 应用经 toml_edit 往返（MCP 段携带路径）：live 无 MCP 时内容不变、仅补行尾换行
+        let live = codex_config::parse_document("model = \"other\"\n").unwrap();
+        let expected = codex_config::merge_mcp_section(&String::from_utf8_lossy(&rendered), &live)
+            .into_bytes();
         assert_eq!(config, expected);
         assert!(String::from_utf8_lossy(&config)
             .contains("model_catalog_json = \"~/.codex/model-catalogs/custom-catalog.json\""));

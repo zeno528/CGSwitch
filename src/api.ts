@@ -8,6 +8,7 @@ import type {
   DatabaseBackupInfo,
   DeviceCodeResponse,
   ManagedAccount,
+  McpServerSpec,
   ProfileBalance,
   ProfileBalanceInfo,
   ProfileDetail,
@@ -200,6 +201,35 @@ let webSettings: Settings = {
 };
 
 let webBackups: DatabaseBackupInfo[] = [];
+// MCP 页 web 调试样例：stdio + http 各一条，字段对齐 Codex 官方配置格式
+let webMcpServers: McpServerSpec[] = [
+  {
+    name: "github",
+    enabled: null,
+    startup_timeout_sec: null,
+    tool_timeout_sec: null,
+    command: "github-mcp-server",
+    args: ["stdio"],
+    env: { GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_demo" },
+    url: null,
+    bearer_token_env_var: null,
+    http_headers: {},
+    env_http_headers: {},
+  },
+  {
+    name: "tavily",
+    enabled: null,
+    startup_timeout_sec: null,
+    tool_timeout_sec: null,
+    command: null,
+    args: [],
+    env: {},
+    url: "https://mcp.tavily.com/mcp",
+    bearer_token_env_var: "TAVILY_API_KEY",
+    http_headers: {},
+    env_http_headers: {},
+  },
+];
 // 与后端一致：激活状态只由“应用/捕获”显式建立，添加供应商不激活
 let webActiveProfileId: string | null = null;
 const webBalanceCache: Record<string, ProfileBalanceInfo> = {};
@@ -561,6 +591,18 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     // Web 调试模式无 Rust 侧解析器，TOML 校验一律视为通过（与既有 mock 桩风格一致）
     case "validate_toml":
       return [] as T;
+    case "list_mcp_servers":
+      return [...webMcpServers] as T;
+    case "save_mcp_server": {
+      const spec = args?.spec as McpServerSpec;
+      const original = typeof args?.originalName === "string" ? args.originalName : null;
+      webMcpServers = webMcpServers.filter((server) => server.name !== (original ?? spec.name));
+      webMcpServers.push(spec);
+      return undefined as T;
+    }
+    case "delete_mcp_server":
+      webMcpServers = webMcpServers.filter((server) => server.name !== args?.name);
+      return undefined as T;
     default:
       throw new Error(`Web 调试模式不支持命令：${command}`);
   }
@@ -639,6 +681,10 @@ export const api = {
   deleteProfile: (id: string) => call<void>("delete_profile", { id }),
   reorderProfiles: (ids: string[]) => call<void>("reorder_profiles", { ids }),
   applyProfile: (id: string) => call<void>("apply_profile", { id }),
+  listMcpServers: () => call<McpServerSpec[]>("list_mcp_servers"),
+  saveMcpServer: (originalName: string | null, spec: McpServerSpec) =>
+    call<void>("save_mcp_server", { originalName, spec }),
+  deleteMcpServer: (name: string) => call<void>("delete_mcp_server", { name }),
   restartCodex: () => call<void>("restart_codex"),
   setWindowTheme: (dark: boolean) => call<void>("set_window_theme", { dark }),
   authStartLogin: () => call<DeviceCodeResponse>("auth_start_login"),

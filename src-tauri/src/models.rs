@@ -58,6 +58,35 @@ fn default_false() -> bool {
     false
 }
 
+/// ~/.codex/config.toml [mcp_servers.*] 的一条服务器配置（建模字段子集；未建模键由 toml_edit 原样保留）。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct McpServerSpec {
+    pub name: String,
+    /// None = 未写入该键（Codex 默认启用）；Some(false) 显式停用。
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub startup_timeout_sec: Option<i64>,
+    #[serde(default)]
+    pub tool_timeout_sec: Option<i64>,
+    /// STDIO 传输：有 command 无 url。
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
+    /// Streamable HTTP 传输：有 url 无 command。
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub bearer_token_env_var: Option<String>,
+    #[serde(default)]
+    pub http_headers: BTreeMap<String, String>,
+    #[serde(default)]
+    pub env_http_headers: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ProfileSummary {
     pub id: String,

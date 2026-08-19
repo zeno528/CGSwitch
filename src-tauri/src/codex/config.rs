@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::Serialize;
-use toml_edit::{Decor, DocumentMut, Item, Table, Value};
+use toml_edit::{Array, Decor, DocumentMut, Item, Table, Value};
 
 use crate::error::{app_err, AppResult};
-use crate::models::ProfilePayload;
+use crate::models::{McpServerSpec, ProfilePayload};
 
 pub fn parse_document(text: &str) -> AppResult<DocumentMut> {
     text.parse::<DocumentMut>()
@@ -241,6 +241,229 @@ fn set_table_value(document: &mut DocumentMut, key: &str, value: &str) {
     }
 }
 
+// ===== MCP 服务器段（[mcp_servers.*]）=====
+// live config.toml 是 MCP 的唯一事实源：读取只取建模字段子集，
+// 写入就地编辑，未建模键（tools.*、cwd、注释等）原样保留。
+
+/// 读取 [mcp_servers.*] 下全部服务器（按文件顺序）；段缺失返回空列表。
+pub fn mcp_servers_from_document(document: &DocumentMut) -> Vec<McpServerSpec> {
+    let Some(servers) = document
+        .as_table()
+        .get("mcp_servers")
+        .and_then(Item::as_table)
+    else {
+        return Vec::new();
+    };
+    servers
+        .iter()
+        .filter_map(|(name, item)| item.as_table().map(|table| (name, table)))
+        .map(|(name, table)| McpServerSpec {
+            name: name.to_string(),
+            enabled: boolean_of(table, "enabled"),
+            startup_timeout_sec: integer_of(table, "startup_timeout_sec"),
+            tool_timeout_sec: integer_of(table, "tool_timeout_sec"),
+            command: string_of(table, "command"),
+            args: table
+                .get("args")
+                .and_then(Item::as_value)
+                .and_then(Value::as_array)
+                .map(|values| {
+                    values
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default(),
+            env: string_map(table.get("env")),
+            url: string_of(table, "url"),
+            bearer_token_env_var: string_of(table, "bearer_token_env_var"),
+            http_headers: string_map(table.get("http_headers")),
+            env_http_headers: string_map(table.get("env_http_headers")),
+        })
+        .collect()
+}
+
+/// 就地写入一个服务器：建模字段按 spec 设置（None/空 = 移除键），未建模字段原样保留；
+/// env / http_headers / env_http_headers 三个子表按 map 全量重建。
+pub fn upsert_mcp_server(document: &mut DocumentMut, spec: &McpServerSpec) -> AppResult<()> {
+    let servers = document
+        .as_table_mut()
+        .entry("mcp_servers")
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| app_err!("mcp_servers 不是 TOML table"))?;
+    let server = servers
+        .entry(&spec.name)
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| app_err!("mcp_servers.{} 不是 TOML table", spec.name))?;
+
+    let set_string = |table: &mut Table, key: &str, value: &Option<String>| match value
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
+        Some(value) => {
+            replace_value(table, key, Value::from(value.to_string()));
+        }
+        None => {
+            table.remove(key);
+        }
+    };
+    let set_map = |table: &mut Table, key: &str, map: &BTreeMap<String, String>| {
+        if map.is_empty() {
+            table.remove(key);
+        } else {
+            let mut sub = Table::new();
+            for (name, value) in map {
+                sub.insert(name, Item::Value(Value::from(value.clone())));
+            }
+            replace_table(table, key, sub);
+        }
+    };
+
+    set_typed_value(server, "enabled", spec.enabled);
+    set_typed_value(server, "startup_timeout_sec", spec.startup_timeout_sec);
+    set_typed_value(server, "tool_timeout_sec", spec.tool_timeout_sec);
+    // 标量在前、子表在后：新建条目按 [mcp_servers.x] + [mcp_servers.x.env] 的常规顺序渲染
+    set_string(server, "command", &spec.command);
+    if spec.args.is_empty() {
+        server.remove("args");
+    } else {
+        let mut args = Array::new();
+        for arg in &spec.args {
+            args.push(arg.clone());
+        }
+        replace_value(server, "args", Value::Array(args));
+    }
+    set_string(server, "url", &spec.url);
+    set_string(server, "bearer_token_env_var", &spec.bearer_token_env_var);
+    set_map(server, "env", &spec.env);
+    set_map(server, "http_headers", &spec.http_headers);
+    set_map(server, "env_http_headers", &spec.env_http_headers);
+    Ok(())
+}
+
+/// 删除一个服务器（连同其全部子表）；不存在时报错。
+pub fn remove_mcp_server(document: &mut DocumentMut, name: &str) -> AppResult<()> {
+    let removed = document
+        .as_table_mut()
+        .get_mut("mcp_servers")
+        .and_then(Item::as_table_mut)
+        .and_then(|servers| servers.remove(name));
+    if removed.is_none() {
+        return Err(app_err!("MCP 服务器 {name} 不存在"));
+    }
+    Ok(())
+}
+
+/// 把 source（live）的 [mcp_servers] 段整体搬到 target：live 有则覆盖（indexmap 语义下
+/// 同键原位替换，段落位置不动；Item::clone 保留注释等装饰），live 无则移除 target 既有段
+/// （全局模型：切换供应商不增删 MCP，只跟随 live）。
+pub fn replace_mcp_section(target: &mut DocumentMut, source: &DocumentMut) {
+    match source
+        .as_table()
+        .get("mcp_servers")
+        .and_then(Item::as_table)
+        .filter(|servers| !servers.is_empty())
+    {
+        Some(servers) => {
+            target
+                .as_table_mut()
+                .insert("mcp_servers", Item::Table(servers.clone()));
+        }
+        None => {
+            target.as_table_mut().remove("mcp_servers");
+        }
+    }
+}
+
+/// 应用供应商时使用：把 live 的 MCP 段合并进即将写回的原文；
+/// 原文解析失败时原样返回（保持旧的整文件回退行为）。
+pub fn merge_mcp_section(raw: &str, live: &DocumentMut) -> String {
+    match parse_document(raw) {
+        Ok(mut incoming) => {
+            replace_mcp_section(&mut incoming, live);
+            incoming.to_string()
+        }
+        Err(_) => raw.to_string(),
+    }
+}
+
+fn string_of(table: &Table, key: &str) -> Option<String> {
+    table.get(key).and_then(Item::as_str).map(str::to_string)
+}
+
+/// 就地替换已有键的值：不经过 insert 换键，键上的装饰（前缀注释、行内注释）原样保留。
+fn replace_value(table: &mut Table, key: &str, value: Value) {
+    if let Some(Item::Value(old)) = table.get_mut(key) {
+        *old = value;
+    } else {
+        table.insert(key, Item::Value(value));
+    }
+}
+
+/// 同 replace_value，用于子表整体重建（env / http_headers 等）；
+/// 被替换子表头部的前缀注释等装饰随旧表带回。
+fn replace_table(table: &mut Table, key: &str, sub: Table) {
+    if let Some(Item::Table(old)) = table.get_mut(key) {
+        let decor = old.decor().clone();
+        *old = sub;
+        *old.decor_mut() = decor;
+    } else {
+        table.insert(key, Item::Table(sub));
+    }
+}
+
+/// Some 写入、None 移除（bool/i64 等 JSON 直接映射的 TOML 标量共用）。
+fn set_typed_value<T: Into<Value>>(table: &mut Table, key: &str, value: Option<T>) {
+    match value {
+        Some(value) => replace_value(table, key, value.into()),
+        None => {
+            table.remove(key);
+        }
+    }
+}
+
+fn boolean_of(table: &Table, key: &str) -> Option<bool> {
+    table
+        .get(key)
+        .and_then(Item::as_value)
+        .and_then(Value::as_bool)
+}
+
+fn integer_of(table: &Table, key: &str) -> Option<i64> {
+    table
+        .get(key)
+        .and_then(Item::as_value)
+        .and_then(Value::as_integer)
+}
+
+/// 子表两种写法都读：[mcp_servers.x.env] 段形式与 env = { .. } 内联形式；非字符串值跳过。
+fn string_map(item: Option<&Item>) -> BTreeMap<String, String> {
+    let pairs: Vec<(String, String)> = match item {
+        Some(Item::Table(table)) => table
+            .iter()
+            .filter_map(|(key, value)| {
+                value
+                    .as_str()
+                    .map(|text| (key.to_string(), text.to_string()))
+            })
+            .collect(),
+        Some(Item::Value(Value::InlineTable(inline))) => inline
+            .iter()
+            .filter_map(|(key, value)| {
+                value
+                    .as_str()
+                    .map(|text| (key.to_string(), text.to_string()))
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    pairs.into_iter().collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -452,5 +675,235 @@ model_reasoning_effort = "high""#;
 
         // 含语法错误时不 panic：taplo 跳过错误区间仍产出文本
         assert!(!format_document("a = @\n").is_empty());
+    }
+
+    #[test]
+    fn mcp_servers_parses_stdio_http_and_inline_subtables() {
+        let source = r#"
+[mcp_servers.node_repl]
+command = 'C:\bin\node_repl.exe'
+args = ["--a", "--b"]
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+CODEX_HOME = 'C:\.codex'
+
+[mcp_servers.tavily]
+url = "https://mcp.tavily.com/mcp"
+bearer_token_env_var = "TAVILY_API_KEY"
+
+[mcp_servers.tavily.http_headers]
+X-Region = "us"
+
+[mcp_servers.exa]
+url = "https://mcp.exa.ai/mcp"
+env_http_headers = { "x-api-key" = "EXA_API_KEY" }
+"#;
+        let servers = mcp_servers_from_document(&parse_document(source).unwrap());
+
+        assert_eq!(servers.len(), 3);
+        assert_eq!(servers[0].name, "node_repl");
+        assert_eq!(servers[0].command.as_deref(), Some(r"C:\bin\node_repl.exe"));
+        assert_eq!(servers[0].args, ["--a", "--b"]);
+        assert_eq!(servers[0].startup_timeout_sec, Some(120));
+        assert_eq!(
+            servers[0].env.get("CODEX_HOME").map(String::as_str),
+            Some(r"C:\.codex")
+        );
+
+        assert_eq!(servers[1].name, "tavily");
+        assert_eq!(
+            servers[1].url.as_deref(),
+            Some("https://mcp.tavily.com/mcp")
+        );
+        assert_eq!(
+            servers[1].bearer_token_env_var.as_deref(),
+            Some("TAVILY_API_KEY")
+        );
+        assert_eq!(
+            servers[1].http_headers.get("X-Region").map(String::as_str),
+            Some("us")
+        );
+
+        assert_eq!(servers[2].name, "exa");
+        assert_eq!(
+            servers[2]
+                .env_http_headers
+                .get("x-api-key")
+                .map(String::as_str),
+            Some("EXA_API_KEY")
+        );
+    }
+
+    #[test]
+    fn upsert_new_server_renders_expected_section() {
+        let mut document = DocumentMut::new();
+        upsert_mcp_server(
+            &mut document,
+            &McpServerSpec {
+                name: "context7".into(),
+                url: Some("https://mcp.context7.com/mcp".into()),
+                bearer_token_env_var: Some("CONTEXT7_API_KEY".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let text = document.to_string();
+        assert!(text.contains("[mcp_servers.context7]"), "{text}");
+        assert!(
+            text.contains(r#"url = "https://mcp.context7.com/mcp""#),
+            "{text}"
+        );
+        assert!(
+            text.contains(r#"bearer_token_env_var = "CONTEXT7_API_KEY""#),
+            "{text}"
+        );
+        assert!(!text.contains("command"), "{text}");
+    }
+
+    #[test]
+    fn upsert_edit_preserves_unmodeled_keys_and_comments() {
+        let source = r#"
+[mcp_servers.github]
+# 手动维护的服务器
+command = "github-mcp-server"
+args = ["stdio"]
+cwd = "/srv"
+
+[mcp_servers.github.env]
+GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_x"
+EXTRA = "1"
+
+[mcp_servers.github.tools.read]
+approval_mode = "approve"
+"#;
+        let mut document = parse_document(source).unwrap();
+        upsert_mcp_server(
+            &mut document,
+            &McpServerSpec {
+                name: "github".into(),
+                command: Some("github-mcp-server".into()),
+                args: vec!["stdio".into(), "--verbose".into()],
+                env: BTreeMap::from([(
+                    "GITHUB_PERSONAL_ACCESS_TOKEN".to_string(),
+                    "ghp_y".to_string(),
+                )]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let text = document.to_string();
+        assert!(text.contains("# 手动维护的服务器"), "{text}");
+        assert!(text.contains("cwd = \"/srv\""), "{text}");
+        assert!(text.contains("[mcp_servers.github.tools.read]"), "{text}");
+        assert!(text.contains("approval_mode = \"approve\""), "{text}");
+        assert!(text.contains("\"--verbose\""), "{text}");
+        // env 子表按 map 全量重建：旧 token 不留、未列入的 EXTRA 也被清掉
+        assert!(!text.contains("ghp_x"), "{text}");
+        assert!(!text.contains("EXTRA"), "{text}");
+        assert!(text.contains("ghp_y"), "{text}");
+    }
+
+    #[test]
+    fn upsert_removes_emptied_modeled_keys() {
+        let source = r#"
+[mcp_servers.old]
+command = "node"
+url = "https://old.example"
+startup_timeout_sec = 20
+enabled = false
+
+[mcp_servers.old.env]
+A = "1"
+"#;
+        let mut document = parse_document(source).unwrap();
+        upsert_mcp_server(
+            &mut document,
+            &McpServerSpec {
+                name: "old".into(),
+                command: Some("node".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let text = document.to_string();
+        assert!(text.contains("command = \"node\""), "{text}");
+        assert!(!text.contains("url"), "{text}");
+        assert!(!text.contains("startup_timeout_sec"), "{text}");
+        assert!(!text.contains("enabled"), "{text}");
+        assert!(!text.contains("A = \"1\""), "{text}");
+        assert!(!text.contains("[mcp_servers.old.env]"), "{text}");
+    }
+
+    #[test]
+    fn upsert_scalar_after_subtable_reparses_correctly() {
+        // 已有 env 子表的服务器再补一个标量键：依赖 toml_edit 先值后子表的渲染顺序，
+        // 标量若落到 [x.env] 头之后就会归属错误——重解析钉住该假设。
+        let source = r#"
+[mcp_servers.exa]
+url = "https://mcp.exa.ai/mcp"
+
+[mcp_servers.exa.env]
+A = "1"
+"#;
+        let mut document = parse_document(source).unwrap();
+        upsert_mcp_server(
+            &mut document,
+            &McpServerSpec {
+                name: "exa".into(),
+                url: Some("https://mcp.exa.ai/mcp".into()),
+                bearer_token_env_var: Some("EXA_API_KEY".into()),
+                env: BTreeMap::from([("A".to_string(), "1".to_string())]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let text = document.to_string();
+        let servers = mcp_servers_from_document(&parse_document(&text).unwrap());
+        assert_eq!(servers.len(), 1);
+        assert_eq!(
+            servers[0].bearer_token_env_var.as_deref(),
+            Some("EXA_API_KEY")
+        );
+        assert_eq!(servers[0].env.get("A").map(String::as_str), Some("1"));
+    }
+
+    #[test]
+    fn replace_mcp_section_carries_decor_and_drops_stale() {
+        let live = parse_document(
+            "# live 注释\n[mcp_servers.tavily]\nurl = \"https://mcp.tavily.com/mcp\"\n",
+        )
+        .unwrap();
+
+        let mut target =
+            parse_document("model = \"gpt-5.6\"\n\n[mcp_servers.stale]\ncommand = \"old\"\n")
+                .unwrap();
+        replace_mcp_section(&mut target, &live);
+        let text = target.to_string();
+        assert!(text.contains("model = \"gpt-5.6\""), "{text}");
+        assert!(text.contains("mcp_servers.tavily"), "{text}");
+        assert!(text.contains("live 注释"), "{text}");
+        assert!(!text.contains("stale"), "{text}");
+
+        // live 无 MCP 段：target 的陈旧段被清除（全局模型：删除即全局删除）
+        let empty_live = parse_document("model = \"gpt-5.6\"\n").unwrap();
+        let mut target = parse_document("[mcp_servers.stale]\ncommand = \"old\"\n").unwrap();
+        replace_mcp_section(&mut target, &empty_live);
+        assert!(!target.to_string().contains("stale"));
+    }
+
+    #[test]
+    fn merge_mcp_section_falls_back_to_verbatim_on_invalid_raw() {
+        let live = parse_document("[mcp_servers.tavily]\nurl = \"x\"\n").unwrap();
+        let raw = "not [ valid";
+        assert_eq!(merge_mcp_section(raw, &live), raw);
+
+        let merged = merge_mcp_section("model = \"gpt-5.6\"\n", &live);
+        assert!(merged.contains("mcp_servers.tavily"), "{merged}");
+        assert!(merged.contains("model = \"gpt-5.6\""), "{merged}");
     }
 }

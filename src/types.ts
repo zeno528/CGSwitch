@@ -46,6 +46,24 @@ export interface ProfileConnectionResult {
   error: string | null;
 }
 
+/** ~/.codex/config.toml [mcp_servers.*] 的一条服务器配置（建模字段子集；未建模键由后端原样保留）。 */
+export interface McpServerSpec {
+  name: string;
+  /** null = 未写入该键（Codex 默认启用）；false 显式停用。 */
+  enabled: boolean | null;
+  startup_timeout_sec: number | null;
+  tool_timeout_sec: number | null;
+  /** STDIO 传输：有 command 无 url。 */
+  command: string | null;
+  args: string[];
+  env: Record<string, string>;
+  /** Streamable HTTP 传输：有 url 无 command。 */
+  url: string | null;
+  bearer_token_env_var: string | null;
+  http_headers: Record<string, string>;
+  env_http_headers: Record<string, string>;
+}
+
 export interface TomlDiagnostic {
   from: number;
   to: number;
