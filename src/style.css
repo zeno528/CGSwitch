@@ -480,7 +480,7 @@ body.drag-active * {
   display: flex;
   margin-inline: -2rem;
   margin-top: -1rem;
-  min-height: 3.25rem;
+  min-height: 3.5rem;
   /* 内容区中心对齐侧边栏 wordmark（实测差 6px），按钮仍在容器内垂直居中 */
   padding: 0.875rem 2rem 0.125rem;
 }

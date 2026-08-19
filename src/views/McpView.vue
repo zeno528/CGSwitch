@@ -137,12 +137,12 @@ function removeServer(server: McpServerSpec) {
   <McpEdit v-else-if="creatingServer" :server="null" create @back="creatingServer = false" />
   <section v-else class="mx-auto w-full max-w-none">
     <header class="apple-page-bar apple-page-bar--roomy sticky top-[-16px] z-10 flex-wrap justify-between gap-4">
-      <div class="flex min-w-0 items-center gap-2.5 text-sm">
+      <div class="flex min-w-0 items-center gap-2.5">
         <span class="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-[10px] text-accent">
           <McpIcon class="h-[22px] w-[22px]" />
         </span>
         <div class="min-w-0">
-          <div class="font-semibold tracking-tight">MCP 服务器</div>
+          <div class="apple-title">MCP 服务器管理</div>
           <div class="muted truncate text-xs">直接读写 ~/.codex/config.toml，对所有供应商全局生效；重启 Codex 后加载。</div>
         </div>
       </div>
