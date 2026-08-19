@@ -7,11 +7,11 @@ import {
   NInput,
   NModal,
   NSelect,
-  NSwitch,
   useDialog,
   useMessage,
 } from "naive-ui";
 import { api, isTauri } from "../api";
+import AppSwitch from "../components/AppSwitch.vue";
 import ChatGPTAccount from "../components/ChatGPTAccount.vue";
 import ProfileIconTile from "../components/ProfileIconTile.vue";
 import TrashIcon from "../components/TrashIcon.vue";
@@ -470,7 +470,7 @@ async function openPath(item: PathInfo) {
               <div class="setting-description mt-0.5">登录系统后自动启动 CGswitch</div>
             </div>
           </div>
-          <n-switch
+          <AppSwitch
             v-model:value="form.autostart_enabled"
             @update:value="updateStartupToggle('autostart_enabled', $event)"
           />
@@ -485,7 +485,7 @@ async function openPath(item: PathInfo) {
               <div class="setting-description mt-0.5">启动时不显示主窗口，驻留系统托盘</div>
             </div>
           </div>
-          <n-switch
+          <AppSwitch
             v-model:value="form.silent_start"
             @update:value="updateStartupToggle('silent_start', $event)"
           />
@@ -500,7 +500,7 @@ async function openPath(item: PathInfo) {
               <div class="setting-description mt-0.5">点击关闭按钮时隐藏到托盘而不是退出</div>
             </div>
           </div>
-          <n-switch
+          <AppSwitch
             v-model:value="form.minimize_to_tray"
             @update:value="updateStartupToggle('minimize_to_tray', $event)"
           />
@@ -630,7 +630,7 @@ async function openPath(item: PathInfo) {
           <div class="setting-title">应用配置后自动重启 Codex</div>
           <div class="setting-description mt-0.5">开启后应用配置会自动重启 Codex 生效；关闭则只保存配置，稍后可手动重启。</div>
         </div>
-        <n-switch v-model:value="form.auto_restart" @update:value="updateAutoRestart" />
+        <AppSwitch v-model:value="form.auto_restart" @update:value="updateAutoRestart" />
       </div>
     </div>
 

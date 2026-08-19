@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { defineAsyncComponent, h, onActivated, onMounted, ref, watch } from "vue";
-import { NButton, NEmpty, NSwitch, useDialog, useMessage } from "naive-ui";
+import { NButton, NEmpty, useDialog, useMessage } from "naive-ui";
+import AppSwitch from "../components/AppSwitch.vue";
 import TrashIcon from "../components/TrashIcon.vue";
 import McpIcon from "../components/McpIcon.vue";
 import { api } from "../api";
@@ -272,10 +273,9 @@ function restoreToLive() {
             </div>
           </div>
           <div class="flex shrink-0 items-center gap-1.5">
-            <n-switch
+            <AppSwitch
               size="small"
               :value="server.enabled !== false"
-              :loading="togglingName === server.name"
               :aria-label="`启用 ${server.name}`"
               @update:value="toggleEnabled(server, $event)"
             />

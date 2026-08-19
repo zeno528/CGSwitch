@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, h, nextTick, onMounted, ref, watch } from "vue";
-import { NButton, NCheckbox, NInput, NSelect, NSwitch, useMessage } from "naive-ui";
+import { NButton, NCheckbox, NInput, NSelect, useMessage } from "naive-ui";
 import type { SelectOption } from "naive-ui";
+import AppSwitch from "./AppSwitch.vue";
 import LoadingSpinner from "./LoadingSpinner.vue";
 import ProfileIconEdit from "./ProfileIconEdit.vue";
 import ProfileIconTile from "./ProfileIconTile.vue";
@@ -635,6 +636,7 @@ async function saveIcon(icon: string | null) {
 
 async function toggleBalance(enabled: boolean) {
   if (savingBalance.value || !props.profile) return;
+  showBalance.value = enabled;
   savingBalance.value = true;
   try {
     await api.setProfileShowBalance(props.profile.id, enabled);
@@ -867,7 +869,7 @@ async function save() {
           <div class="text-sm font-semibold">余额/用量查询</div>
           <div class="muted mt-0.5 text-xs">窗口激活时自动刷新，点击数字手动刷新</div>
         </div>
-        <n-switch v-model:value="showBalance" :disabled="savingBalance" @update:value="toggleBalance" />
+        <AppSwitch :value="showBalance" @update:value="toggleBalance" />
       </div>
     </div>
 
