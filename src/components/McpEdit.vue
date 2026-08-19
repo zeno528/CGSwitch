@@ -122,7 +122,7 @@ async function save() {
       </button>
     </div>
 
-    <div class="apple-edit-content -mx-8 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pl-[var(--gap-main)] pr-[calc(var(--gap-main)-var(--scrollbar-size))] pb-4 [scrollbar-gutter:stable]">
+    <div class="apple-edit-content">
       <div class="apple-group shrink-0 p-0">
         <div class="apple-panel-section">
           <div class="grid gap-4 sm:grid-cols-2">
@@ -196,7 +196,7 @@ async function save() {
       </div>
     </div>
 
-    <div class="apple-edit-toolbar apple-edit-toolbar--footer -mx-8 -mb-7 flex items-center justify-end gap-2 bg-[var(--app-bg)] pl-8 pr-[42px]">
+    <div class="apple-edit-toolbar apple-edit-toolbar--footer">
       <n-button secondary @click="emit('back')">取消</n-button>
       <n-button type="primary" :loading="saving" @click="save">
         <template #icon>

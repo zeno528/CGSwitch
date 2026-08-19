@@ -744,7 +744,7 @@ async function save() {
       </button>
     </div>
 
-    <div class="apple-edit-content -mx-8 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pl-[var(--gap-main)] pr-[calc(var(--gap-main)-var(--scrollbar-size))] pb-4 [scrollbar-gutter:stable]">
+    <div class="apple-edit-content">
       <p v-if="loadError" class="muted mt-4 text-sm">{{ loadError }}</p>
 
       <div class="apple-group shrink-0 p-0">
@@ -958,16 +958,16 @@ async function save() {
       </div>
     </div>
 
-    <div class="apple-edit-toolbar apple-edit-toolbar--footer -mx-8 -mb-7 flex items-center justify-end gap-2 bg-[var(--app-bg)] pl-8 pr-[42px]">
+    <div class="apple-edit-toolbar apple-edit-toolbar--footer">
       <button
         v-if="editorDiagnostics.count > 0"
         type="button"
-        class="mr-auto flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-[#ff3b30] transition-opacity hover:opacity-80"
+        class="mr-auto flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-[var(--danger)] transition-opacity hover:opacity-80"
         title="跳转到第一个错误"
         aria-live="polite"
         @click="jumpToFirstDiagnostic"
       >
-        <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ff3b30]" aria-hidden="true" />
+        <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--danger)]" aria-hidden="true" />
         <span class="truncate">
           {{ editorDiagnostics.count }} 个错误
           <template v-if="editorDiagnostics.firstLine !== null">

@@ -167,7 +167,7 @@ onMounted(refreshStatus);
     </div>
 
     <div v-else-if="status?.authenticated" class="space-y-4">
-      <div class="flex items-start justify-between gap-3 rounded-[var(--radius-card)] bg-success/10 p-3 shadow-[0_0_0_1px_rgba(52,199,89,0.16)]">
+      <div class="rounded-[var(--radius-card)] flex items-start justify-between gap-3 bg-success/10 p-3 shadow-[0_0_0_1px_rgba(52,199,89,0.16)]">
         <div class="flex min-w-0 items-start gap-3">
           <PhCheckCircle class="mt-2 h-6 w-6 shrink-0 text-success" weight="bold" aria-hidden="true" />
           <div class="min-w-0">

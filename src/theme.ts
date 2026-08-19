@@ -1,5 +1,7 @@
 import type { GlobalThemeOverrides } from "naive-ui";
 
+// Naive UI derives component colors through seemly/rgba at runtime, so these
+// bridge values must stay concrete; CSS-native surfaces use the tokens in style.css.
 export const themeOverrides: GlobalThemeOverrides = {
   common: {
     primaryColor: "#007aff",
@@ -18,13 +20,13 @@ export const themeOverrides: GlobalThemeOverrides = {
     fontSizeMedium: "14px",
   },
   Card: {
-    borderRadius: "20px",
+    borderRadius: "16px",
   },
   Dialog: {
-    borderRadius: "20px",
+    borderRadius: "16px",
   },
   Modal: {
-    borderRadius: "20px",
+    borderRadius: "16px",
   },
   Input: {
     colorFocus: "#ffffff",
@@ -48,22 +50,22 @@ export const darkThemeOverrides: GlobalThemeOverrides = {
     errorColorPressed: "#c4251d",
     errorColorSuppl: "#ff3b30",
     infoColor: "#5e9cff",
-    bodyColor: "#1a1a1c",
+    bodyColor: "#1a1d1f",
     borderRadius: "10px",
     borderRadiusSmall: "8px",
     fontSizeMedium: "14px",
   },
   Card: {
-    borderRadius: "20px",
+    borderRadius: "16px",
     color: "#24242a",
   },
   Dialog: {
     color: "#24242a",
-    borderRadius: "20px",
+    borderRadius: "16px",
   },
   Modal: {
     color: "#24242a",
-    borderRadius: "20px",
+    borderRadius: "16px",
   },
   Popover: {
     color: "#24242a",

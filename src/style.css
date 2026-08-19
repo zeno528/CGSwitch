@@ -11,6 +11,8 @@
   color-scheme: light;
   --accent: #007aff;
   --success: #34c759;
+  --warning: #ff9f0a;
+  --danger: #ff3b30;
   --app-bg: #f7f7f8;
   --panel-bg: #ffffff;
   --panel-border: rgba(60, 60, 67, 0.12);
@@ -30,6 +32,26 @@
   --gap-main: 2rem;
   /* 主滚动容器底部留白，避免滚动到末尾时内容贴住窗口边缘 */
   --gap-main-bottom: 2rem;
+  /* 全局控件与窗口几何：页面、编辑页和侧边栏只从这里取尺寸 */
+  --font-size-base: 0.875rem;
+  --sidebar-width-expanded: 8rem;
+  --sidebar-width-collapsed: 3rem;
+  --sidebar-nav-height: 2.25rem;
+  --sidebar-nav-radius: 0.625rem;
+  --sidebar-nav-padding: 0.5625rem;
+  --sidebar-icon-size: 1.125rem;
+  --brand-logo-size: 1.25rem;
+  --control-height: 2.25rem;
+  --icon-button-size: 2rem;
+  --radius-control: 0.75rem;
+  --radius-control-sm: 0.5rem;
+  --main-top-inset: 1rem;
+  --edit-page-offset: 2.75rem;
+  --edit-footer-bleed: 1.75rem;
+  --edit-footer-padding-right: 2.625rem;
+  --motion-fast: 150ms;
+  --motion-sidebar: 240ms;
+  --motion-layout: 360ms;
   /* 页面顶部栏与底部操作栏统一高度 */
   --toolbar-height: 3.625rem;
   /* 窗口标题栏高度：品牌区与窗口控制按钮共用同一垂直中心 */
@@ -45,7 +67,7 @@
   /* linguagram 深色配色：抬升暖灰画布（不纯黑）+ 表面抬一档 + 白底 hairline */
   --accent: #5e9cff;
   --success: #3fb950;
-  --app-bg: #1a1a1c;
+  --app-bg: #1a1d1f;
   --panel-bg: #24242a;
   --panel-border: rgba(255, 255, 255, 0.10);
   --panel-ring: rgba(255, 255, 255, 0.06);
@@ -83,7 +105,7 @@ body {
     system-ui,
     sans-serif;
   /* 与 naive-ui NGlobalStyle 原先注入的基准一致（已移除该组件，由这里接管） */
-  font-size: 14px;
+  font-size: var(--font-size-base);
   line-height: 1.6;
 }
 
@@ -139,17 +161,17 @@ body {
 /* 余额/用量胶囊数据变色（全局统一；cc-switch 同款阈值，后续供应商直接复用）。
    变色数据同时加粗，标签/倒计时保持默认字重 */
 .chip-success {
-  color: #16a34a;
+  color: var(--success);
   font-weight: 600;
 }
 
 .chip-warn {
-  color: #ff9500;
+  color: var(--warning);
   font-weight: 600;
 }
 
 .chip-danger {
-  color: #ff3b30;
+  color: var(--danger);
   font-weight: 600;
 }
 
@@ -229,7 +251,7 @@ body {
 
 /* 删除确认弹窗：标题与操作按钮统一红色语义 */
 .delete-profile-dialog .n-dialog__title {
-  color: #ff3b30;
+  color: var(--danger);
 }
 
 /* 弹窗操作按钮略放大，保持自定义模态框与 useDialog 的触控尺寸一致 */
@@ -289,12 +311,71 @@ main:has(.apple-edit-toolbar) {
 }
 
 .apple-edit-page {
-  height: calc(100vh - var(--window-chrome-height) - 2.75rem);
+  height: calc(100vh - var(--window-chrome-height) - var(--edit-page-offset));
 }
 
+.apple-window-chrome,
+.apple-page-bar,
+.apple-edit-toolbar {
+  display: flex;
+  align-items: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.apple-window-chrome {
+  height: var(--window-chrome-height);
+  flex-shrink: 0;
+  background: var(--app-bg);
+}
+
+.window-control-button {
+  display: grid;
+  width: 2.5rem;
+  height: 100%;
+  place-items: center;
+  color: var(--text-secondary);
+  transition: background-color var(--motion-fast) ease-out, color var(--motion-fast) ease-out;
+}
+
+.window-control-button:hover {
+  background: rgb(0 0 0 / 0.06);
+}
+
+.window-control-button > svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+:root.dark .window-control-button:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.window-control-button--close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+.apple-sidebar-shell,
 .apple-sidebar {
   background: var(--sidebar-bg);
-  transition: width 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  width: var(--sidebar-width-expanded);
+  transition: width var(--motion-layout) cubic-bezier(0.22, 1, 0.36, 1);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.apple-sidebar-shell {
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;
+  align-items: center;
+  position: relative;
+}
+
+.apple-sidebar-shell.apple-sidebar--collapsed,
+.apple-sidebar.apple-sidebar--collapsed {
+  width: var(--sidebar-width-collapsed);
 }
 
 /* 侧边栏应用名 wordmark：Windows 自带几何字体 Bahnschrift + 黑白品牌色 */
@@ -453,15 +534,28 @@ body.drag-active * {
 }
 
 .apple-sidebar-nav-button {
+  align-items: center;
+  border-radius: var(--sidebar-nav-radius);
+  display: flex;
   font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: var(--font-size-base);
   gap: 0.5rem;
+  height: var(--sidebar-nav-height);
+  position: relative;
+  width: 100%;
   /* 与收缩态一致（9px），展开/收缩图标 x 位置固定不动 */
-  padding-inline: 9px;
+  padding-inline: var(--sidebar-nav-padding);
   transition:
-    gap 240ms cubic-bezier(0.22, 1, 0.36, 1),
-    padding 240ms cubic-bezier(0.22, 1, 0.36, 1),
-    background-color 150ms ease-out,
-    color 150ms ease-out;
+    gap var(--motion-sidebar) cubic-bezier(0.22, 1, 0.36, 1),
+    padding var(--motion-sidebar) cubic-bezier(0.22, 1, 0.36, 1),
+    background-color var(--motion-fast) ease-out,
+    color var(--motion-fast) ease-out;
+}
+
+.apple-sidebar-nav-button > svg {
+  width: var(--sidebar-icon-size);
+  height: var(--sidebar-icon-size);
+  flex-shrink: 0;
 }
 
 :root.dark .apple-sidebar-nav-button .apple-sidebar-label,
@@ -477,8 +571,8 @@ body.drag-active * {
 .apple-sidebar--collapsed .apple-sidebar-nav-button {
   gap: 0;
   /* 36px 按钮内 18px 图标居中：padding 9px 可过渡，避免 justify-content 瞬间切换造成撞边弹回 */
-  padding-left: 9px;
-  padding-right: 9px;
+  padding-left: var(--sidebar-nav-padding);
+  padding-right: var(--sidebar-nav-padding);
 }
 
 /* 标题栏品牌（logo+名字）：复用导航按钮的固定图标锚点，收缩时只保留 Logo */
@@ -486,7 +580,13 @@ body.drag-active * {
   gap: 0.5rem;
   padding-left: 0.75rem;
   transition:
-    gap 240ms cubic-bezier(0.22, 1, 0.36, 1);
+    gap var(--motion-sidebar) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.apple-sidebar-brand > img {
+  width: var(--brand-logo-size);
+  height: var(--brand-logo-size);
+  flex-shrink: 0;
 }
 
 .apple-sidebar--collapsed .apple-sidebar-brand {
@@ -507,10 +607,16 @@ body.drag-active * {
    固定后右侧操作按钮在所有页面落在同一水平线上 */
 .apple-page-bar {
   background: var(--app-bg);
-  display: flex;
-  margin-inline: -2rem;
-  margin-top: -1rem;
-  padding-inline: 2rem;
+  margin-inline: calc(-1 * var(--gap-main));
+  margin-top: calc(-1 * var(--main-top-inset));
+  padding-inline: var(--gap-main);
+}
+
+.apple-page-bar--sticky {
+  position: sticky;
+  /* 与 .apple-page-bar 的负上边距共用 --main-top-inset，sticky 顶点始终贴住 main 顶部 */
+  top: calc(-1 * var(--main-top-inset));
+  z-index: 10;
 }
 
 /* 标题栏与下方内容的间距走外边距：不再用内边距，避免压缩统一高度的垂直居中空间 */
@@ -522,7 +628,6 @@ body.drag-active * {
    让状态、标题、返回按钮和操作按钮落在同一条垂直中心线上。 */
 .apple-page-bar,
 .apple-edit-toolbar {
-  align-items: center;
   box-sizing: border-box;
   height: var(--toolbar-height);
   min-height: var(--toolbar-height);
@@ -530,6 +635,14 @@ body.drag-active * {
 }
 
 .apple-edit-toolbar--footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-inline: calc(-1 * var(--gap-main));
+  margin-bottom: calc(-1 * var(--edit-footer-bleed));
+  background: var(--app-bg);
+  padding-left: var(--gap-main);
+  padding-right: var(--edit-footer-padding-right);
   border-top: 1px solid var(--panel-border);
 }
 
@@ -541,9 +654,19 @@ body.drag-active * {
 }
 
 .apple-edit-content {
-  margin-top: calc(-1 * var(--toolbar-height));
-  padding-top: calc(var(--toolbar-height) + var(--gap-page));
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  margin-inline: calc(-1 * var(--gap-main));
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-left: var(--gap-main);
+  padding-right: calc(var(--gap-main) - var(--scrollbar-size));
+  padding-bottom: 1rem;
+  padding-top: var(--gap-page);
   position: relative;
+  scrollbar-gutter: stable;
 }
 
 .apple-edit-content > .apple-group {
@@ -611,6 +734,62 @@ body.drag-active * {
   border-radius: var(--radius-card);
   background: var(--panel-bg);
   box-shadow: 0 0 0 1px var(--panel-ring);
+}
+
+.apple-action-button {
+  align-items: center;
+  border: 1px solid var(--panel-ring);
+  border-radius: var(--radius-control);
+  display: inline-flex;
+  gap: 0.5rem;
+  height: var(--control-height);
+  justify-content: center;
+  padding-inline: 0.75rem;
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  transition: background-color var(--motion-fast) ease-out;
+}
+
+.apple-action-button:hover {
+  background: var(--sidebar-bg);
+}
+
+.apple-action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.apple-list-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: var(--radius-control);
+  padding: 0.625rem 0.75rem;
+  box-shadow: 0 0 0 1px var(--panel-ring);
+}
+
+.apple-icon-button {
+  display: grid;
+  width: var(--icon-button-size);
+  height: var(--icon-button-size);
+  place-items: center;
+  border-radius: var(--radius-control-sm);
+  transition:
+    background-color var(--motion-fast) ease-out,
+    color var(--motion-fast) ease-out,
+    opacity var(--motion-fast) ease-out;
+}
+
+.apple-editor-shell {
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background: rgb(0 0 0 / 0.04);
+  box-shadow: 0 0 0 1px var(--panel-ring);
+}
+
+:root.dark .apple-editor-shell {
+  background: rgb(255 255 255 / 0.06);
 }
 
 /* 暗色下卡片增加纵深：半透明白 hairline 环 + 更强的黑接触阴影，避免贴平背景 */

@@ -28,7 +28,7 @@ const selected = ref<string | null>(props.icon);
       </button>
     </div>
 
-    <div class="apple-edit-content -mx-8 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pl-[var(--gap-main)] pr-[calc(var(--gap-main)-var(--scrollbar-size))] pb-4 [scrollbar-gutter:stable]">
+    <div class="apple-edit-content">
       <div class="apple-group shrink-0 p-[var(--gap-card)]">
       <div class="grid grid-cols-4 gap-1.5 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8">
         <button
@@ -59,7 +59,7 @@ const selected = ref<string | null>(props.icon);
       </div>
     </div>
 
-    <div class="apple-edit-toolbar apple-edit-toolbar--footer -mx-8 -mb-7 flex items-center justify-end gap-2 bg-[var(--app-bg)] pl-8 pr-[42px]">
+    <div class="apple-edit-toolbar apple-edit-toolbar--footer">
       <n-button secondary @click="emit('back')">取消</n-button>
       <n-button type="primary" @click="emit('save', selected)">
         <template #icon>

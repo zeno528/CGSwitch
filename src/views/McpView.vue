@@ -192,7 +192,7 @@ function restoreToLive() {
   <McpEdit v-if="editingServer" :server="editingServer" @back="closeEdit" />
   <McpEdit v-else-if="creatingServer" :server="null" create @back="creatingServer = false" />
   <section v-else class="mx-auto w-full max-w-none">
-    <header class="apple-page-bar apple-page-bar--roomy sticky top-[-16px] z-10 flex-wrap justify-between gap-4">
+    <header class="apple-page-bar apple-page-bar--roomy apple-page-bar--sticky flex-wrap justify-between gap-4">
       <div class="flex min-w-0 items-center gap-2.5">
         <span class="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-[10px] text-accent">
           <McpIcon class="h-[22px] w-[22px]" />
@@ -244,7 +244,7 @@ function restoreToLive() {
         <div
           v-for="server in servers"
           :key="server.name"
-          class="flex items-center justify-between gap-3 rounded-xl shadow-[0_0_0_1px_var(--panel-ring)] px-3 py-2.5"
+          class="apple-list-row"
         >
           <div class="flex min-w-0 items-center gap-2.5">
             <span class="settings-icon-tile grid h-8 w-8 shrink-0 place-items-center rounded-lg text-accent">

@@ -367,7 +367,7 @@ async function openPath(item: PathInfo) {
 
 <template>
   <section class="settings-page mx-auto w-full max-w-none">
-    <div class="apple-page-bar sticky top-[-16px] z-10">
+    <div class="apple-page-bar apple-page-bar--sticky">
       <button
         type="button"
         class="apple-page-header apple-back-button"
@@ -464,7 +464,7 @@ async function openPath(item: PathInfo) {
       <div class="flex flex-col gap-5">
         <div class="flex items-center justify-between gap-4">
           <div class="flex items-start gap-3">
-            <span class="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[#007aff]">
+            <span class="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-xl text-accent">
               <PhPower class="h-[18px] w-[18px]" weight="bold" aria-hidden="true" />
             </span>
             <div>
@@ -494,7 +494,7 @@ async function openPath(item: PathInfo) {
         </div>
         <div class="flex items-center justify-between gap-4">
           <div class="flex items-start gap-3">
-            <span class="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[#ff9500]">
+            <span class="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[var(--warning)]">
               <PhTrayArrowDown class="h-[18px] w-[18px]" weight="bold" aria-hidden="true" />
             </span>
             <div>
@@ -526,7 +526,7 @@ async function openPath(item: PathInfo) {
           v-for="action in backupFileActions"
           :key="action.key"
           type="button"
-          class="inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-[var(--panel-ring)] px-3 text-sm font-medium transition-colors hover:bg-[var(--sidebar-bg)] disabled:cursor-not-allowed disabled:opacity-50"
+          class="apple-action-button"
           :disabled="action.disabled()"
           @click="action.run()"
         >
@@ -536,7 +536,7 @@ async function openPath(item: PathInfo) {
         </button>
       </div>
 
-      <div class="mt-[var(--gap-section)] rounded-[var(--radius-card)] bg-[color-mix(in_srgb,var(--sidebar-bg)_30%,var(--panel-bg))] p-3.5 shadow-[0_0_0_1px_var(--panel-ring)]">
+      <div class="rounded-[var(--radius-card)] mt-[var(--gap-section)] bg-[color-mix(in_srgb,var(--sidebar-bg)_30%,var(--panel-bg))] p-3.5 shadow-[0_0_0_1px_var(--panel-ring)]">
         <div class="text-[15px] font-semibold tracking-tight">自动备份</div>
         <div class="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
@@ -561,7 +561,7 @@ async function openPath(item: PathInfo) {
             v-for="action in backupUtilityActions"
             :key="action.key"
             type="button"
-            class="inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-[var(--panel-ring)] px-3 text-sm font-medium transition-colors hover:bg-[var(--sidebar-bg)] disabled:cursor-not-allowed disabled:opacity-50"
+            class="apple-action-button"
             :disabled="action.disabled()"
             @click="action.run()"
           >
@@ -578,7 +578,7 @@ async function openPath(item: PathInfo) {
         <div
           v-for="backup in backups"
           :key="backup.name"
-          class="flex items-center justify-between gap-3 rounded-xl shadow-[0_0_0_1px_var(--panel-ring)] px-3 py-2.5"
+          class="apple-list-row"
         >
           <div class="flex min-w-0 items-center gap-2.5">
             <span class="settings-icon-tile grid h-8 w-8 shrink-0 place-items-center rounded-lg text-accent">
@@ -592,7 +592,7 @@ async function openPath(item: PathInfo) {
           <div class="flex shrink-0 gap-1.5">
             <button
               type="button"
-              class="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 transition-colors hover:bg-[var(--sidebar-bg)] hover:text-accent"
+              class="apple-icon-button text-zinc-500 hover:bg-[var(--sidebar-bg)] hover:text-accent"
               title="编辑备份名称"
               aria-label="编辑备份名称"
               @click="openRename(backup)"
@@ -601,7 +601,7 @@ async function openPath(item: PathInfo) {
             </button>
             <button
               type="button"
-              class="grid h-8 w-8 place-items-center rounded-lg text-accent transition-colors hover:bg-accent/10"
+              class="apple-icon-button text-accent hover:bg-accent/10"
               title="恢复数据库"
               aria-label="恢复数据库"
               @click="restoreBackup(backup)"
@@ -610,7 +610,7 @@ async function openPath(item: PathInfo) {
             </button>
             <button
               type="button"
-              class="grid h-8 w-8 place-items-center rounded-lg text-[#ff3b30]/70 transition-colors hover:bg-[#ff3b30]/10 hover:text-[#ff3b30]"
+              class="apple-icon-button text-[var(--danger)]/70 hover:bg-[var(--danger)]/10 hover:text-[var(--danger)]"
               title="删除备份"
               aria-label="删除备份"
               @click="deleteBackup(backup)"

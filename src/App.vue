@@ -221,8 +221,8 @@ useModalEnterConfirm();
       <n-message-provider :container-style="{ top: '44px' }">
         <n-layout class="h-full! rounded-none! bg-transparent!">
           <div class="flex h-screen flex-col">
-            <div class="flex h-[var(--window-chrome-height)] shrink-0 items-center bg-[var(--app-bg)]">
-              <div data-tauri-drag-region class="relative flex h-full shrink-0 items-center bg-[var(--sidebar-bg)] transition-[width] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)]" :class="isSidebarCollapsed ? ['w-12', 'apple-sidebar--collapsed'] : 'w-[128px]'">
+            <div class="apple-window-chrome">
+              <div data-tauri-drag-region class="apple-sidebar-shell" :class="isSidebarCollapsed ? 'apple-sidebar--collapsed' : ''">
                 <div
                   class="apple-sidebar-brand flex h-full w-fit cursor-pointer items-center"
                   role="button"
@@ -233,43 +233,43 @@ useModalEnterConfirm();
                   @mouseenter="sidebarFlyoutArmed = true"
                   @mouseleave="sidebarFlyoutArmed = false"
                 >
-                  <img src="/logo.svg" alt="CGswitch" class="h-5 w-5 shrink-0 dark:invert" draggable="false" />
+                  <img src="/logo.svg" alt="CGswitch" class="dark:invert" draggable="false" />
                   <span class="apple-sidebar-label apple-wordmark whitespace-nowrap">CGswitch</span>
                 </div>
                 <span v-if="sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">{{ isSidebarCollapsed ? "展开侧边栏" : "收缩侧边栏" }}</span>
               </div>
               <div data-tauri-drag-region class="min-w-0 flex-1 self-stretch" />
               <div class="flex h-full items-center">
-                <button type="button" class="grid h-8 w-10 place-items-center text-[var(--text-secondary)] transition-colors hover:bg-black/6 dark:hover:bg-white/10" aria-label="最小化" @click="windowMinimize">
-                  <PhMinus class="h-4 w-4" weight="bold" aria-hidden="true" />
+                <button type="button" class="window-control-button" aria-label="最小化" @click="windowMinimize">
+                  <PhMinus weight="bold" aria-hidden="true" />
                 </button>
-                <button type="button" class="grid h-8 w-10 place-items-center text-[var(--text-secondary)] transition-colors hover:bg-black/6 dark:hover:bg-white/10" aria-label="最大化" @click="windowToggleMaximize">
-                  <PhSquare class="h-4 w-4" weight="bold" aria-hidden="true" />
+                <button type="button" class="window-control-button" aria-label="最大化" @click="windowToggleMaximize">
+                  <PhSquare weight="bold" aria-hidden="true" />
                 </button>
-                <button type="button" class="grid h-8 w-10 place-items-center text-[var(--text-secondary)] transition-colors hover:bg-[#e81123] hover:text-white" aria-label="关闭" @click="windowClose">
-                  <PhX class="h-4 w-4" weight="bold" aria-hidden="true" />
+                <button type="button" class="window-control-button window-control-button--close" aria-label="关闭" @click="windowClose">
+                  <PhX weight="bold" aria-hidden="true" />
                 </button>
               </div>
             </div>
             <div class="flex min-h-0 flex-1">
-            <aside class="apple-sidebar relative h-full shrink-0" :class="isSidebarCollapsed ? ['w-12', 'apple-sidebar--collapsed'] : 'w-[128px]'">
+            <aside class="apple-sidebar relative h-full shrink-0" :class="isSidebarCollapsed ? 'apple-sidebar--collapsed' : ''">
               <nav ref="sidebarNavRef" class="relative mx-1.5 mt-3 space-y-1">
                 <span class="apple-sidebar-indicator" :style="{ top: `${indicatorTop}px`, left: `${indicatorLeft}px` }" aria-hidden="true" />
-                <button ref="profilesNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-normal hover:bg-black/5 dark:hover:bg-white/8'" aria-label="供应商配置" @click="goProfiles" @mouseenter="sidebarFlyoutArmed = true">
-                  <PhStack class="h-[18px] w-[18px] shrink-0" weight="bold" aria-hidden="true" />
+                <button ref="profilesNavBtn" type="button" class="apple-sidebar-nav-button" :class="view === 'profiles' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-normal hover:bg-black/5 dark:hover:bg-white/8'" aria-label="供应商配置" @click="goProfiles" @mouseenter="sidebarFlyoutArmed = true">
+                  <PhStack weight="bold" aria-hidden="true" />
                   <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">供应商配置</span>
                   <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">供应商配置</span>
                 </button>
-                <button ref="mcpNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'mcp' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-normal hover:bg-black/5 dark:hover:bg-white/8'" aria-label="MCP 管理" @click="goMcp" @mouseenter="sidebarFlyoutArmed = true">
-                  <McpIcon class="h-[18px] w-[18px] shrink-0" />
+                <button ref="mcpNavBtn" type="button" class="apple-sidebar-nav-button" :class="view === 'mcp' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-normal hover:bg-black/5 dark:hover:bg-white/8'" aria-label="MCP 管理" @click="goMcp" @mouseenter="sidebarFlyoutArmed = true">
+                  <McpIcon />
                   <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">MCP 管理</span>
                   <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">MCP 管理</span>
                 </button>
               </nav>
 
               <div class="absolute inset-x-1.5 bottom-4">
-                <button ref="settingsNavBtn" type="button" class="apple-sidebar-nav-button relative flex h-9 w-full items-center rounded-[10px] text-sm transition-colors" :class="view === 'settings' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-normal hover:bg-black/5 dark:hover:bg-white/8'" aria-label="设置" @click="view = 'settings'" @mouseenter="sidebarFlyoutArmed = true">
-                  <PhGearSix class="h-[18px] w-[18px] shrink-0" weight="bold" aria-hidden="true" />
+                <button ref="settingsNavBtn" type="button" class="apple-sidebar-nav-button" :class="view === 'settings' ? 'bg-[var(--selection-bg)] font-semibold text-accent' : 'font-normal hover:bg-black/5 dark:hover:bg-white/8'" aria-label="设置" @click="view = 'settings'" @mouseenter="sidebarFlyoutArmed = true">
+                  <PhGearSix weight="bold" aria-hidden="true" />
                   <span class="apple-sidebar-label" :aria-hidden="isSidebarCollapsed">设置</span>
                   <span v-if="isSidebarCollapsed && sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">设置</span>
                 </button>

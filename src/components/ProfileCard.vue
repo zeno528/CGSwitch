@@ -291,7 +291,7 @@ async function testConnection() {
       </n-button>
       <button
         type="button"
-        class="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition-colors hover:bg-accent/10 hover:text-accent dark:text-zinc-500"
+        class="apple-icon-button text-zinc-400 hover:bg-accent/10 hover:text-accent dark:text-zinc-500"
         title="复制供应商"
         aria-label="复制供应商"
         @click="emit('duplicate')"
@@ -300,7 +300,7 @@ async function testConnection() {
       </button>
       <button
         type="button"
-        class="grid h-8 w-8 place-items-center rounded-lg transition-colors enabled:hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40"
+        class="apple-icon-button enabled:hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40"
         :class="connectionDimmed ? 'text-zinc-400' : 'text-accent'"
         :disabled="(!profile.provider && !subscriptionAuthed) || busy || testing"
         :title="connectionTitle"
@@ -312,7 +312,7 @@ async function testConnection() {
       </button>
       <button
         type="button"
-        class="grid h-8 w-8 place-items-center rounded-lg text-[#ff3b30]/60 transition-colors enabled:hover:bg-[#ff3b30]/10 enabled:hover:text-[#ff3b30] disabled:cursor-not-allowed disabled:opacity-40"
+        class="apple-icon-button text-[var(--danger)]/60 enabled:hover:bg-[var(--danger)]/10 enabled:hover:text-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-40"
         :disabled="busy || active"
         title="删除"
         aria-label="删除"

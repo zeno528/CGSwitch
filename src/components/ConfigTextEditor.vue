@@ -130,7 +130,7 @@ onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-[var(--radius-card)] shadow-[0_0_0_1px_var(--panel-ring)] bg-black/4 dark:bg-white/6">
+  <div class="apple-editor-shell">
     <Codemirror
       :model-value="modelValue"
       :placeholder="placeholder ?? '在此编辑配置…'"
