@@ -1,7 +1,8 @@
 use tauri::{AppHandle, State};
 
 use crate::auth::codex_oauth::{
-    AuthStatus, CodexOAuthError, CodexOAuthState, DeviceCodeResponse, ManagedAccount,
+    parse_external_auth_json, AuthStatus, CodexOAuthError, CodexOAuthManager, CodexOAuthState,
+    DeviceCodeResponse, ManagedAccount,
 };
 use crate::error::{app_err, AppResult};
 use crate::models::{
@@ -26,6 +27,49 @@ async fn unmanaged_external_codex_auth(
     } else {
         Ok(Some(external))
     }
+}
+
+fn should_try_next_account_credential(result: &ProfileConnectionResult) -> bool {
+    matches!(result.status, Some(401 | 403))
+        && !result
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("地区限制"))
+}
+
+async fn test_account_connection(
+    state: &AppContext,
+    manager: &CodexOAuthManager,
+    account_id: &str,
+) -> AppResult<ProfileConnectionResult> {
+    let mut tokens = Vec::with_capacity(2);
+    if let Some(token) = state.external_codex_access_token_for_account(account_id)? {
+        tokens.push(token);
+    }
+    if let Some(cached) = manager.cached_auth_json(account_id).await {
+        if let Some(auth) =
+            parse_external_auth_json(&cached).filter(|auth| auth.account_id == account_id)
+        {
+            if !tokens.iter().any(|token| token == &auth.access_token) {
+                tokens.push(auth.access_token);
+            }
+        }
+    }
+    for token in tokens {
+        let result = state.test_subscription_connection(&token).await?;
+        if !should_try_next_account_credential(&result) {
+            return Ok(result);
+        }
+    }
+
+    let auth_json = manager
+        .refresh_codex_auth_json(account_id)
+        .await
+        .map_err(|error| app_err!("{error}"))?;
+    let auth = parse_external_auth_json(&auth_json)
+        .filter(|auth| auth.account_id == account_id)
+        .ok_or_else(|| app_err!("刷新后账号标识不匹配"))?;
+    state.test_subscription_connection(&auth.access_token).await
 }
 
 #[tauri::command]
@@ -105,25 +149,23 @@ pub async fn test_profile_connection(
     if state.is_subscription_profile(&id)? {
         let manager = oauth.0.read().await;
         let bound = state.bound_account_id(&id)?;
-        let access_token = match bound {
-            Some(account_id) => manager
-                .get_valid_token_for_account(&account_id)
-                .await
-                .map_err(|error| app_err!("{error}"))?,
+        return match bound {
+            Some(account_id) => test_account_connection(&state, &manager, &account_id).await,
             None => match unmanaged_external_codex_auth(&state, &oauth).await? {
-                Some(_) => state
-                    .external_codex_access_token()?
-                    .ok_or_else(|| app_err!("未检测到有效的 Codex 官方认证"))?,
+                Some(_) => {
+                    let token = state
+                        .external_codex_access_token()?
+                        .ok_or_else(|| app_err!("未检测到有效的 Codex 官方认证"))?;
+                    state.test_subscription_connection(&token).await
+                }
                 None => match manager.default_account_id().await {
-                    Some(account_id) => manager
-                        .get_valid_token_for_account(&account_id)
-                        .await
-                        .map_err(|error| app_err!("{error}"))?,
+                    Some(account_id) => {
+                        test_account_connection(&state, &manager, &account_id).await
+                    }
                     None => return Err(app_err!("未检测到已认证的 ChatGPT 订阅账号，请先登录")),
                 },
             },
         };
-        return state.test_subscription_connection(&access_token).await;
     }
     state
         .test_profile_connection(&id, base_url.as_deref(), api_key.as_deref())
@@ -294,7 +336,7 @@ pub async fn apply_profile(
     state
         .apply_profile(&id)
         .map_err(|error| error.to_string())?;
-    // 认证优先级：档案 auth 覆盖 > 显式绑定账号 > 未托管的 Codex 官方认证 > CGswitch 默认账号。
+    // 认证优先级：档案 auth 覆盖 > 显式绑定账号 > 未托管的 Codex 官方认证 > 自动账号回退。
     let is_subscription = state
         .is_subscription_profile(&id)
         .map_err(|error| error.to_string())?;
@@ -316,17 +358,24 @@ pub async fn apply_profile(
             (None, false) => manager.default_account_id().await,
         };
         if let Some(account_id) = account_id {
-            // 优先用缓存凭据离线切换；首次（无缓存）才刷新一次播种，之后不再发网络请求
-            let content = match manager.cached_auth_json(&account_id).await {
-                Some(cached) => cached,
-                None => manager
-                    .codex_auth_json(&account_id)
-                    .await
-                    .map_err(|error| error.to_string())?,
-            };
-            state
-                .write_codex_auth_json(&content)
-                .map_err(|error| error.to_string())?;
+            // 当前 live auth.json 已属于目标账号时，保留 Codex 正在使用的凭据。
+            if state
+                .external_codex_access_token_for_account(&account_id)
+                .map_err(|error| error.to_string())?
+                .is_none()
+            {
+                // 否则优先用缓存凭据离线切换；首次（无缓存）才刷新一次播种。
+                let content = match manager.cached_auth_json(&account_id).await {
+                    Some(cached) => cached,
+                    None => manager
+                        .codex_auth_json(&account_id)
+                        .await
+                        .map_err(|error| error.to_string())?,
+                };
+                state
+                    .write_codex_auth_json(&content)
+                    .map_err(|error| error.to_string())?;
+            }
         }
     }
     Ok(())
@@ -435,32 +484,6 @@ pub async fn auth_remove_account(
 }
 
 #[tauri::command]
-pub async fn auth_set_default_account(
-    account_id: String,
-    state: State<'_, CodexOAuthState>,
-) -> Result<(), String> {
-    state
-        .0
-        .write()
-        .await
-        .set_default_account(&account_id)
-        .await
-        .map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-pub async fn auth_apply_to_codex(
-    account_id: String,
-    state: State<'_, AppContext>,
-    oauth: State<'_, CodexOAuthState>,
-) -> Result<(), String> {
-    state
-        .apply_oauth_auth(&oauth, &account_id)
-        .await
-        .map_err(|error| error.to_string())
-}
-
-#[tauri::command]
 pub fn open_url(url: String) -> AppResult<()> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err(app_err!("仅支持打开 http(s) 链接"));
@@ -518,4 +541,45 @@ fn sync_autostart(app: &AppHandle, settings: &Settings) -> AppResult<()> {
 #[tauri::command]
 pub fn open_path(path: String, state: State<'_, AppContext>) -> AppResult<()> {
     state.open_path(&path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cached_auth_failure_allows_same_account_fallback_but_not_network_or_region_errors() {
+        assert!(should_try_next_account_credential(
+            &ProfileConnectionResult {
+                ok: false,
+                latency_ms: Some(10),
+                status: Some(401),
+                error: Some("ChatGPT 登录已失效".to_string()),
+            }
+        ));
+        assert!(should_try_next_account_credential(
+            &ProfileConnectionResult {
+                ok: false,
+                latency_ms: Some(10),
+                status: Some(403),
+                error: Some("ChatGPT 登录已失效".to_string()),
+            }
+        ));
+        assert!(!should_try_next_account_credential(
+            &ProfileConnectionResult {
+                ok: false,
+                latency_ms: Some(10),
+                status: Some(403),
+                error: Some("认证请求被地区限制拦截".to_string()),
+            }
+        ));
+        assert!(!should_try_next_account_credential(
+            &ProfileConnectionResult {
+                ok: false,
+                latency_ms: None,
+                status: None,
+                error: Some("网络错误".to_string()),
+            }
+        ));
+    }
 }

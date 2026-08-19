@@ -534,6 +534,15 @@ impl CodexOAuthManager {
         Ok(text)
     }
 
+    /// 强制刷新账号的 access_token 后生成 auth.json，用于认证失败后的重试。
+    pub async fn refresh_codex_auth_json(
+        &self,
+        account_id: &str,
+    ) -> Result<String, CodexOAuthError> {
+        self.access_tokens.write().await.remove(account_id);
+        self.codex_auth_json(account_id).await
+    }
+
     /// 读取缓存的 auth.json（离线切换配置用，不触发 token 刷新）。
     pub async fn cached_auth_json(&self, account_id: &str) -> Option<String> {
         let accounts = self.accounts.read().await;
@@ -563,24 +572,6 @@ impl CodexOAuthManager {
 
     pub async fn default_account_id(&self) -> Option<String> {
         self.resolve_default_account_id().await
-    }
-
-    /// 切换当前订阅账号（用于多账号管理）。
-    pub async fn set_default_account(&self, account_id: &str) -> Result<(), CodexOAuthError> {
-        {
-            let accounts = self.accounts.read().await;
-            if !accounts.contains_key(account_id) {
-                return Err(CodexOAuthError::AccountNotFound(account_id.to_string()));
-            }
-        }
-        {
-            let mut default = self.default_account_id.write().await;
-            if default.as_deref() == Some(account_id) {
-                return Ok(());
-            }
-            *default = Some(account_id.to_string());
-        }
-        self.save_default_account(Some(account_id))
     }
 
     pub async fn remove_account(&self, account_id: &str) -> Result<(), CodexOAuthError> {

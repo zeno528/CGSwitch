@@ -523,10 +523,6 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       return undefined as T;
     case "auth_get_status":
       return { authenticated: false, default_account_id: null, accounts: [], external: null } as T;
-    case "auth_apply_to_codex":
-      return undefined as T;
-    case "auth_set_default_account":
-      return undefined as T;
     case "set_profile_account": {
       const profile = webProfiles.find((item) => item.id === args?.id);
       if (profile) {
@@ -620,10 +616,6 @@ export const api = {
   authGetStatus: () => call<AuthStatus>("auth_get_status"),
   authRemoveAccount: (accountId: string) =>
     call<void>("auth_remove_account", { accountId }),
-  authSetDefaultAccount: (accountId: string) =>
-    call<void>("auth_set_default_account", { accountId }),
-  authApplyToCodex: (accountId: string) =>
-    call<void>("auth_apply_to_codex", { accountId }),
   openUrl: (url: string) => call<void>("open_url", { url }),
   getSettings: () => call<Settings>("get_settings"),
   saveSettings: (settings: Settings) => call<Settings>("save_settings", { settings }),

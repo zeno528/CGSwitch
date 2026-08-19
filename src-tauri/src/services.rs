@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Emitter};
 
-use crate::auth::codex_oauth::{parse_external_auth_json, CodexOAuthState, ManagedAccount};
+use crate::auth::codex_oauth::{parse_external_auth_json, ManagedAccount};
 use crate::builtin;
 use crate::codex::{config as codex_config, process as codex_process};
 use crate::database::{profile_summary, Database};
@@ -1367,23 +1367,6 @@ impl AppContext {
         Ok(())
     }
 
-    /// 把 OAuth 账号的订阅凭据按官方格式写入 ~/.codex/auth.json，
-    /// 让 Codex 直接使用该 ChatGPT 订阅额度，而不是 API key。
-    pub async fn apply_oauth_auth(
-        &self,
-        oauth: &CodexOAuthState,
-        account_id: &str,
-    ) -> AppResult<()> {
-        let content = oauth
-            .0
-            .read()
-            .await
-            .codex_auth_json(account_id)
-            .await
-            .map_err(|error| app_err!("{error}"))?;
-        self.write_codex_auth_json(&content)
-    }
-
     /// 把订阅凭据原文写入 ~/.codex/auth.json（写前备份旧文件）。
     pub fn write_codex_auth_json(&self, content: &str) -> AppResult<()> {
         let destination = self.paths.codex_home.join("auth.json");
@@ -1417,6 +1400,20 @@ impl AppContext {
             return Ok(None);
         };
         Ok(parse_external_auth_json(&text).map(|auth| auth.access_token))
+    }
+
+    /// 读取 live auth.json 中属于指定账号的 ChatGPT access_token。
+    pub fn external_codex_access_token_for_account(
+        &self,
+        account_id: &str,
+    ) -> AppResult<Option<String>> {
+        let Some(text) = read_optional_text(&self.paths.codex_home.join("auth.json")) else {
+            return Ok(None);
+        };
+        let Some(auth) = parse_external_auth_json(&text) else {
+            return Ok(None);
+        };
+        Ok((auth.account_id == account_id).then_some(auth.access_token))
     }
 
     /// 是否为官方订阅供应商（无 API 供应商，凭据走 ChatGPT 订阅）。
@@ -1860,6 +1857,36 @@ fn read_optional_text(path: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn live_codex_auth_is_available_for_matching_account_only() {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+
+        let home = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(home.path()).unwrap();
+        paths.ensure().unwrap();
+        std::fs::create_dir_all(&paths.codex_home).unwrap();
+        let payload = URL_SAFE_NO_PAD
+            .encode(br#"{"chatgpt_account_id":"acc-live","email":"live@example.com"}"#);
+        let auth = format!(
+            r#"{{"auth_mode":"chatgpt","tokens":{{"id_token":"e30.{payload}.sig","access_token":"live-access"}}}}"#
+        );
+        std::fs::write(paths.codex_home.join("auth.json"), auth).unwrap();
+
+        let context = AppContext::new(paths).unwrap();
+
+        assert_eq!(
+            context
+                .external_codex_access_token_for_account("acc-live")
+                .unwrap()
+                .as_deref(),
+            Some("live-access")
+        );
+        assert!(context
+            .external_codex_access_token_for_account("acc-other")
+            .unwrap()
+            .is_none());
+    }
 
     #[test]
     fn connection_error_body_detects_provider_level_failures() {

@@ -61,7 +61,7 @@ async function poll() {
       if (account) {
         login.value = null;
         await refreshStatus();
-        message.success("ChatGPT 账号已添加，可手动设为当前");
+        message.success("ChatGPT 账号已添加，可在配置中选择");
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, current.interval * 1000));
@@ -111,17 +111,6 @@ async function removeAccount(accountId: string) {
       }
     },
   });
-}
-
-async function setDefault(accountId: string) {
-  try {
-    await api.authSetDefaultAccount(accountId);
-    await api.authApplyToCodex(accountId);
-    message.success("已切换当前订阅账号，Codex 将使用该账号");
-    await refreshStatus();
-  } catch (error) {
-    message.error(String(error));
-  }
 }
 
 onMounted(refreshStatus);
@@ -217,17 +206,14 @@ onMounted(refreshStatus);
           v-for="account in status.accounts"
           :key="account.id"
           class="flex items-center gap-3 rounded-xl px-3 py-2.5 shadow-[0_0_0_1px_var(--panel-ring)]"
-          :class="account.is_default ? 'bg-[var(--selection-bg)]' : ''"
         >
           <PhKey class="h-5 w-5 shrink-0 text-accent" weight="bold" aria-hidden="true" />
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 items-center gap-2">
               <span class="mono truncate text-sm font-medium">{{ account.login }}</span>
-              <n-tag v-if="account.is_default" size="small" type="success">CGswitch 默认</n-tag>
             </div>
           </div>
           <div class="flex shrink-0 gap-1.5">
-            <n-button v-if="!account.is_default" size="small" secondary @click="setDefault(account.id)">设为当前</n-button>
             <n-button size="small" quaternary type="error" @click="removeAccount(account.id)">移除</n-button>
           </div>
         </div>
