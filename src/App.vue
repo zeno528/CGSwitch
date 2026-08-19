@@ -276,7 +276,7 @@ useModalEnterConfirm();
               </div>
             </aside>
 
-            <main class="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-[var(--app-bg)] pt-4 pb-7">
+            <main class="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-[var(--app-bg)] pt-4">
               <template v-if="state">
                 <KeepAlive>
                   <ProfilesView v-if="view === 'profiles'" :state="state" :nav-reset="profilesNavReset" @refresh="refresh" />

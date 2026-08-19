@@ -28,6 +28,10 @@
   --gap-card: 1.25rem;
   /* 主内容区左右间距基准（卡片到侧边栏/窗口边缘的视觉间距） */
   --gap-main: 2rem;
+  /* 主滚动容器底部留白，避免滚动到末尾时内容贴住窗口边缘 */
+  --gap-main-bottom: 2rem;
+  /* 页面顶部栏与底部操作栏统一高度 */
+  --toolbar-height: 3.625rem;
   /* 右侧滚动条占位宽度，启动时由 JS 实测写入，保证左右视觉间距完全一致 */
   --scrollbar-size: 0px;
 }
@@ -270,6 +274,13 @@ main {
   scrollbar-gutter: stable;
   padding-left: var(--gap-main);
   padding-right: calc(var(--gap-main) - var(--scrollbar-size));
+  padding-bottom: var(--gap-main-bottom);
+}
+
+/* 编辑页由中间内容区承担滚动，避免固定的顶部/底部工具栏被 main 带动 */
+main:has(.apple-edit-toolbar) {
+  overflow-y: hidden;
+  padding-bottom: 0;
 }
 
 .apple-sidebar {
@@ -486,19 +497,48 @@ body.drag-active * {
    统一最小高度：各页左侧内容高度不同（状态胶囊 28 / 返回按钮 32 / 图标座 36），
    固定后右侧操作按钮在所有页面落在同一水平线上 */
 .apple-page-bar {
-  align-items: center;
   background: var(--app-bg);
   display: flex;
   margin-inline: -2rem;
   margin-top: -1rem;
-  min-height: 3.625rem;
-  /* 内容区中心对齐侧边栏 wordmark（实测差 6px），按钮仍在容器内垂直居中 */
-  padding: 0.875rem 2rem 0.125rem;
+  padding-inline: 2rem;
 }
 
 /* 标题栏与下方内容的间距走外边距：不再用内边距，避免压缩统一高度的垂直居中空间 */
 .apple-page-bar--roomy {
   margin-bottom: 0.75rem;
+}
+
+/* 所有页面顶部栏与编辑页底部操作栏共用：固定高度、上下内边距对称，
+   让状态、标题、返回按钮和操作按钮落在同一条垂直中心线上。 */
+.apple-page-bar,
+.apple-edit-toolbar {
+  align-items: center;
+  box-sizing: border-box;
+  height: var(--toolbar-height);
+  min-height: var(--toolbar-height);
+  padding-block: 0.75rem;
+}
+
+.apple-edit-toolbar--footer {
+  border-top: 1px solid var(--panel-border);
+}
+
+/* 编辑页首卡初始保留页面间距，滚动后可贴到顶部栏；首页/设置页仍保留各自的页面间距。 */
+.apple-edit-toolbar--header {
+  margin-bottom: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.apple-edit-content {
+  margin-top: calc(-1 * var(--toolbar-height));
+  padding-top: calc(var(--toolbar-height) + var(--gap-page));
+  position: relative;
+}
+
+.apple-edit-content > .apple-group {
+  margin-top: 0;
 }
 
 .profiles-page-bar {

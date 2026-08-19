@@ -732,7 +732,7 @@ async function save() {
     @save="saveIcon"
   />
   <section v-else class="mx-auto flex h-[calc(100vh-4.75rem)] w-full max-w-none flex-col" @keydown.ctrl.enter="save">
-    <div class="apple-page-bar apple-page-bar--roomy">
+    <div class="apple-page-bar apple-page-bar--roomy apple-edit-toolbar apple-edit-toolbar--header">
       <button
         type="button"
         class="apple-page-header apple-back-button"
@@ -744,10 +744,10 @@ async function save() {
       </button>
     </div>
 
-    <div class="-mx-8 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pl-[var(--gap-main)] pr-[calc(var(--gap-main)-var(--scrollbar-size))] pb-4 [scrollbar-gutter:stable]">
+    <div class="apple-edit-content -mx-8 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pl-[var(--gap-main)] pr-[calc(var(--gap-main)-var(--scrollbar-size))] pb-4 [scrollbar-gutter:stable]">
       <p v-if="loadError" class="muted mt-4 text-sm">{{ loadError }}</p>
 
-      <div class="apple-group mt-[var(--gap-page)] shrink-0 p-0">
+      <div class="apple-group shrink-0 p-0">
         <div v-if="creating" class="apple-panel-section">
       <div class="field-subtitle">选择供应商</div>
       <div class="mt-3 grid gap-2 sm:grid-cols-3 md:grid-cols-6">
@@ -958,7 +958,7 @@ async function save() {
       </div>
     </div>
 
-    <div class="-mx-8 -mb-7 flex items-center justify-end gap-2 bg-[var(--app-bg)] pl-8 pr-[42px] pt-2 pb-4">
+    <div class="apple-edit-toolbar apple-edit-toolbar--footer -mx-8 -mb-7 flex items-center justify-end gap-2 bg-[var(--app-bg)] pl-8 pr-[42px]">
       <button
         v-if="editorDiagnostics.count > 0"
         type="button"
