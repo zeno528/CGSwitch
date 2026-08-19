@@ -29,6 +29,11 @@ jobs:
         shell: bash
         run: |
           VERSION="$(cat VERSION)"
+          # 手动触发（分支）无 tag 概念，跳过 tag/VERSION 一致性及发行日志校验
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            [ -n "$VERSION" ] || { echo "::error::VERSION 文件为空"; exit 1; }
+            exit 0
+          fi
           if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
             echo "::error::tag $GITHUB_REF_NAME 与 VERSION（$VERSION）不一致"
             exit 1
@@ -103,6 +108,8 @@ jobs:
   release:
     # 校验和所有平台构建成功后才会执行；任何失败都不会创建发行
     needs: build
+    # 手动触发（分支）无 tag 可发，跳过草稿发行页与资产上传
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
