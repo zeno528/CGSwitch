@@ -221,10 +221,10 @@ useModalEnterConfirm();
       <n-message-provider :container-style="{ top: '44px' }">
         <n-layout class="h-full! rounded-none! bg-transparent!">
           <div class="flex h-screen flex-col">
-            <div class="flex h-8 shrink-0 items-center bg-[var(--app-bg)]">
+            <div class="flex h-[var(--window-chrome-height)] shrink-0 items-center bg-[var(--app-bg)]">
               <div data-tauri-drag-region class="relative flex h-full shrink-0 items-center bg-[var(--sidebar-bg)] transition-[width] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)]" :class="isSidebarCollapsed ? ['w-12', 'apple-sidebar--collapsed'] : 'w-[128px]'">
                 <div
-                  class="apple-sidebar-brand flex h-full w-fit cursor-pointer items-center pt-2"
+                  class="apple-sidebar-brand flex h-full w-fit cursor-pointer items-center"
                   role="button"
                   tabindex="0"
                   aria-label="CGswitch"
@@ -233,7 +233,7 @@ useModalEnterConfirm();
                   @mouseenter="sidebarFlyoutArmed = true"
                   @mouseleave="sidebarFlyoutArmed = false"
                 >
-                  <img src="/logo.svg" alt="CGswitch" class="h-6 w-6 shrink-0 dark:invert" draggable="false" />
+                  <img src="/logo.svg" alt="CGswitch" class="h-5 w-5 shrink-0 dark:invert" draggable="false" />
                   <span class="apple-sidebar-label apple-wordmark whitespace-nowrap">CGswitch</span>
                 </div>
                 <span v-if="sidebarFlyoutArmed" class="apple-sidebar-flyout" aria-hidden="true">{{ isSidebarCollapsed ? "展开侧边栏" : "收缩侧边栏" }}</span>

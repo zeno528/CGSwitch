@@ -114,7 +114,7 @@ async function save() {
 </script>
 
 <template>
-  <section class="mx-auto flex h-[calc(100vh-4.75rem)] w-full max-w-none flex-col" @keydown.ctrl.enter="save">
+  <section class="apple-edit-page mx-auto flex w-full max-w-none flex-col" @keydown.ctrl.enter="save">
     <div class="apple-page-bar apple-page-bar--roomy apple-edit-toolbar apple-edit-toolbar--header">
       <button type="button" class="apple-page-header apple-back-button" aria-label="返回" @click="emit('back')">
         <PhArrowLeft class="h-4 w-4 shrink-0 text-accent" weight="bold" aria-hidden="true" />

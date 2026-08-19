@@ -15,7 +15,7 @@ const selected = ref<string | null>(props.icon);
 </script>
 
 <template>
-  <section class="mx-auto flex h-[calc(100vh-4.75rem)] w-full max-w-none flex-col">
+  <section class="apple-edit-page mx-auto flex w-full max-w-none flex-col">
     <div class="apple-page-bar apple-page-bar--roomy apple-edit-toolbar apple-edit-toolbar--header">
       <button
         type="button"

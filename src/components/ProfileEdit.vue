@@ -731,7 +731,7 @@ async function save() {
     @back="pickingIcon = false"
     @save="saveIcon"
   />
-  <section v-else class="mx-auto flex h-[calc(100vh-4.75rem)] w-full max-w-none flex-col" @keydown.ctrl.enter="save">
+  <section v-else class="apple-edit-page mx-auto flex w-full max-w-none flex-col" @keydown.ctrl.enter="save">
     <div class="apple-page-bar apple-page-bar--roomy apple-edit-toolbar apple-edit-toolbar--header">
       <button
         type="button"

@@ -32,6 +32,8 @@
   --gap-main-bottom: 2rem;
   /* 页面顶部栏与底部操作栏统一高度 */
   --toolbar-height: 3.625rem;
+  /* 窗口标题栏高度：品牌区与窗口控制按钮共用同一垂直中心 */
+  --window-chrome-height: 2.5rem;
   /* 右侧滚动条占位宽度，启动时由 JS 实测写入，保证左右视觉间距完全一致 */
   --scrollbar-size: 0px;
 }
@@ -283,6 +285,10 @@ main:has(.apple-edit-toolbar) {
   padding-bottom: 0;
 }
 
+.apple-edit-page {
+  height: calc(100vh - var(--window-chrome-height) - 2.75rem);
+}
+
 .apple-sidebar {
   background: var(--sidebar-bg);
   transition: width 360ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -431,7 +437,7 @@ body.drag-active * {
 /* 标题栏品牌按钮浮标：锚定标题栏左侧色块（随侧边栏宽度自适应），
    展开时浮标在侧边栏右缘外、收缩时在栏外右侧；两种状态悬停都显示动作提示 */
 .apple-sidebar-brand + .apple-sidebar-flyout {
-  /* 标题栏仅 32px，垂直中心下移避免浮标顶部被窗口边缘盖住 */
+  /* 标题栏为 40px，浮标保持在品牌区垂直中心 */
   top: calc(50% + 6px);
   /* 与其他按钮浮标一致：距侧边栏右缘 3.6px（导航按钮 mx-1.5 内缩 6px + 0.6rem 间距） */
   left: calc(100% + 0.225rem);
