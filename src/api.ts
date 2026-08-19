@@ -593,6 +593,28 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       return [] as T;
     case "list_mcp_servers":
       return [...webMcpServers] as T;
+    case "get_mcp_section_toml": {
+      // 创建表单预填用：把 mock 列表渲染成 config.toml 片段
+      const lines: string[] = [];
+      for (const server of webMcpServers) {
+        lines.push(`[mcp_servers.${server.name}]`);
+        if (server.command) lines.push(`command = "${server.command}"`);
+        if (server.args.length) {
+          lines.push(`args = [${server.args.map((arg) => `"${arg}"`).join(", ")}]`);
+        }
+        if (server.url) lines.push(`url = "${server.url}"`);
+        if (server.bearer_token_env_var) {
+          lines.push(`bearer_token_env_var = "${server.bearer_token_env_var}"`);
+        }
+        const env = Object.entries(server.env);
+        if (env.length) {
+          lines.push(`[mcp_servers.${server.name}.env]`);
+          for (const [key, value] of env) lines.push(`${key} = "${value}"`);
+        }
+        lines.push("");
+      }
+      return lines.join("\n") as T;
+    }
     case "save_mcp_server": {
       const spec = args?.spec as McpServerSpec;
       const original = typeof args?.originalName === "string" ? args.originalName : null;
@@ -682,6 +704,8 @@ export const api = {
   reorderProfiles: (ids: string[]) => call<void>("reorder_profiles", { ids }),
   applyProfile: (id: string) => call<void>("apply_profile", { id }),
   listMcpServers: () => call<McpServerSpec[]>("list_mcp_servers"),
+  // 创建表单预填用：当前全局 MCP 段的 TOML 文本（无 MCP 返回空串）
+  getMcpSectionToml: () => call<string>("get_mcp_section_toml"),
   saveMcpServer: (originalName: string | null, spec: McpServerSpec) =>
     call<void>("save_mcp_server", { originalName, spec }),
   deleteMcpServer: (name: string) => call<void>("delete_mcp_server", { name }),

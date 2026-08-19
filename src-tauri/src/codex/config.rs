@@ -391,6 +391,58 @@ pub fn merge_mcp_section(raw: &str, live: &DocumentMut) -> String {
     }
 }
 
+/// 提取 [mcp_servers.*] 每个服务器的独立片段（含 [mcp_servers.<名称>] 表头、注释、子表，
+/// 往返无损），(名称, 片段) 按文件顺序。数据库镜像与创建表单预填共用。
+pub fn mcp_server_fragments_from_document(document: &DocumentMut) -> Vec<(String, String)> {
+    let Some(servers) = document
+        .as_table()
+        .get("mcp_servers")
+        .and_then(Item::as_table)
+    else {
+        return Vec::new();
+    };
+    servers
+        .iter()
+        .filter_map(|(name, item)| {
+            let table = item.as_table()?;
+            let mut piece = DocumentMut::new();
+            let mut section = Table::new();
+            section.insert(name, Item::Table(table.clone()));
+            piece
+                .as_table_mut()
+                .insert("mcp_servers", Item::Table(section));
+            Some((name.to_string(), piece.to_string()))
+        })
+        .collect()
+}
+
+/// 用片段按序重建 [mcp_servers] 段（数据库备份恢复写回 live 用）；解析失败的片段跳过。
+pub fn replace_mcp_section_from_fragments(
+    document: &mut DocumentMut,
+    fragments: &[(String, String)],
+) {
+    let mut section = Table::new();
+    for (name, fragment) in fragments {
+        let parsed = parse_document(fragment).ok().and_then(|doc| {
+            doc.as_table()
+                .get("mcp_servers")
+                .and_then(Item::as_table)
+                .and_then(|servers| servers.get(name))
+                .and_then(Item::as_table)
+                .cloned()
+        });
+        if let Some(table) = parsed {
+            section.insert(name, Item::Table(table));
+        }
+    }
+    document.as_table_mut().remove("mcp_servers");
+    if !section.is_empty() {
+        document
+            .as_table_mut()
+            .insert("mcp_servers", Item::Table(section));
+    }
+}
+
 fn string_of(table: &Table, key: &str) -> Option<String> {
     table.get(key).and_then(Item::as_str).map(str::to_string)
 }
@@ -905,5 +957,39 @@ A = "1"
         let merged = merge_mcp_section("model = \"gpt-5.6\"\n", &live);
         assert!(merged.contains("mcp_servers.tavily"), "{merged}");
         assert!(merged.contains("model = \"gpt-5.6\""), "{merged}");
+    }
+
+    #[test]
+    fn mcp_fragments_round_trip_losslessly() {
+        // 片段是数据库镜像的存储形态：注释、子表必须原样往返
+        let source = r#"
+model = "gpt-5.6"
+
+[mcp_servers.github]
+# 手动维护的服务器
+command = "github-mcp-server"
+cwd = "/srv"
+
+[mcp_servers.github.env]
+TOKEN = "ghp_x"
+
+[mcp_servers.tavily]
+url = "https://mcp.tavily.com/mcp"
+"#;
+        let document = parse_document(source).unwrap();
+        let fragments = mcp_server_fragments_from_document(&document);
+        assert_eq!(fragments.len(), 2);
+        assert_eq!(fragments[0].0, "github");
+        assert!(fragments[0].1.contains("# 手动维护的服务器"));
+        assert!(fragments[0].1.contains("cwd = \"/srv\""));
+
+        let mut target =
+            parse_document("model = \"other\"\n[mcp_servers.stale]\ncommand = \"x\"\n").unwrap();
+        replace_mcp_section_from_fragments(&mut target, &fragments);
+        let text = target.to_string();
+        assert!(text.contains("# 手动维护的服务器"), "{text}");
+        assert!(text.contains("[mcp_servers.github.env]"), "{text}");
+        assert!(text.contains("[mcp_servers.tavily]"), "{text}");
+        assert!(!text.contains("stale"), "{text}");
     }
 }

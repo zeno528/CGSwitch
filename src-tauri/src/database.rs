@@ -59,6 +59,15 @@ fn migrations() -> Migrations<'static> {
         M::up("ALTER TABLE profiles ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"),
         // 缓存上次生成的 auth.json 原文：切换 ChatGPT 配置时离线复用，不触发 token 刷新
         M::up("ALTER TABLE accounts ADD COLUMN auth_json TEXT"),
+        // MCP 服务器片段镜像（live config.toml 为操作事实源，DB 存一份随备份/恢复携带）
+        M::up(
+            "CREATE TABLE mcp_servers (
+               name TEXT PRIMARY KEY,
+               toml TEXT NOT NULL,
+               sort_order INTEGER NOT NULL DEFAULT 0,
+               updated_at TEXT NOT NULL
+             )",
+        ),
     ])
 }
 
@@ -306,6 +315,52 @@ impl Database {
         Ok(())
     }
 
+    /// 读取 MCP 服务器片段（名称, TOML 片段）按 sort_order；表空返回空列表。
+    pub fn mcp_server_fragments(&self) -> AppResult<Vec<(String, String)>> {
+        let connection = self.lock()?;
+        let mut statement = connection
+            .prepare("SELECT name, toml FROM mcp_servers ORDER BY sort_order ASC, name ASC")
+            .map_err(|error| app_err!("无法读取 MCP 服务器: {error}"))?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|error| app_err!("无法读取 MCP 服务器: {error}"))?;
+        let mut fragments = Vec::new();
+        for row in rows {
+            fragments.push(row.map_err(|error| app_err!("MCP 服务器数据无效: {error}"))?);
+        }
+        Ok(fragments)
+    }
+
+    /// 全量替换 MCP 服务器片段：管理规模小，整表重写最简单。
+    pub fn replace_mcp_server_fragments(
+        &self,
+        fragments: &[(String, String)],
+        timestamp: &str,
+    ) -> AppResult<()> {
+        let mut connection = self.lock()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| app_err!("无法开始 MCP 写入事务: {error}"))?;
+        transaction
+            .execute("DELETE FROM mcp_servers", [])
+            .map_err(|error| app_err!("无法清理 MCP 服务器: {error}"))?;
+        for (index, (name, toml)) in fragments.iter().enumerate() {
+            transaction
+                .execute(
+                    "INSERT INTO mcp_servers(name, toml, sort_order, updated_at)
+                     VALUES(?1, ?2, ?3, ?4)",
+                    params![name, toml, index as i64, timestamp],
+                )
+                .map_err(|error| app_err!("无法保存 MCP 服务器: {error}"))?;
+        }
+        transaction
+            .commit()
+            .map_err(|error| app_err!("无法提交 MCP 写入事务: {error}"))?;
+        Ok(())
+    }
+
     /// 读取单行应用状态：返回 (active_profile_id, default_account_id)。
     pub fn app_state(&self) -> AppResult<(Option<String>, Option<String>)> {
         let connection = self.lock()?;
@@ -414,6 +469,7 @@ impl Database {
             .and_then(|_| transaction.execute("DELETE FROM profiles", []))
             .and_then(|_| transaction.execute("DELETE FROM accounts", []))
             .and_then(|_| transaction.execute("DELETE FROM app_state", []))
+            .and_then(|_| transaction.execute("DELETE FROM mcp_servers", []))
             .map_err(|error| app_err!("恢复前清理数据失败: {error}"))?;
 
         copy_table(
@@ -448,6 +504,24 @@ impl Database {
             "INSERT INTO switch_events(id, profile_id, action, status, message, created_at)
              VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
         )?;
+        // 旧备份可能还没有 mcp_servers 表：无表跳过（保持 live 现状，不误清）
+        let has_mcp_servers: i64 = source
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='mcp_servers'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|error| app_err!("备份文件不是有效的 CGswitch 数据库: {error}"))?;
+        if has_mcp_servers > 0 {
+            copy_table(
+                &source,
+                &transaction,
+                "mcp_servers",
+                "SELECT name, toml, sort_order, updated_at FROM mcp_servers",
+                "INSERT INTO mcp_servers(name, toml, sort_order, updated_at)
+                 VALUES(?1, ?2, ?3, ?4)",
+            )?;
+        }
 
         transaction
             .commit()
@@ -640,6 +714,37 @@ mod tests {
         assert!(names.contains(&"app_state".into()));
         assert!(names.contains(&"switch_events".into()));
         assert!(names.contains(&"accounts".into()));
+        assert!(names.contains(&"mcp_servers".into()));
+    }
+
+    #[test]
+    fn mcp_fragments_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = crate::paths::from_home(dir.path()).unwrap();
+        let db = Database::open(&paths).unwrap();
+
+        assert!(db.mcp_server_fragments().unwrap().is_empty());
+
+        let fragments = vec![
+            (
+                "github".to_string(),
+                "[mcp_servers.github]\ncommand = \"node\"\n".to_string(),
+            ),
+            (
+                "tavily".to_string(),
+                "[mcp_servers.tavily]\nurl = \"https://x/mcp\"\n".to_string(),
+            ),
+        ];
+        db.replace_mcp_server_fragments(&fragments, "1").unwrap();
+        assert_eq!(db.mcp_server_fragments().unwrap(), fragments);
+
+        // 全量替换：旧条目清空，顺序按传入顺序
+        let replaced = vec![(
+            "fresh".to_string(),
+            "[mcp_servers.fresh]\nurl = \"https://y\"\n".to_string(),
+        )];
+        db.replace_mcp_server_fragments(&replaced, "2").unwrap();
+        assert_eq!(db.mcp_server_fragments().unwrap(), replaced);
     }
 
     #[test]

@@ -65,6 +65,7 @@ pub fn run() {
             commands::list_mcp_servers,
             commands::save_mcp_server,
             commands::delete_mcp_server,
+            commands::get_mcp_section_toml,
             commands::restart_codex,
             commands::set_window_theme,
             commands::auth_start_login,

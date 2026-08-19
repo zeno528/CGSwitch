@@ -427,6 +427,12 @@ pub fn delete_mcp_server(name: String, state: State<'_, AppContext>) -> AppResul
     state.delete_mcp_server(&name)
 }
 
+/// 创建表单预填用：当前全局 MCP 段的 TOML 文本（live 无 MCP 返回空串）。
+#[tauri::command]
+pub fn get_mcp_section_toml(state: State<'_, AppContext>) -> AppResult<String> {
+    state.mcp_section_toml()
+}
+
 #[tauri::command]
 pub fn set_window_theme(dark: bool, app: AppHandle) -> AppResult<()> {
     #[cfg(not(windows))]

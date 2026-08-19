@@ -319,24 +319,32 @@ const baseFragment = computed(() =>
     : detail.value?.config_fragment ?? "",
 );
 
+// 创建表单把当前全局 MCP 段直接预填进模板（保存时后端会再合并，保持一致）
+const mcpSection = ref("");
+function withMcpSection(base: string): string {
+  return mcpSection.value ? `${base.trimEnd()}\n\n${mcpSection.value.trimEnd()}\n` : base;
+}
+
 const liveConfigFragment = computed(() => {
   if (!baseFragment.value) return "";
   const values: Record<string, string> = {
     base_url: baseUrl.value.trim(),
     experimental_bearer_token: apiKey.value.trim(),
   };
-  return baseFragment.value
-    .split("\n")
-    .map((line) => {
-      const trimmed = line.trimStart();
-      const match = /^(base_url|experimental_bearer_token)\s*=/.exec(trimmed);
-      if (!match) return line;
-      const field = match[1];
-      const indent = line.slice(0, line.length - trimmed.length);
-      const escaped = (values[field] ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-      return `${indent}${field} = "${escaped}"`;
-    })
-    .join("\n");
+  return withMcpSection(
+    baseFragment.value
+      .split("\n")
+      .map((line) => {
+        const trimmed = line.trimStart();
+        const match = /^(base_url|experimental_bearer_token)\s*=/.exec(trimmed);
+        if (!match) return line;
+        const field = match[1];
+        const indent = line.slice(0, line.length - trimmed.length);
+        const escaped = (values[field] ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        return `${indent}${field} = "${escaped}"`;
+      })
+      .join("\n"),
+  );
 });
 
 const canSave = computed(() => {
@@ -421,10 +429,10 @@ function selectPreset(kind: string) {
     apiKey.value = "";
     adminUrl.value = "";
     selectedIcon.value = "custom";
-    configText.value = customConfigTemplate;
+    configText.value = withMcpSection(customConfigTemplate);
     catalogText.value = customCatalogTemplate;
     authText.value = customAuthTemplate;
-    configInitial.value = customConfigTemplate;
+    configInitial.value = configText.value;
     catalogInitial.value = customCatalogTemplate;
     authInitial.value = customAuthTemplate;
     longContextEnabled.value = false;
@@ -441,7 +449,9 @@ function selectPreset(kind: string) {
   baseUrl.value = preset.base_url;
   adminUrl.value = preset.admin_url ?? "";
   apiKey.value = "";
-  configText.value = patchProviderFields(preset.fragment, baseUrl.value, apiKey.value);
+  configText.value = withMcpSection(
+    patchProviderFields(preset.fragment, baseUrl.value, apiKey.value),
+  );
   configInitial.value = configText.value;
   longContextEnabled.value = kind === "chatgpt" && hasLongContextOverride(configText.value);
   selectedIcon.value = preset.icon;
@@ -565,6 +575,12 @@ watch(configText, (text) => {
 
 onMounted(async () => {
   if (creating.value) {
+    // 先取全局 MCP 段再初始化模板：创建表单打开即展示 MCP 配置
+    try {
+      mcpSection.value = (await api.getMcpSectionToml()).trim();
+    } catch {
+      // 拿不到就不预填，保存时后端仍会合并
+    }
     selectPreset("custom");
   } else {
     try {

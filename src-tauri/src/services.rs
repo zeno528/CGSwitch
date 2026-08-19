@@ -589,6 +589,9 @@ impl AppContext {
         let mut payload =
             codex_config::capture_from_document(&codex_config::parse_document(text)?)?;
         payload.builtin = Some(template.kind.to_string());
+        // 快照直接并入当前全局 MCP 段：编辑器打开即见，应用时随 live 携带保持一致
+        let live = codex_config::parse_document(&self.read_live_config()?)?;
+        payload.raw_config = Some(codex_config::merge_mcp_section(text, &live));
         if let Some(admin_url) = admin_url.map(str::trim).filter(|value| !value.is_empty()) {
             payload.admin_url = Some(admin_url.to_string());
         }
@@ -654,7 +657,12 @@ impl AppContext {
             payload.provider_body =
                 Some(codex_config::update_provider_body(body, base_url, api_key)?);
         }
-        payload.raw_config = Some(config_text.trim_end().to_string());
+        // 快照直接并入当前全局 MCP 段：编辑器打开即见，应用时随 live 携带保持一致
+        let live = codex_config::parse_document(&self.read_live_config()?)?;
+        payload.raw_config = Some(codex_config::merge_mcp_section(
+            config_text.trim_end(),
+            &live,
+        ));
         if let Some(text) = catalog_text {
             let text = text.trim();
             if !text.is_empty() {
@@ -910,6 +918,8 @@ impl AppContext {
             return Err(app_err!("不能导入当前正在使用的数据库文件"));
         }
         self.database.restore_from_backup(&canonical)?;
+        // 备份里的 MCP 镜像写回 live config.toml（旧备份无 MCP 表则保持 live 现状）
+        self.write_mcp_to_live_from_database()?;
         self.database.record_event(
             None,
             "import",
@@ -956,6 +966,8 @@ impl AppContext {
     pub fn restore_database(&self, name: &str) -> AppResult<()> {
         let path = self.database_backup_path(name)?;
         self.database.restore_from_backup(&path)?;
+        // 备份里的 MCP 镜像写回 live config.toml（旧备份无 MCP 表则保持 live 现状）
+        self.write_mcp_to_live_from_database()?;
         self.database.record_event(
             None,
             "restore",
@@ -1348,10 +1360,45 @@ impl AppContext {
         }
     }
 
+    /// live 是操作事实源；把 MCP 段无损片段镜像进数据库，让备份/恢复能携带。
+    /// 有差异才写库，读路径不产生无谓事务。
+    fn mirror_mcp_to_database(&self, document: &toml_edit::DocumentMut) -> AppResult<()> {
+        let fragments = codex_config::mcp_server_fragments_from_document(document);
+        if self.database.mcp_server_fragments()? != fragments {
+            self.database
+                .replace_mcp_server_fragments(&fragments, &now_ms().to_string())?;
+        }
+        Ok(())
+    }
+
+    /// 数据库镜像写回 live config.toml（备份恢复后调用；旧备份无 MCP 表则不动 live）。
+    fn write_mcp_to_live_from_database(&self) -> AppResult<()> {
+        let fragments = self.database.mcp_server_fragments()?;
+        if fragments.is_empty() {
+            return Ok(());
+        }
+        let mut document = codex_config::parse_document(&self.read_live_config()?)?;
+        codex_config::replace_mcp_section_from_fragments(&mut document, &fragments);
+        let config_path = self.paths.codex_config();
+        backup_file(&config_path, &self.paths.config_backup, "config")?;
+        atomic_write(&config_path, document.to_string().as_bytes())?;
+        Ok(())
+    }
+
     /// 读取 live config.toml 中的全部 MCP 服务器（全局唯一事实源，不随供应商切换）。
     pub fn list_mcp_servers(&self) -> AppResult<Vec<McpServerSpec>> {
         let document = codex_config::parse_document(&self.read_live_config()?)?;
+        self.mirror_mcp_to_database(&document)?;
         Ok(codex_config::mcp_servers_from_document(&document))
+    }
+
+    /// 创建表单预填用：当前全局 MCP 段的 TOML 文本（live 无 MCP 返回空串）。
+    pub fn mcp_section_toml(&self) -> AppResult<String> {
+        let document = codex_config::parse_document(&self.read_live_config()?)?;
+        Ok(codex_config::mcp_server_fragments_from_document(&document)
+            .into_iter()
+            .map(|(_, toml)| toml)
+            .collect())
     }
 
     /// 新增/编辑/重命名一个 MCP 服务器：就地修改 live config.toml，未建模键与注释原样保留；
@@ -1425,6 +1472,7 @@ impl AppContext {
         let config_path = self.paths.codex_config();
         backup_file(&config_path, &self.paths.config_backup, "config")?;
         atomic_write(&config_path, document.to_string().as_bytes())?;
+        self.mirror_mcp_to_database(&document)?;
         Ok(())
     }
 
@@ -1439,6 +1487,7 @@ impl AppContext {
         let config_path = self.paths.codex_config();
         backup_file(&config_path, &self.paths.config_backup, "config")?;
         atomic_write(&config_path, document.to_string().as_bytes())?;
+        self.mirror_mcp_to_database(&document)?;
         Ok(())
     }
 
@@ -3002,6 +3051,89 @@ CODEX_HOME = "C:\\.codex"
         assert!(config.contains("mcp_servers.tavily"), "{config}");
         assert!(!config.contains("mcp_servers.stale"), "{config}");
         assert!(config.contains("model = \"glm-5.3\""), "{config}");
+    }
+
+    #[test]
+    fn mcp_list_mirrors_into_database_for_backup() {
+        let (context, _home) = mcp_test_context(concat!(
+            "[mcp_servers.github]\n",
+            "# 手动维护\n",
+            "command = \"node\"\n",
+            "cwd = \"/srv\"\n",
+        ));
+
+        let servers = context.list_mcp_servers().unwrap();
+        assert_eq!(servers.len(), 1);
+
+        // 镜像无损：注释与未建模键都进了数据库，随备份导出携带
+        let fragments = context.database.mcp_server_fragments().unwrap();
+        assert_eq!(fragments.len(), 1);
+        assert_eq!(fragments[0].0, "github");
+        assert!(
+            fragments[0].1.contains("# 手动维护"),
+            "{:?}",
+            fragments[0].1
+        );
+        assert!(
+            fragments[0].1.contains("cwd = \"/srv\""),
+            "{:?}",
+            fragments[0].1
+        );
+    }
+
+    #[test]
+    fn restore_database_writes_mcp_back_to_live() {
+        // 机器 A：有 MCP，镜像入库并导出备份
+        let (source_context, _home_a) =
+            mcp_test_context("[mcp_servers.tavily]\nurl = \"https://mcp.tavily.com/mcp\"\n");
+        context_with_profile(&source_context);
+        source_context.list_mcp_servers().unwrap();
+        let exported = source_context.export_database().unwrap();
+        let backup_name = exported.file_name().unwrap().to_string_lossy().into_owned();
+
+        // 机器 B：live 没有 MCP，导入备份后 MCP 写回 live
+        let (target_context, _home_b) = mcp_test_context("model = \"gpt-5.6\"\n");
+        context_with_profile(&target_context);
+        std::fs::copy(
+            &exported,
+            target_context.paths.database_backup.join(&backup_name),
+        )
+        .unwrap();
+        target_context.restore_database(&backup_name).unwrap();
+
+        let config = read_config_text(&target_context);
+        assert!(config.contains("mcp_servers.tavily"), "{config}");
+        assert!(config.contains("model = \"gpt-5.6\""), "{config}");
+    }
+
+    fn context_with_profile(context: &AppContext) {
+        let raw = "model = \"glm-5.3\"\nmodel_provider = \"ZAI\"\n\n[model_providers.ZAI]\nname = \"ZAI\"\nbase_url = \"https://api.z.ai\"\nwire_api = \"responses\"\n";
+        context
+            .add_custom_profile("智谱", raw, None, None, None, None, None)
+            .unwrap();
+    }
+
+    #[test]
+    fn created_profiles_snapshot_includes_global_mcp() {
+        let (context, _home) =
+            mcp_test_context("[mcp_servers.tavily]\nurl = \"https://mcp.tavily.com/mcp\"\n");
+
+        // 自定义供应商：粘贴的配置没有 MCP，保存后快照带上全局段（编辑器打开即见）
+        let raw = "model = \"glm-5.3\"\nmodel_provider = \"ZAI\"\n\n[model_providers.ZAI]\nname = \"ZAI\"\nbase_url = \"https://api.z.ai\"\nwire_api = \"responses\"\n";
+        let custom = context
+            .add_custom_profile("智谱", raw, None, None, None, None, None)
+            .unwrap();
+        let detail = context.get_profile(&custom.id).unwrap();
+        let stored = detail.raw_config.expect("自定义快照应有 raw_config");
+        assert!(stored.contains("mcp_servers.tavily"), "{stored}");
+
+        // 内置供应商：快照同样带上全局段
+        let builtin = context
+            .add_builtin_profile("chatgpt", None, None, None, None)
+            .unwrap();
+        let detail = context.get_profile(&builtin.id).unwrap();
+        let stored = detail.raw_config.expect("内置快照应有 raw_config");
+        assert!(stored.contains("mcp_servers.tavily"), "{stored}");
     }
 
     #[test]
