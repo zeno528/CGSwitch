@@ -16,6 +16,9 @@ use crate::models::{
 };
 use crate::paths::{now_ms, AppPaths};
 
+const DATABASE_BACKUP_PREFIX: &str = "cg-backup-";
+const LEGACY_DATABASE_BACKUP_PREFIX: &str = "cgswitch-export-";
+
 fn now_seconds() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -26,7 +29,8 @@ fn now_seconds() -> u64 {
 fn database_backup_name() -> String {
     let now = chrono::Local::now();
     format!(
-        "cgswitch-export-{}-{:03}.db",
+        "{}{}-{:03}.db",
+        DATABASE_BACKUP_PREFIX,
         now.format("%Y%m%d-%H%M%S"),
         now.timestamp_subsec_millis()
     )
@@ -938,7 +942,7 @@ impl AppContext {
         let target = directory.join(&name);
         self.database.export_database(&target)?;
         let keep = backup_keep_count(self.settings()?.database_backup_keep_count);
-        prune_backups(directory, "cgswitch-export-", ".db", keep);
+        prune_backups(directory, DATABASE_BACKUP_PREFIX, ".db", keep);
         self.database.record_event(
             None,
             "export",
@@ -1008,7 +1012,9 @@ impl AppContext {
         if let Ok(entries) = std::fs::read_dir(directory) {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().into_owned();
-                if !(name.starts_with("cgswitch-export-") && name.ends_with(".db")) {
+                if !((name.starts_with(DATABASE_BACKUP_PREFIX)
+                    || name.starts_with(LEGACY_DATABASE_BACKUP_PREFIX))
+                    && name.ends_with(".db")) {
                     continue;
                 }
                 let size_bytes = entry.metadata().map(|metadata| metadata.len()).unwrap_or(0);
@@ -1056,11 +1062,13 @@ impl AppContext {
         Ok(())
     }
 
-    /// 重命名备份（标题写入文件名，保留 cgswitch-export- 前缀与 .db 后缀）。
+    /// 重命名备份（标题写入文件名，保留 cg-backup- 前缀与 .db 后缀）。
     pub fn rename_database_backup(&self, old_name: &str, title: &str) -> AppResult<()> {
         let from = self.database_backup_path(old_name)?;
         let mut stem = title.trim().to_string();
-        if let Some(rest) = stem.strip_prefix("cgswitch-export-") {
+        if let Some(rest) = stem.strip_prefix(DATABASE_BACKUP_PREFIX) {
+            stem = rest.to_string();
+        } else if let Some(rest) = stem.strip_prefix(LEGACY_DATABASE_BACKUP_PREFIX) {
             stem = rest.to_string();
         }
         if stem.ends_with(".db") {
@@ -1078,7 +1086,7 @@ impl AppContext {
         let to = self
             .paths
             .database_backup
-            .join(format!("cgswitch-export-{stem}.db"));
+            .join(format!("{DATABASE_BACKUP_PREFIX}{stem}.db"));
         if to == from {
             return Ok(());
         }
@@ -1090,7 +1098,8 @@ impl AppContext {
     }
 
     fn database_backup_path(&self, name: &str) -> AppResult<PathBuf> {
-        let valid = name.starts_with("cgswitch-export-")
+        let valid = (name.starts_with(DATABASE_BACKUP_PREFIX)
+            || name.starts_with(LEGACY_DATABASE_BACKUP_PREFIX))
             && name.ends_with(".db")
             && Path::new(name).file_name().and_then(|file| file.to_str()) == Some(name);
         if !valid {
@@ -2023,7 +2032,7 @@ impl AppContext {
         atomic_write(&self.paths.settings, text.as_bytes())?;
         prune_backups(
             &self.paths.database_backup,
-            "cgswitch-export-",
+            DATABASE_BACKUP_PREFIX,
             ".db",
             backup_keep_count(settings.database_backup_keep_count),
         );

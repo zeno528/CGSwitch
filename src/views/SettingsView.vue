@@ -60,7 +60,7 @@ const renameText = ref("");
 const renaming = ref(false);
 
 function backupTitle(name: string) {
-  return name.replace(/^cgswitch-export-/, "").replace(/\.db$/, "");
+  return name.replace(/^(?:cg-backup-|cgswitch-export-)/, "").replace(/\.db$/, "");
 }
 
 const backupFileActions = [

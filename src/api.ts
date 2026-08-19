@@ -238,7 +238,7 @@ const webBalanceCache: Record<string, ProfileBalanceInfo> = {};
 
 function databaseBackupName(date = new Date()): string {
   const pad = (value: number, length = 2) => String(value).padStart(length, "0");
-  return `cgswitch-export-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}-${pad(date.getMilliseconds(), 3)}.db`;
+  return `cg-backup-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}-${pad(date.getMilliseconds(), 3)}.db`;
 }
 
 function webState(): AppState {
@@ -494,10 +494,11 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
       const backup = webBackups.find((item) => item.name === args?.oldName);
       if (backup) {
         let stem = String(args?.title ?? "").trim();
+        if (stem.startsWith("cg-backup-")) stem = stem.slice("cg-backup-".length);
         if (stem.startsWith("cgswitch-export-")) stem = stem.slice("cgswitch-export-".length);
         if (stem.endsWith(".db")) stem = stem.slice(0, -3);
         stem = stem.replace(/[<>:"/\\|?*]/g, "").trim();
-        if (stem) backup.name = `cgswitch-export-${stem}.db`;
+        if (stem) backup.name = `cg-backup-${stem}.db`;
       }
       return undefined as T;
     }

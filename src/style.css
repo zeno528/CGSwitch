@@ -13,8 +13,8 @@
   --success: #34c759;
   --app-bg: #f7f7f8;
   --panel-bg: #ffffff;
-  --panel-border: rgba(60, 60, 67, 0.16);
-  --panel-ring: rgba(60, 60, 67, 0.12);
+  --panel-border: rgba(60, 60, 67, 0.12);
+  --panel-ring: rgba(60, 60, 67, 0.08);
   --panel-divider: rgba(60, 60, 67, 0.1);
   --text-secondary: rgba(60, 60, 67, 0.68);
   --sidebar-bg: #e8e8e9;
@@ -39,8 +39,8 @@
   --success: #3fb950;
   --app-bg: #1a1a1c;
   --panel-bg: #24242a;
-  --panel-border: rgba(255, 255, 255, 0.14);
-  --panel-ring: rgba(255, 255, 255, 0.08);
+  --panel-border: rgba(255, 255, 255, 0.10);
+  --panel-ring: rgba(255, 255, 255, 0.06);
   --panel-divider: rgba(255, 255, 255, 0.08);
   --text-secondary: #ffffff;
   --sidebar-bg: #15151a;
@@ -90,9 +90,7 @@ body {
 
 .panel {
   background: var(--panel-bg);
-  box-shadow:
-    0 0 0 1px var(--panel-ring),
-    0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 0 0 1px var(--panel-ring);
 }
 
 .muted {
@@ -563,17 +561,13 @@ body.drag-active * {
   overflow: hidden;
   border-radius: 18px;
   background: var(--panel-bg);
-  box-shadow:
-    0 0 0 1px var(--panel-ring),
-    0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 0 0 1px var(--panel-ring);
 }
 
 /* 暗色下卡片增加纵深：半透明白 hairline 环 + 更强的黑接触阴影，避免贴平背景 */
 :root.dark .panel,
 :root.dark .apple-group {
-  box-shadow:
-    0 0 0 1px var(--panel-ring),
-    0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 1px var(--panel-ring);
 }
 
 /* naive-ui 的 n-list 在深色下自带更暗的底色（--n-color），叠在卡片上
