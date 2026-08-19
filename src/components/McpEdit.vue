@@ -146,7 +146,7 @@ async function save() {
             </div>
             <div class="mt-4">
               <div class="field-label mb-1.5">启动参数</div>
-              <n-input v-model:value="argsText" type="textarea" :rows="2" class="mono" placeholder="一行一个参数，例如：&#10;-y&#10;@upstash/context7-mcp" />
+              <n-input v-model:value="argsText" type="textarea" :rows="2" class="mono" placeholder="每行一个参数，例如：-y" />
             </div>
           </template>
           <template v-else>

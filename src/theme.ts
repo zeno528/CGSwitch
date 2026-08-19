@@ -32,6 +32,7 @@ export const themeOverrides: GlobalThemeOverrides = {
     colorFocus: "#ffffff",
   },
   Button: {
+    borderRadius: "8px",
     fontWeight: "600",
   },
 };
@@ -78,6 +79,7 @@ export const darkThemeOverrides: GlobalThemeOverrides = {
     borderFocus: "1px solid #5e9cff",
   },
   Button: {
+    borderRadius: "8px",
     fontWeight: "600",
   },
 };

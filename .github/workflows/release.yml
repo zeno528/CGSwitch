@@ -1,17 +1,19 @@
-# 手动发行：Actions → Release → Run workflow
-# 版本号取自仓库根目录 VERSION 文件，打 tag 为 v{VERSION}；
-# 三个平台全部构建成功后，才创建标签和发行页并上传产物（避免发行页先建好却没有产物的误导）；
-# 产物以 prerelease（预发布）状态发布，测试通过后手动改为正式版。
+# 发版流水线（构建部分）：由 /release skill 在本地完成版本号、发行日志和 tag，
+# 推送 tag 自动触发本工作流；这里只做确定性的事——
+# 第 0 秒校验 tag 与 VERSION 一致、发行日志存在，然后三平台构建，
+# 全部成功后以草稿创建发行页并上传产物。
+# 草稿不通知关注者；发布（--draft=false）由用户测试确认后执行，那一刻才发出通知。
 name: Release
 
 on:
-  workflow_dispatch:
+  push:
+    tags: ["v*"]
 
 permissions:
   contents: read
 
 concurrency:
-  group: release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -20,6 +22,20 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+      # 第 0 秒拦截：tag 与 VERSION 不一致、或发行日志缺失时直接失败，不浪费三平台构建
+      - name: 校验 tag、VERSION 与发行日志
+        shell: bash
+        run: |
+          VERSION="$(cat VERSION)"
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME 与 VERSION（$VERSION）不一致"
+            exit 1
+          fi
+          NOTES="docs/release-notes/v$VERSION.md"
+          if [ ! -f "$NOTES" ]; then
+            echo "::error::缺少发行日志 $NOTES"
+            exit 1
+          fi
       - run: corepack enable
         shell: bash
       - uses: actions/setup-node@v7
@@ -90,85 +106,22 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
       - id: version
         run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
-      - name: 生成项目更新日志并创建草稿预发布
+      # 日志由 /release skill 生成并随 tag 提交；已存在草稿（重跑场景）则更新，已公开则拒绝改动
+      - name: 创建草稿发行页
         run: |
           TAG="v$VERSION"
-          # 取最近一个已发布版本（排除当前要发的 tag），用于生成对比日志
-          PREV="$(gh release list --limit 30 --json tagName -q '.[].tagName' | grep -v "^${TAG}$" | head -1 || true)"
-          NOTES="$RUNNER_TEMP/release-notes.md"
-          if [ -n "$PREV" ]; then
-            RANGE="$PREV..HEAD"
-          else
-            RANGE="HEAD"
-          fi
-          # 只保留包含项目代码/资源的提交；README、文档、工作流等提交不进入发行说明
-          is_project_commit() {
-            local sha="$1" changed_files project_files
-            changed_files="$(git diff-tree --root --no-commit-id --name-only -r "$sha")"
-            project_files="$(printf '%s\n' "$changed_files" \
-              | grep -Ev '^$|(^|/)(README[^/]*|LICENSE[^/]*)$|(^|/)docs/|\.md$|^\.github/|^\.codex/|(^|/)AGENTS\.md$|(^|/)VERSION$' \
-              || true)"
-            [[ -n "$project_files" ]]
-          }
-
-          # 清洗：去掉提交哈希、gitmoji、feat/fix 等类型前缀与 scope，只留用户能看懂的描述
-          # LC_ALL=C 按字节处理，避免多字节 emoji 在部分 locale 下剥不干净
-          fmt() {
-            LC_ALL=C sed -E 's/^[0-9a-f]{7,} //' \
-              | LC_ALL=C sed -E 's/^[^[:space:]]+[[:space:]]*//' \
-              | LC_ALL=C sed -E 's/^(feat|fix|chore|refactor|style|docs|perf|test|build|ci|release|ui|security|revert)(\([^)]*\))?:[[:space:]]*//' \
-              | LC_ALL=C sed -E 's/[[:space:]]+$//' \
-              | sed -E 's/[✨🐛🚑💄🎨⚡♻️🔥🔒]//g' \
-              | sed 's/^/- /'
-          }
-          # 只收对用户可见的变更；空分类不输出；重复条目只留一条
-          section() {
-            local pattern="$1" title="$2" entries sha subject
-            entries="$(
-              while IFS=$'\t' read -r sha subject; do
-                [[ -z "$sha" ]] && continue
-                if printf '%s\n' "$subject" | grep -qiE '更新版本号|README|LICENSE|文档|依赖|dependenc|(^|[^[:alnum:]])deps([^[:alnum:]]|$)|pnpm[[:space:]]check|(^|[^[:alnum:]])CI([^[:alnum:]]|$)|workflow|工作流'; then
-                  continue
-                fi
-                is_project_commit "$sha" || continue
-                printf '%s\n' "$subject"
-              done < <(git log --format='%H%x09%s' --no-merges -E --grep="$pattern" "$RANGE") \
-                | fmt | awk '!seen[$0]++'
-            )"
-            if [ -n "$entries" ]; then
-              printf '### %s\n%s\n\n' "$title" "$entries"
-            fi
-          }
-          {
-            section '^(✨)' '新增'
-            section '^(🐛|🚑)' '修复'
-            section '^(💄|🎨)' '界面与样式'
-            section '^(⚡)' '性能优化'
-            section '^(♻️)' '重构'
-            section '^(🔥)' '移除'
-            section '^(🔒)' '安全'
-          } > "$NOTES"
-          if [ ! -s "$NOTES" ]; then
-            echo '没有可发布的项目变更，停止发行。'
-            exit 1
-          fi
-
-          RELEASE_STATE="$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null || true)"
-          if [ -z "$RELEASE_STATE" ]; then
-            gh release create "$TAG" --draft --prerelease --title "CGswitch $TAG" --notes-file "$NOTES" --target "$GITHUB_SHA"
-            RELEASE_STATE=true
-          elif [ "$RELEASE_STATE" = true ]; then
+          NOTES="docs/release-notes/v$VERSION.md"
+          STATE="$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null || true)"
+          if [ -z "$STATE" ]; then
+            gh release create "$TAG" --draft --title "CGswitch $TAG" --notes-file "$NOTES"
+          elif [ "$STATE" = true ]; then
             gh release edit "$TAG" --title "CGswitch $TAG" --notes-file "$NOTES"
           else
-            echo "发行 $TAG 已经公开，停止修改已发布内容；请先递增 VERSION。"
+            echo "::error::发行 $TAG 已经公开，拒绝修改已发布内容；请先递增 VERSION。"
             exit 1
           fi
-
-          echo "release_state=$RELEASE_STATE" >> "$GITHUB_ENV"
         env:
           VERSION: ${{ steps.version.outputs.version }}
           GH_TOKEN: ${{ github.token }}
@@ -186,16 +139,11 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.version }}
-      - name: 上传产物到预发布
+      - name: 上传产物到草稿
         run: gh release upload "v$VERSION" release-assets/* --clobber
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.version }}
           GH_TOKEN: ${{ github.token }}
-      - name: 发布预发布
-        if: env.release_state == 'true'
-        run: gh release edit "v$VERSION" --draft=false --prerelease
-        shell: bash
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          GH_TOKEN: ${{ github.token }}
+      # 到此为止：草稿就绪（含全部资产与日志），等待用户测试确认后发布；
+      # 发布动作由 /release skill 执行 gh release edit --draft=false。

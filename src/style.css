@@ -24,14 +24,12 @@
   --scrollbar-thumb: color-mix(in srgb, var(--text-secondary) 25%, transparent);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--text-secondary) 40%, transparent);
   /* 全局间距参数：页头/标题到首个内容区块，以及相邻卡片/分区之间 */
-  --gap-page: 1.125rem;
+  --gap-page: 1rem;
   --gap-section: 1rem;
   /* 卡片内边距（上下左右统一） */
   --gap-card: 1.25rem;
   /* 主内容区左右间距基准（卡片到侧边栏/窗口边缘的视觉间距） */
   --gap-main: 2rem;
-  /* 主滚动容器底部留白，避免滚动到末尾时内容贴住窗口边缘 */
-  --gap-main-bottom: 2rem;
   /* 全局控件与窗口几何：页面、编辑页和侧边栏只从这里取尺寸 */
   --font-size-base: 0.875rem;
   --sidebar-width-expanded: 8rem;
@@ -301,13 +299,11 @@ main {
   scrollbar-gutter: stable;
   padding-left: var(--gap-main);
   padding-right: calc(var(--gap-main) - var(--scrollbar-size));
-  padding-bottom: var(--gap-main-bottom);
 }
 
 /* 编辑页由中间内容区承担滚动，避免固定的顶部/底部工具栏被 main 带动 */
 main:has(.apple-edit-toolbar) {
   overflow-y: hidden;
-  padding-bottom: 0;
 }
 
 .apple-edit-page {
@@ -625,13 +621,13 @@ body.drag-active * {
 }
 
 /* 所有页面顶部栏与编辑页底部操作栏共用：固定高度、上下内边距对称，
-   让状态、标题、返回按钮和操作按钮落在同一条垂直中心线上。 */
+   内容区留出 36px，兼容页面标题图标座并保持按钮垂直居中。 */
 .apple-page-bar,
 .apple-edit-toolbar {
   box-sizing: border-box;
   height: var(--toolbar-height);
   min-height: var(--toolbar-height);
-  padding-block: 0.75rem;
+  padding-block: 0.6875rem;
 }
 
 .apple-edit-toolbar--footer {
@@ -671,10 +667,6 @@ body.drag-active * {
 
 .apple-edit-content > .apple-group {
   margin-top: 0;
-}
-
-.profiles-page-bar {
-  margin-bottom: 0.625rem;
 }
 
 /* 表单行内小按钮（测试连通 / 获取 API 密钥 等同款样式全局复用） */
@@ -761,6 +753,7 @@ body.drag-active * {
 
 .apple-list-row {
   align-items: center;
+  background: color-mix(in srgb, var(--panel-bg) 86%, var(--app-bg));
   display: flex;
   justify-content: space-between;
   gap: 0.75rem;

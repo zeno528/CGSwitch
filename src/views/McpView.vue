@@ -11,6 +11,7 @@ import {
   PhArrowCircleUp,
   PhCircleDashed,
   PhGlobe,
+  PhNotePencil,
   PhPlus,
   PhTerminalWindow,
 } from "@phosphor-icons/vue";
@@ -206,19 +207,29 @@ function restoreToLive() {
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <div class="apple-page-action relative">
-          <n-button quaternary :disabled="syncing" aria-label="从配置导入" @click="importFromLive">
-            <template #icon>
-              <PhArrowCircleDown class="h-4 w-4" weight="bold" aria-hidden="true" />
-            </template>
-          </n-button>
+          <button
+            type="button"
+            class="apple-icon-button text-zinc-500 hover:bg-[var(--sidebar-bg)] hover:text-accent dark:text-zinc-400"
+            :disabled="syncing"
+            title="从配置导入"
+            aria-label="从配置导入"
+            @click="importFromLive"
+          >
+            <PhArrowCircleDown class="h-4 w-4" weight="bold" aria-hidden="true" />
+          </button>
           <span class="apple-sidebar-flyout" aria-hidden="true">从配置导入</span>
         </div>
         <div class="apple-page-action relative">
-          <n-button quaternary :disabled="syncing" aria-label="恢复到配置" @click="restoreToLive">
-            <template #icon>
-              <PhArrowCircleUp class="h-4 w-4" weight="bold" aria-hidden="true" />
-            </template>
-          </n-button>
+          <button
+            type="button"
+            class="apple-icon-button text-zinc-500 hover:bg-[var(--sidebar-bg)] hover:text-accent dark:text-zinc-400"
+            :disabled="syncing"
+            title="恢复到配置"
+            aria-label="恢复到配置"
+            @click="restoreToLive"
+          >
+            <PhArrowCircleUp class="h-4 w-4" weight="bold" aria-hidden="true" />
+          </button>
           <span class="apple-sidebar-flyout" aria-hidden="true">恢复到配置</span>
         </div>
         <n-button type="primary" @click="creatingServer = true">
@@ -268,21 +279,24 @@ function restoreToLive() {
               :aria-label="`启用 ${server.name}`"
               @update:value="toggleEnabled(server, $event)"
             />
-            <n-button size="tiny" quaternary @click="editingServer = server">编辑</n-button>
-            <div class="apple-page-action relative">
-              <n-button
-                size="tiny"
-                quaternary
-                type="error"
-                :aria-label="'删除 ' + server.name"
-                @click="removeServer(server)"
-              >
-                <template #icon>
-                  <TrashIcon />
-                </template>
-              </n-button>
-              <span class="apple-sidebar-flyout" aria-hidden="true">删除</span>
-            </div>
+            <button
+              type="button"
+              class="apple-icon-button text-zinc-600 hover:bg-[var(--sidebar-bg)] hover:text-accent dark:text-zinc-300"
+              title="编辑"
+              :aria-label="'编辑 ' + server.name"
+              @click="editingServer = server"
+            >
+              <PhNotePencil class="h-4 w-4" weight="bold" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              class="apple-icon-button text-[var(--danger)]/70 hover:bg-[var(--danger)]/10 hover:text-[var(--danger)]"
+              title="删除"
+              :aria-label="'删除 ' + server.name"
+              @click="removeServer(server)"
+            >
+              <TrashIcon />
+            </button>
           </div>
         </div>
       </div>
