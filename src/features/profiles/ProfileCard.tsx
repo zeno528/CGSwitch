@@ -160,7 +160,7 @@ export default function ProfileCard({
           </div>
         </div>
       </div>
-      <div className="profile-card-actions pointer-events-none flex shrink-0 items-center gap-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100" onClick={(event) => event.stopPropagation()}>
+      <div className="profile-card-actions pointer-events-none flex shrink-0 items-center gap-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.preventDefault()}>
         <button type="button" className="apple-action-button app-button--primary" disabled={busy || active} onClick={onApply}>{active ? "已应用" : "应用"}</button>
         <button type="button" className="apple-icon-button text-zinc-400 hover:bg-accent/10 hover:text-accent dark:text-zinc-500" title="复制供应商" aria-label="复制供应商" onClick={onDuplicate}><Copy className="h-[18px] w-[18px]" weight="bold" aria-hidden="true" /></button>
         <button type="button" className={`apple-icon-button enabled:hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40 ${connectionDimmed ? "text-zinc-400" : "text-accent"}`} disabled={(!profile.provider && !subscriptionAuthed) || busy || testing} title={connectionTitle} aria-label="测试连通性" onClick={() => void testConnection()}>{testing ? <LoadingSpinner size="md" /> : <WifiHigh className="h-[18px] w-[18px]" weight="bold" aria-hidden="true" />}</button>

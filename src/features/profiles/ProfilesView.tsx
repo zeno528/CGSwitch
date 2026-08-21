@@ -97,6 +97,7 @@ export default function ProfilesView({ state, activationEpoch, onRefresh }: Prof
   const nameInput = useRef<HTMLInputElement>(null);
   const previousRestartStage = useRef<RestartStage>("idle");
   const dragHoverReleaseRef = useRef<(() => void) | null>(null);
+  const duplicatingProfileRef = useRef(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
 
   useEffect(() => setItems(state.profiles), [state.profiles]);
@@ -252,16 +253,28 @@ export default function ProfilesView({ state, activationEpoch, onRefresh }: Prof
   const removeProfile = async (profile: ProfileSummary) => {
     const confirmed = await feedback.confirm({ title: "删除供应商", description: <>确定删除“<strong>{profile.name}</strong>”吗？删除后不可恢复。</>, confirmText: "删除", destructive: true });
     if (!confirmed) return;
-    try { await api.deleteProfile(profile.id); feedback.success("供应商已删除"); await onRefresh(); }
-    catch (error) { feedback.error(String(error)); }
+    const previousIndex = items.findIndex((item) => item.id === profile.id);
+    setItems((current) => current.filter((item) => item.id !== profile.id));
+    try {
+      await api.deleteProfile(profile.id);
+      feedback.success("供应商已删除");
+      await onRefresh();
+    } catch (error) {
+      setItems((current) => {
+        if (current.some((item) => item.id === profile.id)) return current;
+        const index = Math.max(0, Math.min(previousIndex, current.length));
+        return [...current.slice(0, index), profile, ...current.slice(index)];
+      });
+      feedback.error(String(error));
+    }
   };
 
   const duplicateProfile = async (profile: ProfileSummary) => {
-    if (busy) return;
-    setBusy(true);
+    if (busy || duplicatingProfileRef.current) return;
+    duplicatingProfileRef.current = true;
     try { const copy = await api.duplicateProfile(profile.id); feedback.success(`已复制为「${copy.name}」`); await onRefresh(); }
     catch (error) { feedback.error(String(error)); }
-    finally { setBusy(false); }
+    finally { duplicatingProfileRef.current = false; }
   };
 
   const closeEdit = async () => { setEditingProfile(null); setCreatingProfile(false); await onRefresh(); };

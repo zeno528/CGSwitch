@@ -145,6 +145,10 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
               event.preventDefault();
               confirmActionRef.current.focus({ preventScroll: true });
             }}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              (document.activeElement as HTMLElement | null)?.blur();
+            }}
           >
             <AlertDialog.Title className="app-dialog-title">{confirmation?.title}</AlertDialog.Title>
             <AlertDialog.Description className="app-dialog-description">
