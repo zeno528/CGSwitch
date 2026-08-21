@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowSquareOut, BracketsCurly, Check, FloppyDisk, GearSix, Info, PencilSimple } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowSquareOut, BracketsCurly, Check, Eye, EyeSlash, FloppyDisk, GearSix, Info, PencilSimple, WifiHigh } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api";
 import { useFeedback } from "../../app/Feedback";
@@ -46,6 +46,7 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
   const [name, setName] = useState(profile?.name ?? "");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
   const [adminUrl, setAdminUrl] = useState("");
   const [authAccounts, setAuthAccounts] = useState<ManagedAccount[]>([]);
   const [externalAccount, setExternalAccount] = useState<ManagedAccount | null>(null);
@@ -86,6 +87,12 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
     return match ? match[1] ?? match[2] ?? match[3] ?? "" : "";
   }, [configText]);
   const catalogFileName = liveCatalogPath.split(/[\\/]/).pop() || "models.json";
+  const formatTarget = activeTab === "config"
+    ? { icon: GearSix, label: "config.toml", title: "格式化 config.toml（TOML）" }
+    : activeTab === "auth"
+      ? { icon: BracketsCurly, label: "auth.json", title: "格式化 auth.json（JSON）" }
+      : { icon: BracketsCurly, label: catalogFileName, title: `格式化 ${catalogFileName}（JSON）` };
+  const FormatIcon = formatTarget.icon;
   const tabs = useMemo(() => {
     const list: { id: EditTab; label: string; title?: string }[] = [{ id: "config", label: "config.toml" }];
     if (liveCatalogPath) list.push({ id: "models", label: catalogFileName, title: liveCatalogPath });
@@ -180,7 +187,10 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
 
   useEffect(() => {
     if (!initialized.current) return;
-    setConfigText((current) => patchProviderFields(current, baseUrl, apiKey));
+    setConfigText((current) => {
+      const next = patchProviderFields(current, baseUrl, apiKey);
+      return next === current ? current : next;
+    });
   }, [apiKey, baseUrl]);
 
   useEffect(() => {
@@ -188,12 +198,17 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
     const fields = readProviderFields(configText);
     if (fields.found) {
       if (fields.base_url !== baseUrl) setBaseUrl(fields.base_url);
-      const key = /^<.*>$/.test(fields.experimental_bearer_token) ? "" : fields.experimental_bearer_token;
-      if (key !== apiKey) setApiKey(key);
+      if (!fields.tokenMasked) {
+        const key = /^<.*>$/.test(fields.experimental_bearer_token) ? "" : fields.experimental_bearer_token;
+        if (key !== apiKey) setApiKey(key);
+      }
     }
+  }, [configText]);
+
+  useEffect(() => {
     if (create && configText !== liveConfigFragment) setConfigTouched(true);
     if (!patchingLongContext && showLongContextOverride) setLongContextEnabled(hasLongContextOverride(configText));
-  }, [apiKey, baseUrl, configText, create, liveConfigFragment, patchingLongContext, showLongContextOverride]);
+  }, [configText, create, liveConfigFragment, patchingLongContext, showLongContextOverride]);
 
   const selectPreset = (kind: string) => {
     const preset = builtinPresets.find((item) => item.kind === kind);
@@ -235,10 +250,13 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
     setFormatting(true);
     try {
       const formatted = activeTab === "config" ? await api.formatToml(text) : JSON.stringify(JSON.parse(text), null, 2);
-      if (formatted === text) feedback.info(`${activeTab === "config" ? "config.toml" : activeTab === "auth" ? "auth.json" : catalogFileName} 格式无误，无需调整`);
-      else if (activeTab === "config") { setConfigText(formatted); feedback.success("config.toml 格式化成功（保存后生效）"); }
-      else if (activeTab === "auth") { setAuthText(formatted); feedback.success("auth.json 格式化成功（保存后生效）"); }
-      else { setCatalogText(formatted); feedback.success(`${catalogFileName} 格式化成功（保存后生效）`); }
+      if (formatted === text) feedback.info(`${formatTarget.label} 格式无误，无需调整`);
+      else {
+        if (activeTab === "config") setConfigText(formatted);
+        else if (activeTab === "auth") setAuthText(formatted);
+        else setCatalogText(formatted);
+        feedback.success(`${formatTarget.label} 格式化成功（保存后生效）`);
+      }
     } catch (error) { feedback.error(`格式化失败：${String(error)}`); }
     finally { setFormatting(false); }
   };
@@ -318,15 +336,15 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
           </div></div> : null}
           <div className="apple-panel-section">
             <div className="flex items-center gap-4"><button type="button" className="relative grid h-[61px] w-[61px] shrink-0 place-items-center rounded-[16px] transition-opacity hover:opacity-80" title="点击更换图标" aria-label="更换图标" onClick={() => setPickingIcon(true)}><ProfileIconTile name={detail?.name ?? name} icon={selectedIcon} size="fill" /><span className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-white shadow" aria-hidden="true"><PencilSimple className="h-2.5 w-2.5" weight="bold" /></span></button><div className="min-w-0 flex-1"><div className="field-label mb-1.5">名称</div><input className="app-input underline-input" maxLength={50} placeholder="供应商名称" value={name} onChange={(event) => setName(event.target.value)} /></div></div>
-            {showProviderFields ? <><label className="field-label mb-1.5 mt-4 block">请求地址</label><input className="app-input" placeholder="https://api.example.com/v1" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} /><div className="mb-1.5 mt-4 flex items-center gap-2"><span className="field-label">API 密钥</span>{isOpenCode && create ? <button type="button" className="apple-inline-btn" onClick={() => void api.openUrl("https://opencode.ai/go?ref=APHY0DXATH").catch((error) => feedback.error(String(error)))}><ArrowSquareOut className="h-3 w-3" weight="bold" />获取 API 密钥</button> : null}<button type="button" className="apple-inline-btn" disabled={!apiKey.trim() || !baseUrl.trim()} onClick={() => void testConnection()}><LoadingSpinner />测试连通</button></div><input className="app-input" type="password" placeholder="请输入 API 密钥" value={apiKey} onChange={(event) => setApiKey(event.target.value)} />{isOpenCode && create ? <p className="muted mt-2 flex items-start gap-1.5 text-xs"><Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" weight="bold" />使用此链接订阅 OpenCode Go，首月只需 $5，并可获得额外的 $5 额度！</p> : null}</> : null}
+            {showProviderFields ? <><label className="field-label mb-1.5 mt-4 block">请求地址</label><input className="app-input" placeholder="https://api.example.com/v1" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} /><div className="mb-1.5 mt-4 flex items-center gap-2"><span className="field-label">API 密钥</span>{isOpenCode && create ? <button type="button" className="apple-inline-btn" onClick={() => void api.openUrl("https://opencode.ai/go?ref=APHY0DXATH").catch((error) => feedback.error(String(error)))}><ArrowSquareOut className="h-3 w-3" weight="bold" />获取 API 密钥</button> : null}<button type="button" className="apple-inline-btn" disabled={testing || !apiKey.trim() || !baseUrl.trim()} onClick={() => void testConnection()}>{testing ? <LoadingSpinner /> : <WifiHigh className="h-3 w-3" weight="bold" aria-hidden="true" />}测试连通</button></div><div className="app-input-action"><input className="app-input app-input--action" type={showApiKey ? "text" : "password"} placeholder="请输入 API 密钥" value={apiKey} onChange={(event) => setApiKey(event.target.value)} /><button type="button" className="app-input-action__button" aria-label={showApiKey ? "隐藏 API 密钥" : "显示 API 密钥"} title={showApiKey ? "隐藏 API 密钥" : "显示 API 密钥"} aria-pressed={showApiKey} onClick={() => setShowApiKey((visible) => !visible)}>{showApiKey ? <EyeSlash className="h-4 w-4" weight="bold" aria-hidden="true" /> : <Eye className="h-4 w-4" weight="bold" aria-hidden="true" />}</button></div>{isOpenCode && create ? <p className="muted mt-2 flex items-start gap-1.5 text-xs"><Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" weight="bold" />使用此链接订阅 OpenCode Go，首月只需 $5，并可获得额外的 $5 额度！</p> : null}</> : null}
             {isOfficial ? <div className="mt-4"><div className="field-subtitle mb-1.5">认证来源</div>{hasProfileAuthOverride ? <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--panel-ring)] bg-black/3 px-3 py-2.5 dark:bg-white/4"><div><div className="text-sm font-medium">配置内 auth.json</div><div className="muted mt-0.5 text-xs">应用时优先使用当前档案的认证文件</div></div><span className="text-xs font-medium text-accent">优先使用</span></div> : <AppSelect value={boundAccountId ?? ""} options={accountOptions} onChange={setBoundAccountId} placeholder={externalAccount ? "桌面端认证" : "自动选择账号"} />}</div> : null}
             {(!create || selectedPreset?.base_url) ? <div className="mt-4"><div className="mb-1.5 flex items-center gap-1"><span className="field-label">官网地址</span><button type="button" className="grid h-4 w-4 place-items-center rounded-full text-accent transition-colors hover:bg-accent/10 disabled:opacity-40" disabled={!adminUrl.trim()} onClick={() => void api.openUrl(adminUrl.trim()).catch((error) => feedback.error(String(error)))}><ArrowSquareOut className="h-3.5 w-3.5" weight="bold" /></button></div><input className="app-input" placeholder="https://console.example.com（可选）" value={adminUrl} onChange={(event) => setAdminUrl(event.target.value)} /></div> : null}
             {!create && supportsBalance ? <div className="mt-4 flex items-center justify-between gap-3"><div><div className="text-sm font-semibold">余额/用量查询</div><div className="muted mt-0.5 text-xs">窗口激活时自动刷新，点击数字手动刷新</div></div><AppSwitch checked={showBalance} onCheckedChange={(value) => void toggleBalance(value)} disabled={savingBalance} /></div> : null}
           </div>
-          <div className="apple-panel-section flex flex-col"><div className="flex items-center justify-between gap-3"><div className="flex gap-1">{tabs.map((tab) => <button key={tab.id} type="button" className={`relative flex h-8 items-center gap-1.5 rounded-[10px] px-3 text-[13px] transition-colors ${activeTab === tab.id ? "bg-[var(--selection-bg)] font-semibold text-accent" : "muted hover:bg-black/5 dark:hover:bg-white/8"}`} aria-pressed={activeTab === tab.id} title={tab.title} onClick={() => { setActiveTab(tab.id); setEditorDiagnostics({ count: 0, firstLine: null }); }}>{tab.id === "config" ? <GearSix className="h-3.5 w-3.5" weight="bold" /> : <BracketsCurly className="h-3.5 w-3.5" weight="bold" />}<span>{tab.label}</span>{((tab.id === "config" && configDirty) || (tab.id === "models" && catalogDirty) || (tab.id === "auth" && authDirty)) ? <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" /> : null}</button>)}</div>{showLongContextOverride && activeTab === "config" ? <label className={`flex items-center gap-2 rounded-[10px] border px-2.5 py-1 text-xs transition-colors ${longContextEnabled ? "border-accent/30 bg-accent/10 text-accent" : "border-[var(--panel-ring)]"}`} title="上下文窗口：1000000 tokens；自动压缩阈值：900000 tokens"><input type="checkbox" checked={longContextEnabled} disabled={patchingLongContext || saving} onChange={(event) => void toggleLongContext(event.target.checked)} /><span className="whitespace-nowrap font-medium">1M 上下文窗口</span></label> : null}</div><div className="mt-4 flex flex-col pr-1">{activeTab === "config" ? <ConfigTextEditor ref={editorRef} value={configText} language="toml" placeholder={create ? "选择供应商后显示配置预览" : "编辑 config.toml 内容，保存后仅写入该供应商；应用时才生效。"} onChange={(value) => setConfigText(value)} onDiagnostics={setEditorDiagnostics} /> : activeTab === "auth" ? <><p className="muted mb-2 text-xs">{detail?.raw_auth ? "已保存自定义认证：清空并保存即可移除，应用时写入 ~/.codex/auth.json。" : "认证文件保存后仅存入本配置，应用时才写入生效。"}</p><ConfigTextEditor value={authText} language="json" placeholder="认证文件（~/.codex/auth.json）。" onChange={setAuthText} onDiagnostics={setEditorDiagnostics} /></> : <ConfigTextEditor value={catalogText} language="json" placeholder="模型目录文件不存在或无法读取。" onChange={setCatalogText} onDiagnostics={setEditorDiagnostics} />}</div></div>
+          <div className="apple-panel-section flex flex-col"><div className="flex items-center justify-between gap-3"><div className="flex gap-1">{tabs.map((tab) => <button key={tab.id} type="button" className={`relative flex h-8 items-center gap-1.5 rounded-[10px] px-3 text-[13px] transition-colors ${activeTab === tab.id ? "bg-[var(--selection-bg)] font-semibold text-accent" : "muted hover:bg-black/5 dark:hover:bg-white/8"}`} aria-pressed={activeTab === tab.id} title={tab.title} onClick={() => { setActiveTab(tab.id); setEditorDiagnostics({ count: 0, firstLine: null }); }}>{tab.id === "config" ? <GearSix className="h-3.5 w-3.5" weight="bold" /> : <BracketsCurly className="h-3.5 w-3.5" weight="bold" />}<span>{tab.label}</span>{((tab.id === "config" && configDirty) || (tab.id === "models" && catalogDirty) || (tab.id === "auth" && authDirty)) ? <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" /> : null}</button>)}</div>{showLongContextOverride && activeTab === "config" ? <label className={`flex items-center gap-2 rounded-[10px] border px-2.5 py-1 text-xs transition-colors ${longContextEnabled ? "border-accent/30 bg-accent/10 text-accent" : "border-[var(--panel-ring)]"}`} title="上下文窗口：1000000 tokens；自动压缩阈值：900000 tokens"><input type="checkbox" checked={longContextEnabled} disabled={patchingLongContext || saving} onChange={(event) => void toggleLongContext(event.target.checked)} /><span className="whitespace-nowrap font-medium">1M 上下文窗口</span></label> : null}</div><div className="mt-4 flex flex-col pr-1">{activeTab === "config" ? <ConfigTextEditor ref={editorRef} value={configText} language="toml" placeholder={create ? "选择供应商后显示配置预览" : "编辑 config.toml 内容，保存后仅写入该供应商；应用时才生效。"} onChange={(value) => setConfigText(value)} onDiagnostics={setEditorDiagnostics} /> : activeTab === "auth" ? <><ConfigTextEditor value={authText} language="json" placeholder="认证文件（~/.codex/auth.json）。" onChange={setAuthText} onDiagnostics={setEditorDiagnostics} /><p className="muted mt-2 text-xs">{detail?.raw_auth ? "已保存自定义认证：清空并保存即可移除，应用时写入 ~/.codex/auth.json。" : "认证文件保存后仅存入本配置，应用时才写入生效。"}</p></> : <ConfigTextEditor value={catalogText} language="json" placeholder="模型目录文件不存在或无法读取。" onChange={setCatalogText} onDiagnostics={setEditorDiagnostics} />}</div></div>
         </div>
       </div>
-      <div className="apple-edit-toolbar apple-edit-toolbar--footer">{editorDiagnostics.count > 0 ? <button type="button" className="mr-auto flex min-w-0 items-center gap-1.5 rounded-lg border border-[var(--danger)]/20 bg-[var(--danger)]/10 px-2.5 py-1 text-xs chip-danger" aria-live="polite" onClick={() => editorRef.current?.focusFirstDiagnostic()}><span className="h-1.5 w-1.5 rounded-full bg-[var(--danger)]" />{editorDiagnostics.count} 个错误{editorDiagnostics.firstLine !== null ? ` · 第 ${editorDiagnostics.firstLine} 行` : ""}</button> : null}<button type="button" className="apple-action-button" disabled={saving} onClick={() => void formatCurrentDocument()}><GearSix className="h-4 w-4" weight="bold" />格式化</button><button type="button" className="apple-action-button" onClick={onBack}>取消</button><button type="button" className="apple-action-button app-button--primary" disabled={saving || !canSave} onClick={() => void save()}><FloppyDisk className="h-4 w-4" weight="bold" />{saving ? "保存中…" : "保存"}</button></div>
+      <div className="apple-edit-toolbar apple-edit-toolbar--footer">{editorDiagnostics.count > 0 ? <button type="button" className="mr-auto flex min-w-0 items-center gap-1.5 rounded-lg border border-[var(--danger)]/20 bg-[var(--danger)]/10 px-2.5 py-1 text-xs chip-danger" aria-live="polite" onClick={() => editorRef.current?.focusFirstDiagnostic()}><span className="h-1.5 w-1.5 rounded-full bg-[var(--danger)]" />{editorDiagnostics.count} 个错误{editorDiagnostics.firstLine !== null ? ` · 第 ${editorDiagnostics.firstLine} 行` : ""}</button> : null}<button type="button" className="apple-action-button" disabled={saving} title={formatTarget.title} onClick={() => void formatCurrentDocument()}><FormatIcon className="h-4 w-4" weight="bold" aria-hidden="true" />格式化</button><button type="button" className="apple-action-button" onClick={onBack}>取消</button><button type="button" className="apple-action-button app-button--primary" disabled={saving || !canSave} onClick={() => void save()}><FloppyDisk className="h-4 w-4" weight="bold" />{saving ? "保存中…" : "保存"}</button></div>
     </section>
   );
 }

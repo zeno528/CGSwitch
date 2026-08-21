@@ -1,4 +1,4 @@
-import { ArrowLeft, FloppyDisk } from "@phosphor-icons/react";
+import { ArrowLeft, CaretRight, FloppyDisk, Minus, Plus } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { useFeedback } from "../../app/Feedback";
@@ -17,7 +17,8 @@ function pairsToRecord(pairs: KVPair[]): Record<string, string> {
 }
 
 function PairEditor({ pairs, onChange, keyPlaceholder, valuePlaceholder }: { pairs: KVPair[]; onChange: (pairs: KVPair[]) => void; keyPlaceholder: string; valuePlaceholder: string }) {
-  return <div className="space-y-2">{pairs.map((pair, index) => <div key={`${index}-${pair.key}`} className="flex gap-2"><input className="app-input mono" placeholder={keyPlaceholder} value={pair.key} onChange={(event) => onChange(pairs.map((current, currentIndex) => currentIndex === index ? { ...current, key: event.target.value } : current))} /><input className="app-input mono" placeholder={valuePlaceholder} value={pair.value} onChange={(event) => onChange(pairs.map((current, currentIndex) => currentIndex === index ? { ...current, value: event.target.value } : current))} /><button type="button" className="apple-icon-button text-[var(--danger)]" aria-label="删除此行" onClick={() => onChange(pairs.filter((_current, currentIndex) => currentIndex !== index))}>×</button></div>)}<button type="button" className="apple-inline-btn" onClick={() => onChange([...pairs, { key: "", value: "" }])}>添加一行</button></div>;
+  if (!pairs.length) return <button type="button" className="app-dynamic-input__create" onClick={() => onChange([{ key: "", value: "" }])}><Plus size={16} weight="bold" aria-hidden="true" />添加</button>;
+  return <div className="app-dynamic-input">{pairs.map((pair, index) => <div key={index} className="app-dynamic-input__item"><div className="app-dynamic-input__pair"><input className="app-input app-dynamic-input__input mono" placeholder={keyPlaceholder} value={pair.key} onChange={(event) => onChange(pairs.map((current, currentIndex) => currentIndex === index ? { ...current, key: event.target.value } : current))} /><input className="app-input app-dynamic-input__input mono" placeholder={valuePlaceholder} value={pair.value} onChange={(event) => onChange(pairs.map((current, currentIndex) => currentIndex === index ? { ...current, value: event.target.value } : current))} /></div><div className="app-dynamic-input__actions"><button type="button" className="apple-icon-button app-dynamic-input__action" aria-label="删除此行" onClick={() => onChange(pairs.filter((_current, currentIndex) => currentIndex !== index))}><Minus size={16} weight="bold" aria-hidden="true" /></button><button type="button" className="apple-icon-button app-dynamic-input__action" aria-label="在此行后添加" onClick={() => onChange([...pairs.slice(0, index + 1), { key: "", value: "" }, ...pairs.slice(index + 1)])}><Plus size={16} weight="bold" aria-hidden="true" /></button></div></div>)}</div>;
 }
 
 interface McpEditProps {
@@ -134,9 +135,98 @@ export default function McpEdit({ server, create = false, onBack }: McpEditProps
 
   return (
     <section className="apple-edit-page mx-auto flex w-full max-w-none flex-col" onKeyDown={(event) => { if (event.ctrlKey && event.key === "Enter") void save(); }}>
-      <div className="apple-page-bar apple-page-bar--roomy apple-edit-toolbar apple-edit-toolbar--header"><button type="button" className="apple-page-header apple-back-button" aria-label="返回" onClick={onBack}><ArrowLeft className="h-4 w-4 shrink-0 text-accent" weight="bold" /><span className="apple-title">{create ? "新建 MCP 服务器" : "编辑 MCP 服务器"}</span></button></div>
-      <div className="apple-edit-content"><div className="apple-group p-0"><div className="apple-panel-section"><div className="field-label mb-1.5">名称</div><input className="app-input mono" maxLength={64} placeholder="例如：context7" value={name} onChange={(event) => setName(event.target.value)} /><div className="field-label mb-1.5 mt-4">传输方式</div><AppSelect value={transport} options={[{ label: "本地进程 (STDIO)", value: "stdio" as const }, { label: "远程服务 (HTTP)", value: "http" as const }]} onChange={setTransport} /><div className="mt-4">{transport === "stdio" ? <><div className="field-label mb-1.5">启动命令</div><input className="app-input mono" placeholder="例如：npx 或 C:\\tools\\server.exe" value={command} onChange={(event) => setCommand(event.target.value)} /><div className="field-label mb-1.5 mt-4">启动参数（每行一个）</div><textarea className="app-input mono min-h-20" rows={2} placeholder="每行一个参数，例如：-y" value={argsText} onChange={(event) => setArgsText(event.target.value)} /></> : <><div className="field-label mb-1.5">服务地址</div><input className="app-input mono" placeholder="https://mcp.example.com/mcp" value={url} onChange={(event) => setUrl(event.target.value)} /><div className="field-label mb-1.5 mt-4">Bearer Token 环境变量名（可选）</div><input className="app-input mono" placeholder="例如：TAVILY_API_KEY" value={bearer} onChange={(event) => setBearer(event.target.value)} /><p className="muted mt-1.5 text-xs">Codex 启动时从该环境变量读取令牌放入 Authorization 头；留空则不携带。</p></>}</div></div><details className="apple-panel-section"><summary className="field-subtitle cursor-pointer">高级选项（环境变量 / 请求头 / 超时）</summary><div className="mt-4">{transport === "stdio" ? <><div className="field-label mb-1.5">环境变量</div><PairEditor pairs={envPairs} onChange={setEnvPairs} keyPlaceholder="变量名" valuePlaceholder="值" /></> : <><div className="field-label mb-1.5">HTTP 请求头（固定值）</div><PairEditor pairs={headerPairs} onChange={setHeaderPairs} keyPlaceholder="Header 名" valuePlaceholder="值" /><div className="field-label mb-1.5 mt-4">HTTP 请求头（值取自环境变量）</div><PairEditor pairs={envHeaderPairs} onChange={setEnvHeaderPairs} keyPlaceholder="Header 名" valuePlaceholder="环境变量名" /></>}<div className="mt-4 grid gap-4 sm:grid-cols-2"><div><div className="field-label mb-1.5">启动超时（秒，可选）</div><input className="app-input" type="number" min={1} placeholder="默认 10" value={startupTimeout ?? ""} onChange={(event) => setStartupTimeout(event.target.value ? Number(event.target.value) : null)} /></div><div><div className="field-label mb-1.5">工具调用超时（秒，可选）</div><input className="app-input" type="number" min={1} placeholder="默认 60" value={toolTimeout ?? ""} onChange={(event) => setToolTimeout(event.target.value ? Number(event.target.value) : null)} /></div></div></div></details><div className="apple-panel-section"><div className="field-label mb-1.5 flex items-center gap-1.5">TOML 源码{dirty ? <span className="h-1.5 w-1.5 rounded-full bg-accent" role="img" aria-label="有未保存的改动" /> : null}</div><ConfigTextEditor ref={editorRef} value={tomlText} language="toml" placeholder="编辑 [mcp_servers.*] 片段，与上方表单双向同步。" onChange={setTomlText} onDiagnostics={setDiagnostics} /><p className="muted mt-2 text-xs">表单与 TOML 会实时同步；未显示的设置和注释会保留。</p></div></div></div>
-      <div className="apple-edit-toolbar apple-edit-toolbar--footer">{diagnostics.count > 0 ? <button type="button" className="mr-auto flex min-w-0 items-center gap-1.5 rounded-lg border border-[var(--danger)]/20 bg-[var(--danger)]/10 px-2.5 py-1 text-xs chip-danger" onClick={() => editorRef.current?.focusFirstDiagnostic()}>{diagnostics.count} 个错误{diagnostics.firstLine !== null ? ` · 第 ${diagnostics.firstLine} 行` : ""}</button> : null}<button type="button" className="apple-action-button" disabled={formatting || saving} onClick={() => void formatToml()}>格式化</button><button type="button" className="apple-action-button" onClick={onBack}>取消</button><button type="button" className="apple-action-button app-button--primary" disabled={saving} onClick={() => void save()}><FloppyDisk className="h-4 w-4" weight="bold" />{saving ? "保存中…" : "保存"}</button></div>
+      <div className="apple-page-bar apple-page-bar--roomy apple-edit-toolbar apple-edit-toolbar--header">
+        <button type="button" className="apple-page-header apple-back-button" aria-label="返回" onClick={onBack}>
+          <ArrowLeft className="h-4 w-4 shrink-0 text-accent" weight="bold" />
+          <span className="apple-title">{create ? "新建 MCP 服务器" : "编辑 MCP 服务器"}</span>
+        </button>
+      </div>
+
+      <div className="apple-edit-content">
+        <div className="apple-group p-0">
+          <div className="apple-panel-section">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <div className="field-label mb-1.5">名称</div>
+                <input className="app-input mono" maxLength={64} placeholder="例如：context7" value={name} onChange={(event) => setName(event.target.value)} />
+              </div>
+              <div>
+                <div className="field-label mb-1.5">传输类型</div>
+                <AppSelect value={transport} options={[{ label: "本地进程 (STDIO)", value: "stdio" as const }, { label: "远程服务 (HTTP)", value: "http" as const }]} onChange={setTransport} />
+              </div>
+            </div>
+          </div>
+
+          <div className="apple-panel-section">
+            {transport === "stdio" ? <>
+              <div>
+                <div className="field-label mb-1.5">启动命令</div>
+                <input className="app-input mono" placeholder="例如：npx 或 C:\\tools\\server.exe" value={command} onChange={(event) => setCommand(event.target.value)} />
+              </div>
+              <div className="mt-4">
+                <div className="field-label mb-1.5">启动参数</div>
+                <textarea className="app-input mono min-h-20" rows={2} placeholder="每行一个参数，例如：-y" value={argsText} onChange={(event) => setArgsText(event.target.value)} />
+              </div>
+            </> : <>
+              <div>
+                <div className="field-label mb-1.5">服务地址</div>
+                <input className="app-input mono" placeholder="https://mcp.example.com/mcp" value={url} onChange={(event) => setUrl(event.target.value)} />
+              </div>
+              <div className="mt-4">
+                <div className="field-label mb-1.5">Bearer Token 环境变量名（可选）</div>
+                <input className="app-input mono" placeholder="例如：TAVILY_API_KEY" value={bearer} onChange={(event) => setBearer(event.target.value)} />
+                <p className="muted mt-1.5 text-xs">Codex 启动时从该环境变量读取令牌放入 Authorization 头；留空则不携带。</p>
+              </div>
+            </>}
+          </div>
+
+          <div className="apple-panel-section">
+            <details className="apple-disclosure">
+              <summary className="apple-disclosure__summary">
+                <CaretRight className="apple-disclosure__icon" size={18} weight="bold" aria-hidden="true" />
+                <span className="field-subtitle">高级选项（环境变量 / 请求头 / 超时）</span>
+              </summary>
+              <div className="mt-4">
+                {transport === "stdio" ? <>
+                  <div className="field-label mb-1.5">环境变量</div>
+                  <PairEditor pairs={envPairs} onChange={setEnvPairs} keyPlaceholder="变量名" valuePlaceholder="值" />
+                </> : <>
+                  <div className="field-label mb-1.5">HTTP 请求头（固定值）</div>
+                  <PairEditor pairs={headerPairs} onChange={setHeaderPairs} keyPlaceholder="Header 名" valuePlaceholder="值" />
+                  <div className="field-label mb-1.5 mt-4">HTTP 请求头（值取自环境变量）</div>
+                  <PairEditor pairs={envHeaderPairs} onChange={setEnvHeaderPairs} keyPlaceholder="Header 名" valuePlaceholder="环境变量名" />
+                </>}
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <div className="field-label mb-1.5">启动超时（秒，可选）</div>
+                    <input className="app-input" type="number" min={1} placeholder="默认 10" value={startupTimeout ?? ""} onChange={(event) => setStartupTimeout(event.target.value ? Number(event.target.value) : null)} />
+                  </div>
+                  <div>
+                    <div className="field-label mb-1.5">工具调用超时（秒，可选）</div>
+                    <input className="app-input" type="number" min={1} placeholder="默认 60" value={toolTimeout ?? ""} onChange={(event) => setToolTimeout(event.target.value ? Number(event.target.value) : null)} />
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <div className="apple-panel-section">
+            <div className="field-label mb-1.5 flex items-center gap-1.5">
+              TOML 源码
+              {dirty ? <span className="h-1.5 w-1.5 rounded-full bg-accent" role="img" aria-label="有未保存的改动" title="有未保存的改动" /> : null}
+            </div>
+            <ConfigTextEditor ref={editorRef} value={tomlText} language="toml" placeholder="编辑 [mcp_servers.*] 片段，与上方表单双向同步。" onChange={setTomlText} onDiagnostics={setDiagnostics} />
+            <p className="muted mt-2 text-xs">表单与 TOML 会实时同步；未显示的设置和注释会保留。</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="apple-edit-toolbar apple-edit-toolbar--footer">
+        {diagnostics.count > 0 ? <button type="button" className="mr-auto flex min-w-0 items-center gap-1.5 rounded-lg border border-[var(--danger)]/20 bg-[var(--danger)]/10 px-2.5 py-1 text-xs chip-danger" title="跳转到第一个错误" aria-live="polite" onClick={() => editorRef.current?.focusFirstDiagnostic()}><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--danger)]" aria-hidden="true" /><span className="truncate">{diagnostics.count} 个错误{diagnostics.firstLine !== null ? ` · 第 ${diagnostics.firstLine} 行` : ""}</span></button> : null}
+        <button type="button" className="apple-action-button" disabled={formatting || saving} onClick={() => void formatToml()}>格式化</button>
+        <button type="button" className="apple-action-button" onClick={onBack}>取消</button>
+        <button type="button" className="apple-action-button app-button--primary" disabled={saving} onClick={() => void save()}><FloppyDisk className="h-4 w-4" weight="bold" />{saving ? "保存中…" : "保存"}</button>
+      </div>
     </section>
   );
 }

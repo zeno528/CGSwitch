@@ -85,10 +85,19 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
         {children}
         {[...toasts].reverse().map((toast, index) => {
           const ToastIcon = toastIcons[toast.tone];
+          const collapsedScale = Math.max(0.84, 1 - index * 0.04);
+          const collapsedOpacity = Math.max(0.58, 1 - index * 0.08);
+          const collapsedOffset = index * 10;
+          const expandedOffset = index * 52;
           const toastStyle = {
-            "--toast-offset": `${index * 10}px`,
-            "--toast-scale": Math.max(0.84, 1 - index * 0.04),
-            "--toast-opacity": Math.max(0.58, 1 - index * 0.08),
+            "--toast-offset": `${collapsedOffset}px`,
+            "--toast-scale": collapsedScale,
+            "--toast-opacity": collapsedOpacity,
+            "--toast-expanded-offset": `${expandedOffset}px`,
+            "--toast-resting-offset": `${toastExpanded ? expandedOffset : collapsedOffset}px`,
+            "--toast-resting-scale": toastExpanded ? 1 : collapsedScale,
+            "--toast-transition-delay": `${Math.min(index * 18, 72)}ms`,
+            zIndex: toasts.length - index,
           } as CSSProperties;
           return (
             <Toast.Root
@@ -109,6 +118,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
         })}
         <Toast.Viewport
           className="app-toast-viewport"
+          style={{ "--toast-stack-height": `${toasts.length ? (toasts.length - 1) * 52 + 48 : 0}px` } as CSSProperties}
           data-expanded={toastExpanded}
           onPointerEnter={() => setToastExpanded(true)}
           onPointerLeave={() => setToastExpanded(false)}

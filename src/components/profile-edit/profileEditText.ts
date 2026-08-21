@@ -2,6 +2,7 @@ export interface ProviderFields {
   base_url: string;
   experimental_bearer_token: string;
   found: boolean;
+  tokenMasked: boolean;
 }
 
 // 读取 [model_providers.*] 段里的 base_url / 密钥，供编辑器回填表单。
@@ -10,6 +11,7 @@ export function readProviderFields(text: string): ProviderFields {
     base_url: "",
     experimental_bearer_token: "",
     found: false,
+    tokenMasked: false,
   };
   const lines = text.split("\n");
   let providerId: string | null = null;
@@ -43,7 +45,9 @@ export function readProviderFields(text: string): ProviderFields {
       /^(base_url|experimental_bearer_token)\s*=\s*(?:(['"])(.*?)\2|([^\s]+))/.exec(trimmed);
     if (!match) continue;
     const field = match[1] as "base_url" | "experimental_bearer_token";
-    values[field] = match[3] ?? match[4] ?? "";
+    const value = match[3] ?? match[4] ?? "";
+    values[field] = value;
+    if (field === "experimental_bearer_token") values.tokenMasked = /^[•*]+$/.test(value);
   }
   return values;
 }

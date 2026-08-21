@@ -18,6 +18,17 @@ describe("profileEditText", () => {
       base_url: "https://target.example",
       experimental_bearer_token: "secret",
       found: true,
+      tokenMasked: false,
+    });
+  });
+
+  it("marks redacted provider tokens so the form keeps its current key", () => {
+    const text = '[model_providers.target]\nexperimental_bearer_token = "••••••••"';
+
+    expect(readProviderFields(text)).toMatchObject({
+      experimental_bearer_token: "••••••••",
+      found: true,
+      tokenMasked: true,
     });
   });
 

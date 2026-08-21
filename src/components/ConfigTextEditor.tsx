@@ -67,6 +67,7 @@ const ConfigTextEditor = forwardRef<ConfigTextEditorHandle, ConfigTextEditorProp
   const onChangeRef = useRef(onChange);
   const onDiagnosticsRef = useRef(onDiagnostics);
   const lastSummary = useRef<EditorDiagnosticSummary | null>(null);
+  const syncingValueRef = useRef(false);
 
   valueRef.current = value;
   onChangeRef.current = onChange;
@@ -151,7 +152,7 @@ const ConfigTextEditor = forwardRef<ConfigTextEditorHandle, ConfigTextEditorProp
           lintGutter(),
           ...(dark ? [oneDark] : []),
           EditorView.updateListener.of((update: ViewUpdate) => {
-            if (update.docChanged) onChangeRef.current(update.state.doc.toString());
+            if (update.docChanged && !syncingValueRef.current) onChangeRef.current(update.state.doc.toString());
             reportDiagnostics(update.view);
           }),
         ],
@@ -170,7 +171,12 @@ const ConfigTextEditor = forwardRef<ConfigTextEditorHandle, ConfigTextEditorProp
   useEffect(() => {
     const editor = viewRef.current;
     if (!editor || editor.state.doc.toString() === value) return;
-    editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value } });
+    syncingValueRef.current = true;
+    try {
+      editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value } });
+    } finally {
+      syncingValueRef.current = false;
+    }
   }, [value]);
 
   return <div ref={hostRef} className="apple-editor-shell" />;
