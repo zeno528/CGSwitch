@@ -49,7 +49,6 @@ export default function ProfileCard({
   const [testing, setTesting] = useState(false);
   const [connectionState, setConnectionState] = useState<"unknown" | "ok" | "fail">("unknown");
   const [balanceInfo, setBalanceInfo] = useState<ProfileBalanceInfo | null>(null);
-  const [balanceFetching, setBalanceFetching] = useState(false);
   const [balanceError, setBalanceError] = useState("");
   const balanceFetchingRef = useRef(false);
   const supportsBalance = balanceQueryProviders.has(profile.provider ?? "");
@@ -59,7 +58,6 @@ export default function ProfileCard({
   const fetchBalance = async () => {
     if (!supportsBalance || !profile.show_balance || !profile.has_key || balanceFetchingRef.current) return;
     balanceFetchingRef.current = true;
-    setBalanceFetching(true);
     try {
       const result = await api.getProfileBalance(profile.id);
       setBalanceError("");
@@ -73,7 +71,6 @@ export default function ProfileCard({
       setBalanceError(String(error));
     } finally {
       balanceFetchingRef.current = false;
-      setBalanceFetching(false);
     }
   };
 
@@ -83,7 +80,7 @@ export default function ProfileCard({
     void fetchBalance();
     // The root owns the single activation listener; cards only react to its epoch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [balanceCache, activationEpoch, profile.id, profile.show_balance, supportsBalance]);
+  }, [activationEpoch, profile.id, profile.show_balance, supportsBalance]);
 
   useEffect(() => setConnectionState("unknown"), [profile.id]);
 
@@ -132,7 +129,7 @@ export default function ProfileCard({
     <article
       ref={sortable.setNodeRef}
       style={style}
-      className={`group flex cursor-pointer select-none flex-col gap-4 px-5 py-[var(--gap-card)] transition-colors sm:flex-row sm:items-center sm:justify-between ${active ? "bg-[linear-gradient(90deg,color-mix(in_srgb,var(--selection-bg)_70%,transparent),transparent_65%)]" : "hover:bg-black/3 dark:hover:bg-white/4"}`}
+      className={`group flex cursor-pointer select-none flex-col gap-4 px-5 py-[var(--gap-card)] transition-colors sm:flex-row sm:items-center sm:justify-between ${sortable.isDragging ? "opacity-35" : active ? "bg-[linear-gradient(90deg,color-mix(in_srgb,var(--selection-bg)_70%,transparent),transparent_65%)]" : "hover:bg-black/3 dark:hover:bg-white/4"}`}
       title="单击编辑"
       onClick={onEdit}
     >
@@ -156,13 +153,13 @@ export default function ProfileCard({
             <span className="apple-chip">{profile.reasoning_effort ?? "默认"}</span>
             {supportsBalance && profile.show_balance ? <button type="button" className="apple-chip" title={balanceError ? `余额刷新失败：${balanceError}（显示上次余额，点击重试）` : balanceInfo?.usage_percent != null ? "用量，点击刷新" : "余额，点击刷新"} aria-label="余额" onClick={(event) => { event.stopPropagation(); void fetchBalance(); }}>
               <Wallet className="h-3 w-3" weight="bold" aria-hidden="true" />
-              {balanceFetching ? <LoadingSpinner /> : balanceInfo?.usage_percent != null ? <><span>5小时 </span><span className={balanceChipClass(balanceInfo.usage_percent, false)}>{balanceInfo.usage_percent}%</span>{balanceInfo.usage_reset ? <span> {balanceInfo.usage_reset}</span> : null}{balanceInfo.weekly_usage_percent != null ? <><span> · 7天 </span><span className={balanceChipClass(balanceInfo.weekly_usage_percent, false)}>{balanceInfo.weekly_usage_percent}%</span>{balanceInfo.weekly_reset ? <span> {balanceInfo.weekly_reset}</span> : null}</> : null}</> : balanceInfo ? <><span>余额 </span><span className={balanceChipClass(null, false, balanceInfo.total_balance)}>{balanceInfo.total_balance.startsWith("-") ? "-" : ""}{balanceInfo.currency === "USD" ? "$" : "¥"}{balanceInfo.total_balance.replace(/^-/, "")}</span><span> {balanceInfo.currency}</span></> : <span className={balanceError ? "chip-danger" : ""}>{balanceError ? "查询失败" : "余额 --"}</span>}
+              {balanceInfo?.usage_percent != null ? <><span>5小时 </span><span className={balanceChipClass(balanceInfo.usage_percent, false)}>{balanceInfo.usage_percent}%</span>{balanceInfo.usage_reset ? <span> {balanceInfo.usage_reset}</span> : null}{balanceInfo.weekly_usage_percent != null ? <><span> · 7天 </span><span className={balanceChipClass(balanceInfo.weekly_usage_percent, false)}>{balanceInfo.weekly_usage_percent}%</span>{balanceInfo.weekly_reset ? <span> {balanceInfo.weekly_reset}</span> : null}</> : null}</> : balanceInfo ? <><span>余额 </span><span className={balanceChipClass(null, false, balanceInfo.total_balance)}>{balanceInfo.total_balance.startsWith("-") ? "-" : ""}{balanceInfo.currency === "USD" ? "$" : "¥"}{balanceInfo.total_balance.replace(/^-/, "")}</span><span> {balanceInfo.currency}</span></> : <span className={balanceError ? "chip-danger" : ""}>{balanceError ? "查询失败" : "余额 --"}</span>}
             </button> : null}
             {profile.admin_url ? <button type="button" className="grid h-4 w-4 place-items-center rounded-full text-accent transition-colors hover:bg-accent/10" title="打开官网" aria-label="打开官网" onClick={(event) => { event.stopPropagation(); void api.openUrl(profile.admin_url!).catch((error) => feedback.error(String(error))); }}><ArrowSquareOut className="h-3.5 w-3.5" weight="bold" aria-hidden="true" /></button> : null}
           </div>
         </div>
       </div>
-      <div className="pointer-events-none flex shrink-0 items-center gap-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100" onClick={(event) => event.stopPropagation()}>
+      <div className="profile-card-actions pointer-events-none flex shrink-0 items-center gap-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100" onClick={(event) => event.stopPropagation()}>
         <button type="button" className="apple-action-button app-button--primary" disabled={busy || active} onClick={onApply}>{active ? "已应用" : "应用"}</button>
         <button type="button" className="apple-icon-button text-zinc-400 hover:bg-accent/10 hover:text-accent dark:text-zinc-500" title="复制供应商" aria-label="复制供应商" onClick={onDuplicate}><Copy className="h-[18px] w-[18px]" weight="bold" aria-hidden="true" /></button>
         <button type="button" className={`apple-icon-button enabled:hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40 ${connectionDimmed ? "text-zinc-400" : "text-accent"}`} disabled={(!profile.provider && !subscriptionAuthed) || busy || testing} title={connectionTitle} aria-label="测试连通性" onClick={() => void testConnection()}>{testing ? <LoadingSpinner size="md" /> : <WifiHigh className="h-[18px] w-[18px]" weight="bold" aria-hidden="true" />}</button>

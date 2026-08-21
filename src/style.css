@@ -471,6 +471,10 @@ main:has(.apple-scroll-page) {
   z-index: 10;
 }
 
+.profile-drag-preview {
+  overflow: hidden;
+}
+
 /* 列表内的落点占位（ghostClass）：淡显，落点位置一目了然 */
 .drag-ghost {
   opacity: 0.35;
@@ -481,6 +485,11 @@ body.drag-active,
 body.drag-active * {
   user-select: none !important;
   -webkit-user-select: none !important;
+}
+
+body.drag-settling .profile-card-actions {
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* 供应商卡片行间分割线：按相邻卡片绘制，不依赖 item index 或组件属性透传 */

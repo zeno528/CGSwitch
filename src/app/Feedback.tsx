@@ -36,6 +36,7 @@ interface ConfirmationState extends ConfirmOptions {
 }
 
 const toastIcons = { success: CheckCircle, error: XCircle, warning: Warning, info: Info } as const;
+const MAX_TOASTS = 3;
 
 export function FeedbackProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastState[]>([]);
@@ -45,7 +46,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
 
   const showToast = useCallback((tone: ToastTone, message: string) => {
     const id = ++nextToastId.current;
-    setToasts((current) => [...current, { id, tone, message, open: true }]);
+    setToasts((current) => [...current, { id, tone, message, open: true }].slice(-MAX_TOASTS));
   }, []);
 
   const removeToast = useCallback((id: number) => {
