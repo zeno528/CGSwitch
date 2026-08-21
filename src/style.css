@@ -1500,37 +1500,74 @@ textarea.app-input::-webkit-scrollbar { width: 0; height: 0; display: none; }
   display: inline-flex;
   flex: none;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   border: 0;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--text-secondary) 28%, transparent);
-  padding: 2px;
+  background: transparent;
+  padding: 0;
   cursor: pointer;
   outline: none;
-  transition: background-color 150ms ease-out, box-shadow 150ms ease-out, transform 150ms ease-out;
+  transition: none;
+  vertical-align: middle;
+  user-select: none;
+  --switch-offset: 2px;
 }
 
-.app-switch--sm { width: 2rem; height: 1.25rem; }
-.app-switch--md { width: 2.75rem; height: 1.625rem; }
-.app-switch[data-state="checked"] { background: var(--accent); }
-.app-switch:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent); }
-.app-switch:active:not(:disabled) { transform: scale(0.97); }
-.app-switch:disabled { cursor: not-allowed; opacity: 0.5; }
+.app-switch--sm {
+  --switch-button-height: 14px;
+  --switch-button-width: 14px;
+  --switch-button-width-pressed: 20px;
+  --switch-rail-height: 18px;
+  --switch-rail-width: 32px;
+}
+
+.app-switch--md {
+  --switch-button-height: 18px;
+  --switch-button-width: 18px;
+  --switch-button-width-pressed: 24px;
+  --switch-rail-height: 22px;
+  --switch-rail-width: 40px;
+}
+
+.app-switch-rail {
+  position: relative;
+  display: block;
+  flex: none;
+  width: var(--switch-rail-width);
+  height: var(--switch-rail-height);
+  overflow: hidden;
+  border-radius: calc(var(--switch-rail-height) / 2);
+  background-color: rgb(0 0 0 / 0.14);
+  cursor: inherit;
+  transition: opacity 300ms cubic-bezier(0.4, 0, 0.2, 1), background 300ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:root.dark .app-switch-rail { background-color: rgb(255 255 255 / 0.20); }
+.app-switch[data-state="checked"] .app-switch-rail { background-color: var(--accent); }
+.app-switch:focus .app-switch-rail { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
+:root.dark .app-switch:focus .app-switch-rail { box-shadow: 0 0 8px 0 color-mix(in srgb, var(--accent) 30%, transparent); }
+.app-switch:disabled { cursor: not-allowed; }
+.app-switch:disabled .app-switch-rail { opacity: 0.5; }
 
 .app-switch-thumb {
+  position: absolute;
+  top: var(--switch-offset);
+  left: var(--switch-offset);
   display: block;
-  width: calc(50% - 1px);
-  aspect-ratio: 1;
-  border-radius: 50%;
+  width: var(--switch-button-width-pressed);
+  max-width: var(--switch-button-width);
+  height: var(--switch-button-height);
+  box-sizing: border-box;
+  border-radius: calc(var(--switch-button-height) / 2);
   background: white;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
-  --switch-thumb-scale: 1;
-  transform: translateX(0) scale(var(--switch-thumb-scale));
-  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: 0 1px 4px 0 rgb(0 0 0 / 0.3), inset 0 0 1px 0 rgb(0 0 0 / 0.05);
+  cursor: inherit;
+  transition: background-color 300ms cubic-bezier(0.4, 0, 0.2, 1), left 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity 300ms cubic-bezier(0.4, 0, 0.2, 1), max-width 300ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.app-switch[data-state="checked"] .app-switch-thumb { transform: translateX(100%) scale(var(--switch-thumb-scale)); }
-.app-switch:active:not(:disabled) .app-switch-thumb { --switch-thumb-scale: 1.08; }
+.app-switch[data-state="checked"] .app-switch-thumb { left: calc(100% - var(--switch-button-width) - var(--switch-offset)); }
+:root.dark .app-switch-thumb { box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.4); }
+.app-switch:not(:disabled):is(:active, [data-pressed="true"]) .app-switch-thumb { max-width: var(--switch-button-width-pressed); }
+.app-switch[data-state="checked"]:not(:disabled):is(:active, [data-pressed="true"]) .app-switch-thumb { left: calc(100% - var(--switch-button-width-pressed) - var(--switch-offset)); }
 
 @keyframes app-dialog-overlay-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes app-dialog-in { from { opacity: 0; transform: translate(-50%, calc(-50% + 10px)) scale(0.95); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }

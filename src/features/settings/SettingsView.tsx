@@ -15,7 +15,7 @@ import version from "../../../VERSION?raw";
 interface SettingsViewProps { state: AppState; onPreviewTheme: (theme: Settings["theme"]) => void; onRefresh: () => Promise<void>; onSaved: (settings: Settings) => void; onHome: () => void; }
 type Section = "general" | "codex" | "account" | "advanced" | "about";
 
-const themeOptions = [{ label: "浅色", value: "light" as const }, { label: "深色", value: "dark" as const }, { label: "跟随系统", value: "system" as const }];
+const themeOptions = [{ label: "跟随系统", value: "system" as const }, { label: "浅色", value: "light" as const }, { label: "深色", value: "dark" as const }];
 const autoBackupOptions = [{ label: "关闭", value: 0 }, { label: "6 小时", value: 6 }, { label: "12 小时", value: 12 }, { label: "24 小时", value: 24 }, { label: "48 小时", value: 48 }, { label: "7 天", value: 168 }];
 const keepOptions = [3, 5, 10, 15, 20, 30].map((value) => ({ label: `${value} 个`, value }));
 
