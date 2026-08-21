@@ -1,13 +1,12 @@
 # 发版流水线（构建+发布准备）：由 /release skill 负责版本号、撰写发行日志并提交；
 # 本工作流承担确定性动作——校验、三平台构建、创建草稿发行页、上传产物。
-# 触发方式：
-#   手动触发（workflow_dispatch）：skill 提交日志后手动触发，
-#   构建完成直接建草稿、传资产（用 GITHUB_TOKEN 创建 release/tag）。
+# 触发方式：手动触发（workflow_dispatch），仅允许从 main 分支执行；
+# 构建完成直接建草稿、传资产（用 GITHUB_TOKEN 创建 release/tag）。
 # 草稿不通知关注者；发布（--draft=false）由用户测试确认后执行，那一刻才发出通知。
 name: Release
 
 on:
-  # 手动触发（Actions UI → Run workflow 可选分支），用于在打 tag 前预演或重跑
+  # 手动触发（Actions UI → Run workflow），版本提交后从 main 分支执行
   workflow_dispatch:
 
 permissions:
@@ -22,20 +21,24 @@ jobs:
     name: verify (Windows)
     runs-on: windows-latest
     steps:
+      - name: 仅允许从 main 分支发行
+        shell: bash
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          [ "$RELEASE_REF" = "refs/heads/main" ] || {
+            echo "::error::发行工作流只能从 main 分支触发（当前：$RELEASE_REF）"
+            exit 1
+          }
       - uses: actions/checkout@v7
-      # 第 0 秒拦截：VERSION 非空、CHANGELOG 中存在对应版本段落（tag 触发时还需 tag 与 VERSION 一致），
+      # 第 0 秒拦截：VERSION 非空、CHANGELOG 中存在对应版本段落，
       # 不满足直接失败，避免浪费三平台构建
-      - name: 校验 VERSION、CHANGELOG 段落与 tag
+      - name: 校验 VERSION 与 CHANGELOG 段落
         shell: bash
         run: |
           VERSION="$(cat VERSION)"
           [ -n "$VERSION" ] || { echo "::error::VERSION 文件为空"; exit 1; }
           grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "::error::CHANGELOG.md 缺少 ## [$VERSION] 段落（需由 /release skill 先提交）"; exit 1; }
-          # 手动触发无 tag 概念，跳过 tag 一致性校验
-          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::tag $GITHUB_REF_NAME 与 VERSION（$VERSION）不一致"
-            exit 1
-          fi
       - run: corepack enable
         shell: bash
       - uses: actions/setup-node@v7
@@ -50,6 +53,7 @@ jobs:
           workspaces: src-tauri
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - run: pnpm build
 
   build:
     needs: verify
@@ -101,8 +105,8 @@ jobs:
   release:
     # 校验和所有平台构建成功后才会执行；任何失败都不会创建发行
     needs: build
-    # 手动触发与 tag 推送都会执行：构建完直接把资产收进草稿。
-    # 手动触发时 tag 不存在，由 gh release create 自动创建（--target 指向本次 commit）；
+    # 手动触发执行：构建完直接把资产收进草稿。
+    # tag 不存在时，由 gh release create 自动创建（--target 指向本次 commit）；
     # 用 GITHUB_TOKEN 创建 release/tag 不会再次触发本工作流（官方防递归机制）。
     runs-on: ubuntu-latest
     permissions:
