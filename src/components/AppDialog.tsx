@@ -31,7 +31,7 @@ export function AppDialog({ open, onOpenChange, title, description, children, fo
         >
           <Dialog.Title className="app-dialog-title">{title}</Dialog.Title>
           {description ? <Dialog.Description className="app-dialog-description">{description}</Dialog.Description> : null}
-          {children}
+          <div className="app-dialog-body">{children}</div>
           {footer ? <div className="app-dialog-actions">{footer}</div> : null}
           <Dialog.Close aria-label="关闭" className="app-dialog-close">×</Dialog.Close>
         </Dialog.Content>

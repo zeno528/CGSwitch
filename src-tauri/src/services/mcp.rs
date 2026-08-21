@@ -3,6 +3,13 @@ use super::{
     McpServerSpec, McpSyncDiffEntry, McpSyncEntryKind, McpSyncFieldDiff, McpSyncPreview,
 };
 
+fn without_blank_lines(text: &str) -> String {
+    text.lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 impl AppContext {
     /// 读取 live config.toml；文件不存在视作空文档（首个 MCP 服务器创建前允许没有配置文件）。
     pub(super) fn read_live_config(&self) -> AppResult<String> {
@@ -144,7 +151,7 @@ impl AppContext {
                 });
                 continue;
             };
-            if live_toml.as_str() == *db_toml {
+            if without_blank_lines(live_toml) == without_blank_lines(db_toml) {
                 continue;
             }
             let db_spec = codex_config::spec_from_fragment(name, db_toml);

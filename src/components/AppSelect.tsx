@@ -1,5 +1,6 @@
-import { CaretDown } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { CaretDown, Check } from "@phosphor-icons/react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 interface SelectOption<T extends string | number = string> {
   label: string;
@@ -13,6 +14,7 @@ interface AppSelectProps<T extends string | number> {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  renderLabel?: (option: SelectOption<T>) => ReactNode;
 }
 
 export function AppSelect<T extends string | number>({
@@ -22,10 +24,14 @@ export function AppSelect<T extends string | number>({
   placeholder,
   disabled,
   className = "",
+  renderLabel,
 }: AppSelectProps<T>) {
   const selected = options.find((option) => String(option.value) === String(value));
   const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState<"bottom" | "top">("bottom");
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>();
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -35,6 +41,34 @@ export function AppSelect<T extends string | number>({
     document.addEventListener("pointerdown", closeOnOutsidePointer);
     return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
   }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const updatePosition = () => {
+      const root = rootRef.current;
+      const menu = menuRef.current;
+      if (!root || !menu) return;
+      const rect = root.getBoundingClientRect();
+      const gap = 6;
+      const menuHeight = menu.scrollHeight;
+      const below = window.innerHeight - rect.bottom - gap;
+      const above = rect.top - gap;
+      const nextPlacement = below < menuHeight && above > below ? "top" : "bottom";
+      setPlacement(nextPlacement);
+      setMenuStyle({
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+        ...(nextPlacement === "top" ? { top: "auto", bottom: `${window.innerHeight - rect.top + gap}px` } : { top: `${rect.bottom + gap}px`, bottom: "auto" }),
+      });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, options.length]);
 
   const selectOption = (option: SelectOption<T>) => {
     onChange(option.value);
@@ -59,10 +93,10 @@ export function AppSelect<T extends string | number>({
           }
         }}
       >
-        <span className="app-select__label">{selected?.label ?? placeholder ?? "请选择"}</span>
+        <span className="app-select__label">{selected ? renderLabel?.(selected) ?? selected.label : placeholder ?? "请选择"}</span>
         <CaretDown className="app-select__icon" size={16} weight="bold" aria-hidden="true" />
       </button>
-      <div className="app-select-menu" data-open={open} role="listbox" aria-label={placeholder ?? "选项"} aria-hidden={!open}>
+      <div ref={menuRef} className="app-select-menu" data-open={open} data-placement={placement} style={menuStyle} role="listbox" aria-label={placeholder ?? "选项"} aria-hidden={!open}>
         {options.map((option) => <button
           key={String(option.value)}
           type="button"
@@ -73,8 +107,8 @@ export function AppSelect<T extends string | number>({
           data-selected={selected?.value === option.value}
           onClick={() => selectOption(option)}
         >
-          <span>{option.label}</span>
-          {selected?.value === option.value ? <span className="app-select-option__check" aria-hidden="true">✓</span> : null}
+          <span>{renderLabel?.(option) ?? option.label}</span>
+          {selected?.value === option.value ? <Check className="app-select-option__check" size={16} weight="bold" aria-hidden="true" /> : null}
         </button>)}
       </div>
     </div>

@@ -18,7 +18,11 @@ function pairsToRecord(pairs: KVPair[]): Record<string, string> {
 
 function PairEditor({ pairs, onChange, keyPlaceholder, valuePlaceholder }: { pairs: KVPair[]; onChange: (pairs: KVPair[]) => void; keyPlaceholder: string; valuePlaceholder: string }) {
   if (!pairs.length) return <button type="button" className="app-dynamic-input__create" onClick={() => onChange([{ key: "", value: "" }])}><Plus size={16} weight="bold" aria-hidden="true" />添加</button>;
-  return <div className="app-dynamic-input">{pairs.map((pair, index) => <div key={index} className="app-dynamic-input__item"><div className="app-dynamic-input__pair"><input className="app-input app-dynamic-input__input mono" placeholder={keyPlaceholder} value={pair.key} onChange={(event) => onChange(pairs.map((current, currentIndex) => currentIndex === index ? { ...current, key: event.target.value } : current))} /><input className="app-input app-dynamic-input__input mono" placeholder={valuePlaceholder} value={pair.value} onChange={(event) => onChange(pairs.map((current, currentIndex) => currentIndex === index ? { ...current, value: event.target.value } : current))} /></div><div className="app-dynamic-input__actions"><button type="button" className="apple-icon-button app-dynamic-input__action" aria-label="删除此行" onClick={() => onChange(pairs.filter((_current, currentIndex) => currentIndex !== index))}><Minus size={16} weight="bold" aria-hidden="true" /></button><button type="button" className="apple-icon-button app-dynamic-input__action" aria-label="在此行后添加" onClick={() => onChange([...pairs.slice(0, index + 1), { key: "", value: "" }, ...pairs.slice(index + 1)])}><Plus size={16} weight="bold" aria-hidden="true" /></button></div></div>)}</div>;
+  return <div className="app-dynamic-input">{pairs.map((pair, index) => <div key={index} className="app-dynamic-input__item"><div className="app-dynamic-input__pair"><div className="app-input-focus-frame"><input className="app-input app-dynamic-input__input mono" placeholder={keyPlaceholder} value={pair.key} onChange={(event) => onChange(pairs.map((current, currentIndex) => currentIndex === index ? { ...current, key: event.target.value } : current))} /></div><div className="app-input-stepper app-input-focus-frame"><input className="app-input app-dynamic-input__input app-input-stepper__input mono" placeholder={valuePlaceholder} value={pair.value} onChange={(event) => onChange(pairs.map((current, currentIndex) => currentIndex === index ? { ...current, value: event.target.value } : current))} /><div className="app-input-stepper__actions"><button type="button" className="app-input-stepper__action" aria-label="删除此行" onClick={() => onChange(pairs.filter((_current, currentIndex) => currentIndex !== index))}><Minus size={16} weight="bold" aria-hidden="true" /></button><button type="button" className="app-input-stepper__action" aria-label="在此行后添加" onClick={() => onChange([...pairs.slice(0, index + 1), { key: "", value: "" }, ...pairs.slice(index + 1)])}><Plus size={16} weight="bold" aria-hidden="true" /></button></div></div></div></div>)}</div>;
+}
+
+function TimeoutInput({ value, onChange, placeholder }: { value: number | null; onChange: (value: number | null) => void; placeholder: string }) {
+  return <div className="app-input-stepper app-input-focus-frame"><input className="app-input app-input-stepper__input" type="number" min={1} placeholder={placeholder} value={value ?? ""} onChange={(event) => onChange(event.target.value ? Number(event.target.value) : null)} /><div className="app-input-stepper__actions"><button type="button" className="app-input-stepper__action" aria-label="减少 1 秒" onClick={() => onChange(Math.max(1, (value ?? 1) - 1))}><Minus size={16} weight="bold" aria-hidden="true" /></button><button type="button" className="app-input-stepper__action" aria-label="增加 1 秒" onClick={() => onChange((value ?? 0) + 1)}><Plus size={16} weight="bold" aria-hidden="true" /></button></div></div>;
 }
 
 interface McpEditProps {
@@ -46,6 +50,7 @@ export default function McpEdit({ server, create = false, onBack }: McpEditProps
   const [saving, setSaving] = useState(false);
   const [formatting, setFormatting] = useState(false);
   const [diagnostics, setDiagnostics] = useState<EditorDiagnosticSummary>({ count: 0, firstLine: null });
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const patchSeq = useRef(0);
   const parseSeq = useRef(0);
   const editorRef = useRef<ConfigTextEditorHandle>(null);
@@ -181,12 +186,13 @@ export default function McpEdit({ server, create = false, onBack }: McpEditProps
           </div>
 
           <div className="apple-panel-section">
-            <details className="apple-disclosure">
-              <summary className="apple-disclosure__summary">
+            <div className={`apple-disclosure ${advancedOpen ? "apple-disclosure--open" : ""}`}>
+              <button type="button" className="apple-disclosure__summary" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>
                 <CaretRight className="apple-disclosure__icon" size={18} weight="bold" aria-hidden="true" />
                 <span className="field-subtitle">高级选项（环境变量 / 请求头 / 超时）</span>
-              </summary>
-              <div className="mt-4">
+              </button>
+              <div className="apple-disclosure__content" aria-hidden={!advancedOpen} inert={!advancedOpen}>
+                <div className="apple-disclosure__body">
                 {transport === "stdio" ? <>
                   <div className="field-label mb-1.5">环境变量</div>
                   <PairEditor pairs={envPairs} onChange={setEnvPairs} keyPlaceholder="变量名" valuePlaceholder="值" />
@@ -199,15 +205,16 @@ export default function McpEdit({ server, create = false, onBack }: McpEditProps
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div>
                     <div className="field-label mb-1.5">启动超时（秒，可选）</div>
-                    <input className="app-input" type="number" min={1} placeholder="默认 10" value={startupTimeout ?? ""} onChange={(event) => setStartupTimeout(event.target.value ? Number(event.target.value) : null)} />
+                    <TimeoutInput value={startupTimeout} onChange={setStartupTimeout} placeholder="默认 10" />
                   </div>
                   <div>
                     <div className="field-label mb-1.5">工具调用超时（秒，可选）</div>
-                    <input className="app-input" type="number" min={1} placeholder="默认 60" value={toolTimeout ?? ""} onChange={(event) => setToolTimeout(event.target.value ? Number(event.target.value) : null)} />
+                    <TimeoutInput value={toolTimeout} onChange={setToolTimeout} placeholder="默认 60" />
+                    </div>
                   </div>
                 </div>
               </div>
-            </details>
+            </div>
           </div>
 
           <div className="apple-panel-section">

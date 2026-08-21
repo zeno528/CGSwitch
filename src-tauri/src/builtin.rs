@@ -158,8 +158,8 @@ mod tests {
 
     #[test]
     fn embedded_catalogs_keep_original_size_and_line_endings() {
-        assert_eq!(DEEPSEEK_MODELS.len(), 76217);
-        assert_eq!(count(DEEPSEEK_MODELS, b"\r\n"), 137);
+        assert_eq!(DEEPSEEK_MODELS.len(), 114364);
+        assert_eq!(count(DEEPSEEK_MODELS, b"\r\n"), 205);
         assert_eq!(ZHIPU_MODELS.len(), 2543);
         assert_eq!(count(ZHIPU_MODELS, b"\r\n"), 72);
         assert_eq!(MINIMAX_CATALOG.len(), 953);
@@ -169,20 +169,16 @@ mod tests {
     }
 
     #[test]
-    fn deepseek_catalog_disables_search_tool() {
+    fn deepseek_catalog_preserves_search_tool_overrides() {
         let catalog: serde_json::Value = serde_json::from_slice(DEEPSEEK_MODELS).unwrap();
         let models = catalog["models"].as_array().unwrap();
-        assert!(!models.is_empty());
-        for model in models {
-            assert_eq!(
-                model
-                    .get("supports_search_tool")
-                    .and_then(serde_json::Value::as_bool),
-                Some(false),
-                "DeepSeek catalog must disable supports_search_tool for {:?}",
-                model.get("slug"),
-            );
-        }
+        assert_eq!(models.len(), 3);
+        assert_eq!(models[0]["slug"], "deepseek-v4-flash");
+        assert_eq!(models[0]["supports_search_tool"], false);
+        assert_eq!(models[1]["slug"], "deepseek-v4-pro");
+        assert_eq!(models[1]["supports_search_tool"], false);
+        assert_eq!(models[2]["slug"], "deepseek-v4-flash-vision-exp");
+        assert_eq!(models[2]["supports_search_tool"], true);
     }
 
     #[test]

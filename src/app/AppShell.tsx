@@ -239,7 +239,7 @@ export default function AppShell() {
 
   return (
     <FeedbackProvider>
-      <div className="flex h-screen flex-col">
+      <div className="flex h-full min-h-0 flex-col">
         <div className="apple-window-chrome">
           <div
             data-tauri-drag-region
