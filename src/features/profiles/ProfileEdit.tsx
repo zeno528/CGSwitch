@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowSquareOut, BracketsCurly, Check, Eye, EyeSlash, FloppyDisk, GearSix, Info, Key, Monitor, PencilSimple, WifiHigh } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowSquareOut, BracketsCurly, Eye, EyeSlash, FloppyDisk, GearSix, Info, Key, Monitor, PencilSimple, WifiHigh } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api";
 import { useFeedback } from "../../app/Feedback";
@@ -75,7 +75,7 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
   const isCustom = create && presetKind === "custom";
   const isOfficial = create ? presetKind === "chatgpt" : detail?.provider === null;
   const isOpenCode = create ? presetKind === "opencode" : detail?.provider === "opencode-go";
-  const showProviderFields = create ? Boolean(selectedPreset?.base_url) : Boolean(detail?.provider);
+  const showProviderFields = create ? (isCustom || Boolean(selectedPreset?.base_url)) : Boolean(detail?.provider);
   const showLongContextOverride = isOfficial;
   const supportsBalance = balanceQueryProviders.has(detail?.provider ?? "");
   const hasProfileAuthOverride = !create && Boolean(detail?.raw_auth?.trim()) && !(authText !== authInitial && !authText.trim());
@@ -135,7 +135,6 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
         try { initialMcpSection = (await api.getMcpSectionToml()).trim(); setMcpSection(initialMcpSection); } catch { /* backend falls back on save */ }
         setPresetKind("custom");
         setName("自定义供应商");
-        setBaseUrl("https://api.example.com/v1");
         setSelectedIcon("custom");
         setConfigText(withMcpSection(customConfigTemplate, initialMcpSection));
         setCatalogText(customCatalogTemplate);
@@ -337,7 +336,7 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
         {loadError ? <p className="muted mt-4 text-sm">{loadError}</p> : null}
         <div className="apple-group p-0">
           {create ? <div className="apple-panel-section"><div className="field-subtitle">选择供应商</div><div className="mt-3 grid gap-2 sm:grid-cols-3 md:grid-cols-6">
-            {builtinPresets.map((preset) => <button key={preset.kind} type="button" className={`flex items-center gap-2.5 rounded-xl p-2.5 text-left transition-colors ${presetKind === preset.kind ? "shadow-[0_0_0_1px_var(--accent)] bg-[var(--selection-bg)]" : "shadow-[0_0_0_1px_var(--panel-ring)] hover:bg-black/3 dark:hover:bg-white/4"}`} aria-pressed={presetKind === preset.kind} onClick={() => selectPreset(preset.kind)}><ProfileIconTile name={preset.name} icon={preset.icon} size="xs" /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold tracking-tight">{preset.name}</span><span className="muted block truncate text-[11px]">{preset.model}{preset.base_url ? "" : preset.kind === "chatgpt" ? " · 认证登录" : " · 无需密钥"}</span></span>{presetKind === preset.kind ? <Check className="h-4 w-4 shrink-0 text-accent" weight="bold" aria-hidden="true" /> : null}</button>)}
+            {builtinPresets.map((preset) => <button key={preset.kind} type="button" className={`flex items-center gap-2.5 rounded-xl p-2.5 text-left transition-colors ${presetKind === preset.kind ? "shadow-[0_0_0_1px_var(--accent)] bg-[var(--selection-bg)]" : "shadow-[0_0_0_1px_var(--panel-ring)] hover:bg-black/3 dark:hover:bg-white/4"}`} aria-pressed={presetKind === preset.kind} onClick={() => selectPreset(preset.kind)}><ProfileIconTile name={preset.name} icon={preset.icon} size="xs" /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold tracking-tight">{preset.name}</span><span className="muted block truncate text-[11px]">{preset.model}{preset.base_url ? "" : preset.kind === "chatgpt" ? " · 认证登录" : " · 无需密钥"}</span></span></button>)}
           </div></div> : null}
           <div className="apple-panel-section">
             <div className="flex items-center gap-4"><button type="button" className="relative grid h-[61px] w-[61px] shrink-0 place-items-center rounded-[16px] transition-opacity hover:opacity-80" title="点击更换图标" aria-label="更换图标" onClick={() => setPickingIcon(true)}><ProfileIconTile name={detail?.name ?? name} icon={selectedIcon} size="fill" /><span className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-white shadow" aria-hidden="true"><PencilSimple className="h-2.5 w-2.5" weight="bold" /></span></button><div className="min-w-0 flex-1"><div className="field-label mb-1.5">名称</div><input className="app-input underline-input" maxLength={50} placeholder="供应商名称" value={name} onChange={(event) => setName(event.target.value)} /></div></div>

@@ -33,7 +33,6 @@ model_catalog_json = "~/.codex/models.json"
 
 [model_providers.your-provider]
 name = "your-provider"
-base_url = "https://api.example.com/v1"
 wire_api = "responses"
 experimental_bearer_token = "<你的 API Key>"`;
 
@@ -179,7 +178,7 @@ export const builtinPresets: BuiltinPreset[] = [
     name: "自定义",
     provider: null,
     icon: "custom",
-    base_url: "https://api.example.com/v1",
+    base_url: "",
     admin_url: null,
     model: "自定义",
     model_values: { model_catalog_json: '"~/.codex/models.json"' },
