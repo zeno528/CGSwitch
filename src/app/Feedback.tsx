@@ -1,6 +1,7 @@
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Toast from "@radix-ui/react-toast";
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { CheckCircle, Info, Warning, XCircle } from "@phosphor-icons/react";
+import { createContext, useCallback, useContext, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 type ToastTone = "success" | "error" | "warning" | "info";
 
@@ -27,20 +28,34 @@ interface ToastState {
   id: number;
   tone: ToastTone;
   message: string;
+  open: boolean;
 }
 
 interface ConfirmationState extends ConfirmOptions {
   resolve: (confirmed: boolean) => void;
 }
 
+const toastIcons = { success: CheckCircle, error: XCircle, warning: Warning, info: Info } as const;
+
 export function FeedbackProvider({ children }: { children: ReactNode }) {
-  const [toast, setToast] = useState<ToastState | null>(null);
+  const [toasts, setToasts] = useState<ToastState[]>([]);
   const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
   const confirmActionRef = useRef<HTMLButtonElement>(null);
+  const nextToastId = useRef(0);
 
   const showToast = useCallback((tone: ToastTone, message: string) => {
-    setToast({ id: Date.now(), tone, message });
+    const id = ++nextToastId.current;
+    setToasts((current) => [...current, { id, tone, message, open: true }]);
   }, []);
+
+  const removeToast = useCallback((id: number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
+  const closeToast = useCallback((id: number) => {
+    setToasts((current) => current.map((toast) => toast.id === id ? { ...toast, open: false } : toast));
+    window.setTimeout(() => removeToast(id), 220);
+  }, [removeToast]);
 
   const confirm = useCallback((options: ConfirmOptions) => {
     return new Promise<boolean>((resolve) => setConfirmation({ ...options, resolve }));
@@ -52,6 +67,8 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       return null;
     });
   }, []);
+
+  const [toastExpanded, setToastExpanded] = useState(false);
 
   const value: FeedbackContextValue = {
     showToast,
@@ -66,18 +83,40 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     <FeedbackContext.Provider value={value}>
       <Toast.Provider swipeDirection="right">
         {children}
-        <Toast.Root
-          key={toast?.id}
-          open={toast !== null}
-          duration={4200}
-          onOpenChange={(open) => {
-            if (!open) setToast(null);
+        {[...toasts].reverse().map((toast, index) => {
+          const ToastIcon = toastIcons[toast.tone];
+          const toastStyle = {
+            "--toast-offset": `${index * 10}px`,
+            "--toast-scale": Math.max(0.84, 1 - index * 0.04),
+            "--toast-opacity": Math.max(0.58, 1 - index * 0.08),
+          } as CSSProperties;
+          return (
+            <Toast.Root
+              key={toast.id}
+              forceMount
+              open={toast.open}
+              duration={3000}
+              onOpenChange={(open) => {
+                if (!open) closeToast(toast.id);
+              }}
+              style={toastStyle}
+              className={`app-toast app-toast--${toast.tone}`}
+            >
+              <ToastIcon className={`app-toast__icon app-toast__icon--${toast.tone}`} size={20} weight="fill" aria-hidden="true" />
+              <Toast.Description className="app-toast__content">{toast.message}</Toast.Description>
+            </Toast.Root>
+          );
+        })}
+        <Toast.Viewport
+          className="app-toast-viewport"
+          data-expanded={toastExpanded}
+          onPointerEnter={() => setToastExpanded(true)}
+          onPointerLeave={() => setToastExpanded(false)}
+          onFocusCapture={() => setToastExpanded(true)}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setToastExpanded(false);
           }}
-          className={`app-toast app-toast--${toast?.tone ?? "info"}`}
-        >
-          <Toast.Description>{toast?.message}</Toast.Description>
-        </Toast.Root>
-        <Toast.Viewport className="app-toast-viewport" />
+        />
       </Toast.Provider>
 
       <AlertDialog.Root
