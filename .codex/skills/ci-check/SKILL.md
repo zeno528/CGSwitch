@@ -1,6 +1,6 @@
 ---
 name: ci-check
-description: 在本地完整复刻 GitHub Actions CI 的检查链（vue-tsc 类型检查、cargo fmt、clippy -D warnings、cargo test、vite 生产构建），失败就地修复并复跑直到全绿，确保推送后 CI 一次通过、不用返工。当用户说"检查一下"、"跑一下 CI"、"本地 CI"、"推送前检查"、"check 一下"、"preflight" 时使用。
+description: 在本地完整复刻 GitHub Actions CI 的检查链（tsc 类型检查、Vitest、cargo fmt、clippy -D warnings、cargo test、vite 生产构建），失败就地修复并复跑直到全绿，确保推送后 CI 一次通过、不用返工。当用户说"检查一下"、"跑一下 CI"、"本地 CI"、"推送前检查"、"check 一下"、"preflight" 时使用。
 ---
 
 # 本地 CI 预检
@@ -30,7 +30,7 @@ pnpm check && pnpm build
 
 按失败阶段处理，修的是根因，不是绕过检查：
 
-- **vue-tsc 报错**：修类型错误本身；禁止改 tsconfig / 加 any 绕过。
+- **tsc/Vitest 报错**：修类型或测试错误本身；禁止改 tsconfig / 加 any 绕过。
 - **cargo fmt --check**：直接执行 `cargo fmt --all --manifest-path src-tauri/Cargo.toml`，然后展示改了哪些文件。
 - **clippy -D warnings**：逐条修到零警告；确需 `#[allow]` 时必须说明理由并留在代码注释里。
 - **cargo test 失败**：先判断是本次改动引入还是环境差异，修根因；与改动无关的既有失败要报告而不是静默跳过。

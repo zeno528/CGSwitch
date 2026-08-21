@@ -83,12 +83,6 @@ body,
   height: 100%;
 }
 
-/* naive-ui 的 NConfigProvider 会渲染一层无高度包裹 div，
-   会截断 #app 的 100% 高度链（内部 h-full 因此失效、页面被内容撑高），补上高度约束 */
-.n-config-provider {
-  height: 100%;
-}
-
 body {
   margin: 0;
   background: var(--app-bg);
@@ -102,7 +96,6 @@ body {
     "Microsoft YaHei",
     system-ui,
     sans-serif;
-  /* 与 naive-ui NGlobalStyle 原先注入的基准一致（已移除该组件，由这里接管） */
   font-size: var(--font-size-base);
   line-height: 1.6;
 }
@@ -113,16 +106,11 @@ textarea::placeholder {
   font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
 }
 
-.n-input .n-input__placeholder {
-  font-family: "Microsoft YaHei", "Segoe UI", sans-serif !important;
-}
-
 :root.dark body {
   color: #ffffff;
 }
 
 :root.dark main {
-  --n-text-color: #ffffff;
   color: #ffffff;
 }
 
@@ -281,39 +269,6 @@ textarea::placeholder {
 .settings-icon-tile {
   background: transparent;
   border: 1px solid var(--panel-border);
-}
-
-/* 名称行：不用输入框外框，改用底部分割线作为输入框，聚焦时高亮 */
-.underline-input.n-input {
-  background: transparent;
-  border-radius: 0;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-.underline-input .n-input-wrapper {
-  padding-left: 0;
-  padding-right: 0;
-}
-
-.underline-input.n-input:focus-within {
-  border-bottom-color: var(--accent);
-}
-
-/* 深色下下划线输入框的底边也提亮，与有边框输入框一致（naive-ui 深色默认 9-14% 太淡） */
-:root.dark .underline-input.n-input {
-  border-bottom-color: rgba(255, 255, 255, 0.24);
-}
-
-/* 删除确认弹窗：标题与操作按钮统一红色语义 */
-.delete-profile-dialog .n-dialog__title {
-  color: var(--danger);
-}
-
-/* 弹窗操作按钮略放大，保持自定义模态框与 useDialog 的触控尺寸一致 */
-.n-dialog__action .n-button,
-.dialog-actions .n-button {
-  --n-height: 34px !important;
-  --n-padding: 0 16px !important;
 }
 
 /* 全局悬浮滚动条：默认隐藏，鼠标进入可滚动区域时才显现缩略图，
@@ -887,12 +842,6 @@ body.drag-active * {
   box-shadow: 0 0 0 1px var(--panel-ring);
 }
 
-/* naive-ui 的 n-list 在深色下自带更暗的底色（--n-color），叠在卡片上
-   会形成明显的深色分层；列表底一律透明，由外层卡片统一承担背景 */
-.n-list.n-list {
-  background-color: transparent;
-}
-
 /* 统一大面板：外层用 apple-group，内部区块用 apple-panel-section；
    区块之间以分隔线连接，不再各自成卡（编辑供应商/新建供应商等整页表单用） */
 .apple-panel-section {
@@ -901,100 +850,6 @@ body.drag-active * {
 
 .apple-panel-section + .apple-panel-section {
   border-top: 1px solid var(--panel-divider);
-}
-
-/* 分割线颜色走自己的变量轨：naive-ui 的主题色变量与 0.3s background-color
-   过渡会让切深浅色时分割线晚一拍渐变出现；这里压过主题变量并去掉过渡，
-   实现与 .dark 类同帧翻转 */
-.n-divider {
-  --n-color: var(--panel-divider) !important;
-}
-
-.n-divider .n-divider__line {
-  transition: none !important;
-}
-
-/* 全局弹窗进出场动画：覆盖 naive-ui 默认的 scale(0.5) 缩放淡入，
-   改为轻量高级的 0.95 缩放 + 轻微下落 + 淡入（Apple/Radix 同款缓动），
-   只用 transform/opacity，GPU 合成、无额外开销 */
-.n-modal-container .n-modal {
-  transform-origin: center !important;
-}
-
-.n-modal-container .n-modal.fade-in-scale-up-transition-enter-from {
-  opacity: 0;
-  transform: scale(0.95) translateY(10px);
-}
-
-.n-modal-container .n-modal.fade-in-scale-up-transition-enter-to {
-  opacity: 1;
-  transform: scale(1) translateY(0);
-}
-
-.n-modal-container .n-modal.fade-in-scale-up-transition-enter-active {
-  transition:
-    opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
-    transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.n-modal-container .n-modal.fade-in-scale-up-transition-leave-from {
-  opacity: 1;
-  transform: scale(1) translateY(0);
-}
-
-.n-modal-container .n-modal.fade-in-scale-up-transition-leave-to {
-  opacity: 0;
-  transform: scale(0.97) translateY(4px);
-}
-
-.n-modal-container .n-modal.fade-in-scale-up-transition-leave-active {
-  transition:
-    opacity 160ms cubic-bezier(0.4, 0, 1, 1),
-    transform 160ms cubic-bezier(0.4, 0, 1, 1);
-}
-
-/* 遮罩：保持淡入，曲线与内容一致，时长稍短 */
-.n-modal-container .n-modal-mask.fade-in-transition-enter-from,
-.n-modal-container .n-modal-mask.fade-in-transition-leave-to {
-  opacity: 0;
-}
-
-.n-modal-container .n-modal-mask.fade-in-transition-enter-to,
-.n-modal-container .n-modal-mask.fade-in-transition-leave-from {
-  opacity: 1;
-}
-
-.n-modal-container .n-modal-mask.fade-in-transition-enter-active,
-.n-modal-container .n-modal-mask.fade-in-transition-leave-active {
-  transition: opacity 240ms cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-/* 模态框遮罩背景虚化：参考轻灰色半透明遮罩 + 中等模糊，保留背景布局但压住细节；
-   系统关闭透明度时退回纯遮罩 */
-.n-modal-container .n-modal-mask {
-  background: rgb(0 0 0 / 0.1);
-  -webkit-backdrop-filter: blur(6px) saturate(100%);
-  backdrop-filter: blur(6px) saturate(100%);
-}
-
-:root.dark .n-modal-container .n-modal-mask {
-  background: rgb(0 0 0 / 0.34);
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .n-modal-container .n-modal-mask {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .n-modal-container .n-modal.fade-in-scale-up-transition-enter-active,
-  .n-modal-container .n-modal.fade-in-scale-up-transition-leave-active,
-  .n-modal-container .n-modal-mask.fade-in-transition-enter-active,
-  .n-modal-container .n-modal-mask.fade-in-transition-leave-active {
-    transition: none !important;
-  }
 }
 
 .startup-skeleton > div {
@@ -1062,21 +917,228 @@ button:focus-visible {
   }
 }
 
-/* 下拉菜单（select）进场：naive-ui 的 select 弹层与弹窗共用同名过渡类
-   （fade-in-scale-up-transition），默认是 scale(0.5) 弹窗式弹出；
-   这里单独覆盖成原生下拉的淡入 + 轻位移，不影响上方全局弹窗动画 */
-.n-base-select-menu.n-select-menu.fade-in-scale-up-transition-enter-active,
-.n-base-select-menu.n-select-menu.fade-in-scale-up-transition-leave-active {
-  transition:
-    opacity 160ms ease-out,
-    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+/* React shared controls: behavior comes from Radix/native elements; geometry stays on project tokens. */
+.app-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgb(0 0 0 / 0.1);
+  -webkit-backdrop-filter: blur(6px) saturate(100%);
+  backdrop-filter: blur(6px) saturate(100%);
+  animation: app-dialog-overlay-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.n-base-select-menu.n-select-menu.fade-in-scale-up-transition-enter-from,
-.n-base-select-menu.n-select-menu.fade-in-scale-up-transition-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
+:root.dark .app-dialog-overlay {
+  background: rgb(0 0 0 / 0.34);
 }
+
+.app-dialog-content {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 51;
+  width: min(520px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-card);
+  background: var(--panel-bg);
+  box-shadow: 0 22px 70px rgb(0 0 0 / 0.22), 0 0 0 1px var(--panel-ring);
+  padding: var(--gap-card);
+  animation: app-dialog-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-dialog-content--confirm {
+  width: min(460px, calc(100vw - 2rem));
+}
+
+.app-dialog-title {
+  color: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.app-dialog-description {
+  margin-top: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.app-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.625rem;
+  margin-top: 1.25rem;
+}
+
+.app-dialog-close {
+  position: absolute;
+  right: 0.75rem;
+  top: 0.75rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-control-sm);
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.app-dialog-close:hover {
+  background: var(--sidebar-bg);
+  color: inherit;
+}
+
+.app-button--primary {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: var(--accent);
+  color: white;
+}
+
+.app-button--primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, black);
+}
+
+.app-button--danger {
+  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+  background: var(--danger);
+  color: white;
+}
+
+.app-button--danger:hover {
+  background: color-mix(in srgb, var(--danger) 88%, black);
+}
+
+.app-toast-viewport {
+  position: fixed;
+  right: 1rem;
+  top: 2.75rem;
+  z-index: 60;
+  display: flex;
+  width: min(360px, calc(100vw - 2rem));
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0;
+  outline: none;
+}
+
+.app-toast {
+  border-radius: var(--radius-control);
+  background: var(--panel-bg);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 0.16), 0 0 0 1px var(--panel-ring);
+  padding: 0.75rem 0.875rem;
+  color: inherit;
+  font-size: 13px;
+  animation: app-toast-in 180ms ease-out;
+}
+
+.app-toast--success { border-left: 3px solid var(--success); }
+.app-toast--error { border-left: 3px solid var(--danger); }
+.app-toast--warning { border-left: 3px solid var(--warning); }
+.app-toast--info { border-left: 3px solid var(--accent); }
+
+.app-select {
+  display: inline-flex;
+  min-width: 9rem;
+  height: var(--control-height);
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-control);
+  background: var(--panel-bg);
+  padding: 0 0.75rem;
+  color: inherit;
+  font-size: var(--font-size-base);
+}
+
+.app-select:hover,
+.app-select:focus-visible {
+  border-color: var(--accent);
+}
+
+.app-select:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.app-input {
+  width: 100%;
+  min-height: var(--control-height);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-control);
+  background: var(--panel-bg);
+  padding: 0.5rem 0.75rem;
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+
+.app-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.app-input.underline-input {
+  min-height: 2rem;
+  border: 0;
+  border-bottom: 1px solid var(--panel-border);
+  border-radius: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.app-input.underline-input:focus {
+  border-bottom-color: var(--accent);
+  box-shadow: none;
+}
+
+.cm-editor {
+  height: auto;
+  background: transparent;
+}
+
+.cm-scroller {
+  overflow: auto;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.cm-lineNumbers { width: 20px; }
+.cm-lineNumbers .cm-gutterElement { min-width: 20px; padding: 0; }
+.cm-activeLine,
+.cm-activeLineGutter { background-color: var(--selection-bg) !important; }
+
+.app-switch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-secondary) 28%, transparent);
+  padding: 2px;
+  transition: background-color 150ms ease-out;
+}
+
+.app-switch--sm { width: 2rem; height: 1.25rem; }
+.app-switch--md { width: 2.75rem; height: 1.625rem; }
+.app-switch[data-state="checked"] { background: var(--accent); }
+.app-switch:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.app-switch-thumb {
+  display: block;
+  width: calc(50% - 1px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.app-switch[data-state="checked"] .app-switch-thumb { transform: translateX(100%); }
+
+@keyframes app-dialog-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes app-dialog-in { from { opacity: 0; transform: translate(-50%, calc(-50% + 10px)) scale(0.95); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes app-toast-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
 .apple-sidebar-indicator {
   position: absolute;

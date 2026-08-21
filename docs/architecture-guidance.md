@@ -1,6 +1,6 @@
 # CGswitch 架构与目录演进指导
 
-> 本文用于后续开发决策。当前结论基于 CGswitch 现有 Tauri 2 + Vue 3/Vite + Rust + SQLite 实现，以及未来适配 Codex CLI / WSL2 的规划。
+> 本文用于后续开发决策。当前结论基于 CGswitch 现有 Tauri 2 + React 19/Vite + Rust + SQLite 实现，以及未来适配 Codex CLI / WSL2 的规划。
 
 ## 当前结论
 
@@ -36,11 +36,19 @@
 
 ## 源码目录约定
 
-- `src/components/`、`src/views/`：前端组件和页面，保持现有划分。
+- `src/app/`：React AppShell、主题、窗口生命周期和全局反馈。
+- `src/features/profiles/`、`src/features/mcp/`、`src/features/settings/`：按业务边界组织页面与编辑流程。
+- `src/components/`：跨 Feature 共享的控件、编辑器和图标。
 - `src-tauri/src/auth/`：认证逻辑。
 - `src-tauri/src/codex/`：Codex 配置解析和进程操作。
 - `src-tauri/src/database.rs`：SQLite schema、迁移和数据访问。
-- `src-tauri/src/services.rs`：当前应用服务编排；在只有一个 Codex 目标时不提前拆分。
+- `src-tauri/src/services/`：当前应用服务编排；在只有一个 Codex 目标时不提前拆分目标适配层。
+
+### 前端数据边界
+
+- `src/api.ts` 保持 Tauri Command 与 Web 调试 mock 的兼容接口。
+- `AppShell` 持有唯一根 `AppState`；MCP、备份列表和编辑详情只在所属 Feature 内持有局部状态。
+- 不为当前应用引入 QueryClient、路由系统、每条 Command 的 Action 或未来插件市场空接口。
 
 以下目录属于开发或构建产物，不属于软件源码结构：
 

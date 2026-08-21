@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" /></a>
-  <img src="https://img.shields.io/badge/Vue_3-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue 3" />
+  <img src="https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=20232A" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite" />
   <img src="https://img.shields.io/badge/Tauri_2-24C8DB?style=flat-square&logo=tauri&logoColor=white" alt="Tauri 2" />
@@ -150,7 +150,7 @@ pnpm install
 pnpm dev:tauri
 ```
 
-`pnpm dev:tauri` 会启动 Vite 和 Tauri 调试应用。Vue / CSS 修改会通过 Vite HMR 更新，Rust 修改会由 Tauri dev 自动重新编译。
+`pnpm dev:tauri` 会启动 Vite 和 Tauri 调试应用。React / CSS 修改会通过 Vite Fast Refresh 更新，Rust 修改会由 Tauri dev 自动重新编译。
 
 ### 调试构建
 
@@ -178,12 +178,12 @@ pnpm tauri build
 
 ## 技术栈
 
-- Vue 3 + TypeScript
+- React 19 + TypeScript
 - Vite + Tailwind CSS
 - Tauri 2 + Rust
 - SQLite
 - CodeMirror 6
-- Naive UI
+- Radix UI + 原生 HTML 控件
 
 ## 许可证
 

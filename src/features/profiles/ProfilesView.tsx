@@ -1,0 +1,244 @@
+import { ArrowClockwise, Camera, Plus } from "@phosphor-icons/react";
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { api } from "../../api";
+import { useFeedback } from "../../app/Feedback";
+import { AppDialog } from "../../components/AppDialog";
+import type { AppState, AuthStatus, ProfileSummary, RestartStage } from "../../types";
+import ProfileCard from "./ProfileCard";
+import ProfileEdit from "./ProfileEdit";
+
+interface ProfilesViewProps {
+  state: AppState;
+  activationEpoch: number;
+  onRefresh: () => Promise<void>;
+}
+
+const progressByStage: Record<RestartStage, number> = { idle: 0, stopping: 18, waiting: 48, launching: 82, success: 100, error: 100 };
+const textByStage: Record<RestartStage, string> = { idle: "空闲", stopping: "正在停止 Codex", waiting: "等待进程退出", launching: "正在启动 Codex", success: "重启成功", error: "重启失败" };
+const RESTART_CARD_DURATION = 360;
+
+interface RestartProgressCardProps {
+  stage: RestartStage;
+  message: string;
+  visible: boolean;
+  onHidden: () => void;
+}
+
+function RestartProgressCard({ stage, message, visible, onHidden }: RestartProgressCardProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const node = cardRef.current;
+    if (!node) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if (!visible) onHidden();
+      return;
+    }
+
+    const natural = node.scrollHeight;
+    const styles = getComputedStyle(node);
+    const margin = parseFloat(styles.marginTop) || 24;
+    const padTop = parseFloat(styles.paddingTop) || 0;
+    const padBottom = parseFloat(styles.paddingBottom) || 0;
+    const fromHeight = visible ? 0 : natural;
+    const toHeight = visible ? natural : 0;
+    const fromMargin = visible ? 0 : margin;
+    const toMargin = visible ? margin : 0;
+    node.style.overflow = "hidden";
+    node.style.opacity = visible ? "0" : "1";
+    const start = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / RESTART_CARD_DURATION);
+      const eased = 1 - (1 - progress) ** 4;
+      node.style.height = `${Math.round(fromHeight + (toHeight - fromHeight) * eased)}px`;
+      node.style.marginTop = `${Math.round(fromMargin + (toMargin - fromMargin) * eased)}px`;
+      node.style.paddingTop = `${Math.round(padTop * (visible ? eased : 1 - eased))}px`;
+      node.style.paddingBottom = `${Math.round(padBottom * (visible ? eased : 1 - eased))}px`;
+      node.style.opacity = `${visible ? eased : 1 - eased}`;
+      if (progress < 1) {
+        frame = requestAnimationFrame(tick);
+        return;
+      }
+      if (visible) node.style.cssText = "";
+      else onHidden();
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [onHidden, visible]);
+
+  return <div ref={cardRef} className="apple-group mt-[var(--gap-page)] px-4 py-3"><div className="flex items-center justify-between gap-3"><div className="font-semibold">重启进度</div><span className={`apple-chip ${stage === "error" ? "chip-danger" : stage === "success" ? "chip-success" : ""}`}>{textByStage[stage]}</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-black/8 dark:bg-white/8"><div className={`h-full rounded-full transition-[width] duration-300 ${stage === "error" ? "bg-danger" : stage === "success" ? "bg-success" : "bg-accent"}`} style={{ width: `${progressByStage[stage]}%` }} /></div>{message ? <p className="muted mt-3 text-sm">{message}</p> : null}</div>;
+}
+
+export default function ProfilesView({ state, activationEpoch, onRefresh }: ProfilesViewProps) {
+  const feedback = useFeedback();
+  const [items, setItems] = useState(state.profiles);
+  const [busy, setBusy] = useState(false);
+  const [restartStage, setRestartStage] = useState<RestartStage>("idle");
+  const [restartMessage, setRestartMessage] = useState("");
+  const [restartCardStage, setRestartCardStage] = useState<RestartStage>("idle");
+  const [restartCardMounted, setRestartCardMounted] = useState(false);
+  const [restartCardVisible, setRestartCardVisible] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<ProfileSummary | null>(null);
+  const [creatingProfile, setCreatingProfile] = useState(false);
+  const [modal, setModal] = useState<"capture" | "rename" | null>(null);
+  const [modalProfile, setModalProfile] = useState<ProfileSummary | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [authStatus, setAuthStatus] = useState<AuthStatus>(state.auth_status);
+  const nameInput = useRef<HTMLInputElement>(null);
+  const previousRestartStage = useRef<RestartStage>("idle");
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor));
+
+  useEffect(() => setItems(state.profiles), [state.profiles]);
+  useEffect(() => setAuthStatus(state.auth_status), [state.auth_status]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void api.onRestartProgress((payload) => {
+      if (!disposed) {
+        setRestartStage(payload.stage);
+        setRestartMessage(payload.message ?? "");
+      }
+    }).then((cleanup) => {
+      if (disposed) cleanup();
+      else unlisten = cleanup;
+    });
+    void api.authGetStatus().then((status) => { if (!disposed) setAuthStatus(status); }).catch(() => undefined);
+    return () => { disposed = true; unlisten?.(); };
+  }, []);
+
+  useEffect(() => {
+    if (restartStage !== "success") return;
+    const timer = window.setTimeout(() => setRestartStage("idle"), 1200);
+    return () => window.clearTimeout(timer);
+  }, [restartStage]);
+
+  useEffect(() => {
+    if (restartStage === "idle") {
+      if (previousRestartStage.current !== "idle") setRestartCardVisible(false);
+    } else {
+      setRestartCardStage(restartStage);
+      setRestartCardMounted(true);
+      setRestartCardVisible(true);
+    }
+    previousRestartStage.current = restartStage;
+  }, [restartStage]);
+
+  const onRestartCardHidden = useCallback(() => setRestartCardMounted(false), []);
+
+  const persistOrder = async (previous: ProfileSummary[], next: ProfileSummary[]) => {
+    try {
+      await api.reorderProfiles(next.map((item) => item.id));
+    } catch (error) {
+      setItems(previous);
+      feedback.error(String(error));
+      await onRefresh();
+    } finally {
+      document.body.classList.remove("drag-active");
+    }
+  };
+
+  const onDragEnd = (event: DragEndEvent) => {
+    document.body.classList.remove("drag-active");
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldItems = items;
+    const oldIndex = oldItems.findIndex((item) => item.id === active.id);
+    const newIndex = oldItems.findIndex((item) => item.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(oldItems, oldIndex, newIndex);
+    setItems(next);
+    void persistOrder(oldItems, next);
+  };
+
+  const openCapture = () => { setModal("capture"); setModalProfile(null); setProfileName(""); };
+  const openRename = (profile: ProfileSummary) => { setModal("rename"); setModalProfile(profile); setProfileName(profile.name); };
+
+  const submitModal = async () => {
+    if (busy || !modal) return;
+    setBusy(true);
+    try {
+      if (modal === "capture") {
+        await api.captureProfile(profileName.trim());
+        feedback.success("已捕获并设为使用中");
+      } else if (modalProfile) {
+        await api.renameProfile(modalProfile.id, profileName.trim());
+        feedback.success("供应商已重命名");
+      }
+      setModal(null);
+      await onRefresh();
+    } catch (error) { feedback.error(String(error)); }
+    finally { setBusy(false); }
+  };
+
+  const restart = async (force = false) => {
+    if (busy && !force) return;
+    setBusy(true);
+    setRestartStage("stopping");
+    setRestartMessage("");
+    try {
+      await api.restartCodex();
+      feedback.success("Codex 已重启");
+      await onRefresh();
+    } catch (error) {
+      setRestartStage("error");
+      setRestartMessage(String(error));
+      feedback.error(String(error));
+    } finally { setBusy(false); }
+  };
+
+  const applyProfile = async (profile: ProfileSummary) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api.applyProfile(profile.id);
+      feedback.success("模型配置已应用");
+      if (state.settings.auto_restart) await restart(true);
+      await onRefresh();
+    } catch (error) { feedback.error(String(error)); }
+    finally { setBusy(false); }
+  };
+
+  const removeProfile = async (profile: ProfileSummary) => {
+    const confirmed = await feedback.confirm({ title: "删除供应商", description: <>确定删除“<strong>{profile.name}</strong>”吗？删除后不可恢复。</>, confirmText: "删除", destructive: true });
+    if (!confirmed) return;
+    try { await api.deleteProfile(profile.id); feedback.success("供应商已删除"); await onRefresh(); }
+    catch (error) { feedback.error(String(error)); }
+  };
+
+  const duplicateProfile = async (profile: ProfileSummary) => {
+    if (busy) return;
+    setBusy(true);
+    try { const copy = await api.duplicateProfile(profile.id); feedback.success(`已复制为「${copy.name}」`); await onRefresh(); }
+    catch (error) { feedback.error(String(error)); }
+    finally { setBusy(false); }
+  };
+
+  const closeEdit = async () => { setEditingProfile(null); setCreatingProfile(false); await onRefresh(); };
+  const boundAccountLogin = (profile: ProfileSummary) => authStatus.accounts.find((account) => account.id === profile.account_id)?.login ?? null;
+  const subscriptionAccount = authStatus.external?.login ?? authStatus.accounts[0]?.login ?? null;
+  const subscriptionSource = authStatus.external ? "desktop" : authStatus.accounts.length ? "oauth" : null;
+
+  if (editingProfile || creatingProfile) {
+    return <ProfileEdit profile={editingProfile} create={creatingProfile} onBack={() => void closeEdit()} onChanged={() => void onRefresh()} />;
+  }
+
+  return (
+    <section className="apple-scroll-page mx-auto w-full max-w-none">
+      <header className="apple-page-bar flex-wrap justify-between gap-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm"><span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${state.codex.running ? "border-success/25 bg-success/10 text-[#248a3d] dark:border-success/30 dark:bg-success/10 dark:text-[#6ee7a0]" : "border-[var(--panel-border)] bg-black/4 text-zinc-500 dark:bg-white/6"}`}><span className="relative flex h-2 w-2"><span className={`relative inline-flex h-2 w-2 rounded-full ${state.codex.running ? "bg-success shadow-[0_0_6px_1px_rgba(52,199,89,0.45)]" : "bg-zinc-400"}`} /></span>Codex {state.codex.running ? "运行中" : "未运行"}</span></div>
+        <div className="flex flex-wrap items-center gap-2"><button type="button" className="apple-action-button" disabled={busy || (restartStage !== "idle" && restartStage !== "success" && restartStage !== "error")} title="重启 Codex" onClick={() => void restart(false)}><ArrowClockwise className="h-4 w-4" weight="bold" />重启 Codex</button><button type="button" className="apple-icon-button text-accent" disabled={busy} title="捕获当前配置" aria-label="捕获当前配置" onClick={openCapture}><Camera className="h-4 w-4" weight="bold" /></button><button type="button" className="apple-action-button app-button--primary" disabled={busy} onClick={() => setCreatingProfile(true)}><Plus className="h-4 w-4" weight="bold" />添加供应商</button></div>
+      </header>
+      <div className="apple-edit-content">
+        {restartCardMounted ? <RestartProgressCard stage={restartCardStage} message={restartMessage} visible={restartCardVisible} onHidden={onRestartCardHidden} /> : null}
+        <div className="mt-[var(--gap-page)]">{items.length === 0 ? <div className="apple-group py-14 text-center"><p className="muted">还没有供应商配置。可以添加内置官方供应商，或先把 ~/.codex/config.toml 调整到目标状态，再点击“捕获当前配置”。</p></div> : <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={() => document.body.classList.add("drag-active")} onDragCancel={() => document.body.classList.remove("drag-active")} onDragEnd={onDragEnd}><SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}><div className="profile-list apple-group relative will-change-transform">{items.map((profile) => <ProfileCard key={profile.id} profile={profile} active={profile.id === state.active_profile_id} busy={busy} activationEpoch={activationEpoch} subscriptionAuthed={authStatus.authenticated} subscriptionAccount={subscriptionAccount} subscriptionSource={subscriptionSource} boundAccount={boundAccountLogin(profile)} balanceCache={state.balance_cache} onApply={() => void applyProfile(profile)} onRename={() => openRename(profile)} onEdit={() => setEditingProfile(profile)} onRemove={() => void removeProfile(profile)} onDuplicate={() => void duplicateProfile(profile)} />)}</div></SortableContext></DndContext>}</div>
+      </div>
+      <AppDialog open={modal !== null} onOpenChange={(open) => { if (!open) setModal(null); }} title={modal === "capture" ? "保存当前配置快照" : "重命名供应商"} initialFocusRef={nameInput} footer={<><button type="button" className="apple-action-button" onClick={() => setModal(null)}>取消</button><button type="button" className="apple-action-button app-button--primary" disabled={busy || !profileName.trim()} onClick={() => void submitModal()}>保存</button></>}>
+        <div className="space-y-4"><p className="muted text-sm">{modal === "capture" ? "为当前 Codex 配置创建快照，切换供应商后可一键恢复。" : "输入新的供应商名称。"}</p><input ref={nameInput} className="app-input" maxLength={50} placeholder="例如：DeepSeek 日常" value={profileName} onChange={(event) => setProfileName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) void submitModal(); }} /></div>
+      </AppDialog>
+    </section>
+  );
+}
