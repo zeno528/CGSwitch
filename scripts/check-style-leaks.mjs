@@ -9,6 +9,8 @@ const SRC_ROOT = fileURLToPath(new URL("../src", import.meta.url));
 const WHITELIST = [
   { file: "features/mcp/McpView.tsx", class: "text-[10px]", reason: "MCP 传输类型徽标：低于 meta-xs 的特例字号" },
   { file: "features/profiles/ProfileEdit.tsx", class: "text-[13px]", reason: "编辑页 tab：介于 setting-title 与 field-label 之间的既有字号" },
+  { file: "app/AppShell.tsx", class: "overflow-y-auto", reason: "<main> 本身：AGENTS.md 钦定的普通页唯一纵向滚动容器" },
+  { file: "features/mcp/McpSyncDialog.tsx", class: "overflow-y-auto", reason: "Radix 弹窗 body 内部滚动（max-h-50vh）：弹窗不在页面流内" },
 ];
 
 const RULES = [
@@ -31,6 +33,19 @@ const RULES = [
     name: "首卡片页面间距（由 .apple-edit-content 的 padding-top 统一承担，页面禁止再叠 mt）",
     pattern: /mt-\[var\(--gap-page\)\]/g,
     extract: () => "mt-[var(--gap-page)]",
+  },
+  {
+    name: "自造滚动容器 / sticky（纵向滚动只归 <main> 与 .apple-edit-content；页头吸顶用 apple-page-bar--sticky）",
+    pattern: /(?:overflow(?:-x|-y)?-(?:auto|scroll)|overscroll-[a-z-]+|(?:^|[\s"'`])sticky(?:[\s"'`]|$))/g,
+    extract: (match) => match.trim(),
+  },
+];
+
+/* 文件级结构不变量：中间滚动区与页头必须成对出现，防止新页面漏页头或自建布局骨架 */
+const STRUCTURAL_CHECKS = [
+  {
+    name: "使用 apple-edit-content 的文件必须同时包含 apple-page-bar",
+    holds: (content) => content.includes("apple-page-bar"),
   },
 ];
 
@@ -58,6 +73,11 @@ for (const filePath of files) {
       if (!allowed) violations.push({ rel, rule: rule.name, klass });
     }
   }
+  if (content.includes("apple-edit-content")) {
+    for (const check of STRUCTURAL_CHECKS) {
+      if (!check.holds(content)) violations.push({ rel, rule: check.name, klass: "apple-edit-content" });
+    }
+  }
 }
 
 const whitelistedUnknown = WHITELIST.filter(
@@ -75,4 +95,4 @@ if (whitelistedUnknown.length) {
   for (const w of whitelistedUnknown) console.error(`  ${w.file}: ${w.class}`);
   process.exit(1);
 }
-console.log("✔ 样式泄漏扫描通过（字号/十六进制色/中性灰/首卡片间距 均未越界）");
+console.log("✔ 样式泄漏扫描通过（字号/色值/中性灰/首卡间距/滚动与 sticky 均未越界，结构不变量成立）");
