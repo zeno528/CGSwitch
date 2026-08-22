@@ -1,29 +1,14 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { balanceQueryProviders, builtinPresetByKind } from "./presets";
+import { balanceQueryProviders, builtinPresetByKind } from "../presets";
 import type {
   AppState,
-  AuthStatus,
-  CodexAppStatus,
   DatabaseBackupInfo,
-  DeviceCodeResponse,
-  ManagedAccount,
   McpServerSpec,
-  McpSyncPreview,
-  ProfileBalance,
   ProfileBalanceInfo,
   ProfileDetail,
-  ProfileConnectionResult,
   ProfileSummary,
-  RestartStage,
   Settings,
-  TomlDiagnostic,
-} from "./types";
-import { stripTomlQuotes } from "./utils";
-
-export const isTauri = typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
-
-type RestartProgressHandler = (payload: { stage: RestartStage; message: string | null }) => void;
+} from "../types";
+import { stripTomlQuotes } from "../utils";
 
 const webProfiles: ProfileSummary[] = [
   {
@@ -275,7 +260,7 @@ function renderMcpFragmentWeb(spec: McpServerSpec): string {
   return lines.join("\n") + "\n";
 }
 
-async function webInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+export async function webInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   await new Promise((resolve) => setTimeout(resolve, 120));
   switch (command) {    case "get_state":
     case "get_settings":
@@ -616,6 +601,8 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     }
     case "open_url":
       return undefined as T;
+    case "open_path":
+      return undefined as T;
     case "save_settings":
       webSettings = { ...(args?.settings as Settings) };
       webBackups = webBackups.slice(0, webSettings.database_backup_keep_count);
@@ -623,6 +610,9 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     // Web 调试模式无 Rust 侧解析器，TOML 校验一律视为通过（与既有 mock 桩风格一致）
     case "validate_toml":
       return [] as T;
+    // Web 调试模式无 Rust 侧格式化器，保持输入透传，供浏览器走查按钮流程
+    case "format_toml":
+      return String(args?.text ?? "") as T;
     case "list_mcp_servers":
       return [...webMcpServers] as T;
     case "get_mcp_section_toml": {
@@ -709,11 +699,28 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
         http_headers: {},
         env_http_headers: {},
       };
+      let inEnv = false;
       for (const raw of text.split("\n")) {
         const line = raw.trim();
+        const envHeader = /^\[mcp_servers\.([A-Za-z0-9_-]+)\.env\]$/.exec(line);
+        if (envHeader) {
+          spec.name = envHeader[1];
+          inEnv = true;
+          continue;
+        }
         const header = /^\[mcp_servers\.([A-Za-z0-9_-]+)\]$/.exec(line);
         if (header) {
           spec.name = header[1];
+          inEnv = false;
+          continue;
+        }
+        if (/^\[.*\]$/.test(line)) {
+          inEnv = false;
+          continue;
+        }
+        if (inEnv) {
+          const envMatch = /^(\w+)\s*=\s*"(.*)"$/.exec(line);
+          if (envMatch) spec.env[envMatch[1]] = envMatch[2];
           continue;
         }
         const match = /^(command|url|bearer_token_env_var|args)\s*=\s*(.+)$/.exec(line);
@@ -738,120 +745,8 @@ async function webInvoke<T>(command: string, args?: Record<string, unknown>): Pr
     case "delete_mcp_server":
       webMcpServers = webMcpServers.filter((server) => server.name !== args?.name);
       return undefined as T;
+    // 认证设备码流程没有可靠的浏览器 mock；保持默认错误，避免伪造 OAuth 状态
     default:
       throw new Error(`Web 调试模式不支持命令：${command}`);
   }
 }
-
-function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  return isTauri ? invoke<T>(command, args) : webInvoke<T>(command, args);
-}
-
-export const api = {
-  getState: () => call<AppState>("get_state"),
-  getCodexStatus: () => call<CodexAppStatus>("get_codex_status"),
-  captureProfile: (name: string) => call<ProfileSummary>("capture_profile", { name }),
-  addBuiltinProfile: (
-    kind: string,
-    baseUrl?: string,
-    apiKey?: string,
-    adminUrl?: string,
-    accountId?: string,
-  ) => call<ProfileSummary>("add_builtin_profile", { kind, baseUrl, apiKey, adminUrl, accountId }),
-  addCustomProfile: (
-    name: string,
-    configText: string,
-    baseUrl?: string,
-    apiKey?: string,
-    adminUrl?: string,
-    catalogText?: string | null,
-    authText?: string | null,
-  ) =>
-    call<ProfileSummary>("add_custom_profile", {
-      name,
-      configText,
-      baseUrl,
-      apiKey,
-      adminUrl,
-      catalogText,
-      authText,
-    }),
-  getBuiltinCatalog: (kind: string) => call<string | null>("get_builtin_catalog", { kind }),
-  testProfileConnection: (id: string, baseUrl?: string, apiKey?: string) =>
-    call<ProfileConnectionResult>("test_profile_connection", { id, baseUrl, apiKey }),
-  // 创建态表单测试：供应商尚未保存，直接用表单里的地址/密钥
-  testProviderConnection: (baseUrl: string, apiKey: string) =>
-    call<ProfileConnectionResult>("test_provider_connection", { baseUrl, apiKey }),
-  getProfileBalance: (id: string) =>
-    call<ProfileBalance>("get_profile_balance", { id }),
-  exportDatabase: () => call<string>("export_database"),
-  exportDatabaseTo: (directory: string) => call<string>("export_database_to", { directory }),
-  importDatabase: (path: string) => call<void>("import_database", { path }),
-  listDatabaseBackups: () => call<DatabaseBackupInfo[]>("list_database_backups"),
-  restoreDatabase: (name: string) => call<void>("restore_database", { name }),
-  deleteDatabaseBackup: (name: string) => call<void>("delete_database_backup", { name }),
-  renameDatabaseBackup: (oldName: string, title: string) =>
-    call<void>("rename_database_backup", { oldName, title }),
-  renameProfile: (id: string, name: string) => call<void>("rename_profile", { id, name }),
-  setProfileIcon: (id: string, icon: string | null) => call<void>("set_profile_icon", { id, icon }),
-  setProfileShowBalance: (id: string, enabled: boolean) =>
-    call<void>("set_profile_show_balance", { id, enabled }),
-  setProfileBalance: (id: string, info: ProfileBalanceInfo) =>
-    call<void>("set_profile_balance", { id, info }),
-  setProfileAccount: (id: string, accountId: string | null) =>
-    call<void>("set_profile_account", { id, accountId }),
-  duplicateProfile: (id: string) => call<ProfileSummary>("duplicate_profile", { id }),
-  getProfile: (id: string) => call<ProfileDetail>("get_profile", { id }),
-  updateProfile: (id: string, name: string, baseUrl?: string, apiKey?: string, adminUrl?: string) =>
-    call<ProfileSummary>("update_profile", { id, name, baseUrl, apiKey, adminUrl }),
-  updateProfileConfig: (
-    id: string,
-    configText: string,
-    catalogText: string | null,
-    authText: string | null,
-  ) => call<ProfileDetail>("update_profile_config", { id, configText, catalogText, authText }),
-  patchChatgptContextConfig: (configText: string, enabled: boolean) =>
-    call<string>("patch_chatgpt_context_config", { configText, enabled }),
-  validateToml: (text: string) => call<TomlDiagnostic[]>("validate_toml", { text }),
-  formatToml: (text: string) => call<string>("format_toml", { text }),
-  deleteProfile: (id: string) => call<void>("delete_profile", { id }),
-  reorderProfiles: (ids: string[]) => call<void>("reorder_profiles", { ids }),
-  applyProfile: (id: string) => call<void>("apply_profile", { id }),
-  listMcpServers: () => call<McpServerSpec[]>("list_mcp_servers"),
-  // 创建表单预填用：优先数据库 MCP 镜像，首次无镜像时回退 live
-  getMcpSectionToml: () => call<string>("get_mcp_section_toml"),
-  // 显式恢复：数据库镜像写回 live config.toml，返回恢复数量
-  restoreMcpFromDatabase: () => call<number>("restore_mcp_from_database"),
-  // 显式导入：live 当前 MCP 段强制镜像进数据库，返回导入数量
-  importMcpFromLive: () => call<number>("import_mcp_from_live"),
-  // 同步预览：对比 live 与数据库镜像的 MCP 差异（只读），供同步前人工裁决
-  mcpSyncPreview: () => call<McpSyncPreview>("mcp_sync_preview"),
-  saveMcpServer: (originalName: string | null, spec: McpServerSpec, fragment?: string) =>
-    call<void>("save_mcp_server", { originalName, spec, fragment }),
-  // MCP 编辑页：读取 live 原始片段（含未建模键与注释），初始化编辑器用
-  getMcpServerToml: (name: string) => call<string | null>("get_mcp_server_toml", { name }),
-  // MCP 编辑页实时同步：表单建模字段写进片段（表单 → 编辑器）
-  patchMcpFragment: (toml: string, spec: McpServerSpec) =>
-    call<string>("patch_mcp_fragment", { toml, spec }),
-  // MCP 编辑页实时同步：片段解析回建模字段（编辑器 → 表单）
-  parseMcpFragment: (toml: string) => call<McpServerSpec>("parse_mcp_fragment", { toml }),
-  deleteMcpServer: (name: string) => call<void>("delete_mcp_server", { name }),
-  restartCodex: () => call<void>("restart_codex"),
-  setWindowTheme: (dark: boolean) => call<void>("set_window_theme", { dark }),
-  authStartLogin: () => call<DeviceCodeResponse>("auth_start_login"),
-  authPollForAccount: (deviceCode: string) =>
-    call<ManagedAccount | null>("auth_poll_for_account", { deviceCode }),
-  authGetStatus: () => call<AuthStatus>("auth_get_status"),
-  authRemoveAccount: (accountId: string) =>
-    call<void>("auth_remove_account", { accountId }),
-  openUrl: (url: string) => call<void>("open_url", { url }),
-  getSettings: () => call<Settings>("get_settings"),
-  saveSettings: (settings: Settings) => call<Settings>("save_settings", { settings }),
-  openPath: (path: string) => call<void>("open_path", { path }),
-  onRestartProgress: async (handler: RestartProgressHandler) => {
-    if (!isTauri) return () => undefined;
-    return listen("restart-progress", (event) =>
-      handler(event.payload as { stage: RestartStage; message: string | null }),
-    );
-  },
-};
