@@ -27,6 +27,11 @@ const RULES = [
     pattern: /(?:text|bg|border)-(?:zinc|gray|neutral|slate|stone)-\d+/g,
     extract: (match) => match,
   },
+  {
+    name: "首卡片页面间距（由 .apple-edit-content 的 padding-top 统一承担，页面禁止再叠 mt）",
+    pattern: /mt-\[var\(--gap-page\)\]/g,
+    extract: () => "mt-[var(--gap-page)]",
+  },
 ];
 
 function walk(dir) {
@@ -70,4 +75,4 @@ if (whitelistedUnknown.length) {
   for (const w of whitelistedUnknown) console.error(`  ${w.file}: ${w.class}`);
   process.exit(1);
 }
-console.log("✔ 样式泄漏扫描通过（字号/十六进制色/中性灰 均未越界）");
+console.log("✔ 样式泄漏扫描通过（字号/十六进制色/中性灰/首卡片间距 均未越界）");

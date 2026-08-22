@@ -672,6 +672,13 @@ body.drag-settling .profile-card-actions {
   margin-top: 0;
 }
 
+/* 结构性防呆：首卡片间距只来自上方 padding-top（--gap-page），任何首子元素
+   （含包装 div）自带的 mt 都在此归零——即使页面写了多余间距也不会上叠。
+   本规则未分层，优先级高于 Tailwind utilities 的 mt-*，无需 !important。 */
+.apple-edit-content > *:first-child {
+  margin-top: 0;
+}
+
 /* 表单行内小按钮（测试连通 / 获取 API 密钥 等同款样式全局复用） */
 .apple-inline-btn {
   display: inline-flex;
