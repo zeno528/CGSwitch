@@ -460,6 +460,57 @@ body.drag-settling .profile-card-actions {
   ) 1;
 }
 
+/* 重启进度卡展开/收起：布局推移只由外层 grid 行高（0fr↔1fr）一个属性承担，
+   卡片本体只动 transform + opacity（合成器线程）。替代逐帧 JS 写
+   height/margin/padding 的方案——那种方式每帧触发整页 reflow，且 rAF 回调
+   与重启期间的 React 提交争抢主线程，表现为推动下方列表时卡顿。 */
+.restart-card-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion-layout) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.restart-card-reveal--open {
+  grid-template-rows: 1fr;
+}
+
+.restart-card-reveal__inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.restart-card-reveal__inner > .apple-group {
+  opacity: 0;
+  transform: translateY(-10px);
+  transition:
+    transform var(--motion-layout) cubic-bezier(0.22, 1, 0.36, 1),
+    opacity var(--motion-fast) ease-out;
+}
+
+.restart-card-reveal--open .restart-card-reveal__inner > .apple-group {
+  opacity: 1;
+  transform: none;
+}
+
+/* 进场：元素带 --open 挂载，从收起起始样式过渡到展开（WebView2 Chromium 支持 @starting-style） */
+@starting-style {
+  .restart-card-reveal--open {
+    grid-template-rows: 0fr;
+  }
+
+  .restart-card-reveal--open .restart-card-reveal__inner > .apple-group {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .restart-card-reveal,
+  .restart-card-reveal__inner > .apple-group {
+    transition: none;
+  }
+}
+
 .apple-sidebar-label {
   max-width: 160px;
   overflow: hidden;

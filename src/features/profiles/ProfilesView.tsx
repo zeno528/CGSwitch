@@ -1,7 +1,7 @@
 import { Camera, Plus, RefreshCw } from "lucide-react";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { useFeedback } from "../../app/Feedback";
 import { AppDialog } from "../../components/AppDialog";
@@ -32,49 +32,33 @@ function ProfileDragPreview({ profile, width }: { profile: ProfileSummary; width
 }
 
 function RestartProgressCard({ stage, message, visible, onHidden }: RestartProgressCardProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
+  const revealRef = useRef<HTMLDivElement>(null);
 
-  useLayoutEffect(() => {
-    const node = cardRef.current;
-    if (!node) return;
+  // 出场：grid 收起过渡结束后卸载；transitionend 丢失时用定时器兜底
+  useEffect(() => {
+    if (visible) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      if (!visible) onHidden();
+      onHidden();
       return;
     }
-
-    const natural = node.scrollHeight;
-    const styles = getComputedStyle(node);
-    const margin = parseFloat(styles.marginTop) || 24;
-    const padTop = parseFloat(styles.paddingTop) || 0;
-    const padBottom = parseFloat(styles.paddingBottom) || 0;
-    const fromHeight = visible ? 0 : natural;
-    const toHeight = visible ? natural : 0;
-    const fromMargin = visible ? 0 : margin;
-    const toMargin = visible ? margin : 0;
-    node.style.overflow = "hidden";
-    node.style.opacity = visible ? "0" : "1";
-    const start = performance.now();
-    let frame = 0;
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / RESTART_CARD_DURATION);
-      const eased = 1 - (1 - progress) ** 4;
-      node.style.height = `${Math.round(fromHeight + (toHeight - fromHeight) * eased)}px`;
-      node.style.marginTop = `${Math.round(fromMargin + (toMargin - fromMargin) * eased)}px`;
-      node.style.paddingTop = `${Math.round(padTop * (visible ? eased : 1 - eased))}px`;
-      node.style.paddingBottom = `${Math.round(padBottom * (visible ? eased : 1 - eased))}px`;
-      node.style.opacity = `${visible ? eased : 1 - eased}`;
-      if (progress < 1) {
-        frame = requestAnimationFrame(tick);
-        return;
-      }
-      if (visible) node.style.cssText = "";
-      else onHidden();
+    const node = revealRef.current;
+    if (!node) {
+      onHidden();
+      return;
+    }
+    const finish = (event?: TransitionEvent) => {
+      if (event && (event.target !== node || event.propertyName !== "grid-template-rows")) return;
+      onHidden();
     };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [onHidden, visible]);
+    node.addEventListener("transitionend", finish as EventListener);
+    const timer = window.setTimeout(() => finish(), RESTART_CARD_DURATION + 80);
+    return () => {
+      node.removeEventListener("transitionend", finish as EventListener);
+      window.clearTimeout(timer);
+    };
+  }, [visible, onHidden]);
 
-  return <div ref={cardRef} className="apple-group mb-[var(--gap-page)] px-4 py-3"><div className="flex items-center justify-between gap-3"><div className="font-semibold">重启进度</div><span className={`apple-chip ${stage === "error" ? "chip-danger" : stage === "success" ? "chip-success" : ""}`}>{textByStage[stage]}</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-black/8 dark:bg-white/8"><div className={`h-full rounded-full transition-[width] duration-300 ${stage === "error" ? "bg-danger" : stage === "success" ? "bg-success" : "bg-accent"}`} style={{ width: `${progressByStage[stage]}%` }} /></div>{message ? <p className="muted mt-3 text-sm">{message}</p> : null}</div>;
+  return <div ref={revealRef} className={`restart-card-reveal${visible ? " restart-card-reveal--open" : ""}`} aria-hidden={!visible}><div className="restart-card-reveal__inner"><div className="apple-group mb-[var(--gap-page)] px-4 py-3"><div className="flex items-center justify-between gap-3"><div className="font-semibold">重启进度</div><span className={`apple-chip ${stage === "error" ? "chip-danger" : stage === "success" ? "chip-success" : ""}`}>{textByStage[stage]}</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-black/8 dark:bg-white/8"><div className={`h-full rounded-full transition-[width] duration-300 ${stage === "error" ? "bg-danger" : stage === "success" ? "bg-success" : "bg-accent"}`} style={{ width: `${progressByStage[stage]}%` }} /></div>{message ? <p className="muted mt-3 text-sm">{message}</p> : null}</div></div></div>;
 }
 
 export default function ProfilesView({ state, activationEpoch, onRefresh }: ProfilesViewProps) {
