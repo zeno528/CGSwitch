@@ -93,7 +93,6 @@ export function useThemeMode(theme: Settings["theme"] | undefined) {
     return () => cancelAnimationFrame(frame);
   }, [isDark]);
 
-  return isDark;
 }
 
 export function useCodexPolling(

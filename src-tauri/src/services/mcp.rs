@@ -5,7 +5,10 @@ use super::{
 
 fn without_blank_lines(text: &str) -> String {
     text.lines()
-        .filter(|line| !line.trim().is_empty())
+        .filter(|line| {
+            let line = line.trim();
+            !line.is_empty() && line != "[mcp_servers]"
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }

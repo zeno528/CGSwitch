@@ -430,22 +430,25 @@ pub fn merge_mcp_section(raw: &str, live: &DocumentMut) -> String {
 /// 块内容（注释、空行、键值）逐字保留，只搬动块的位置，让 mcp 段模块化。
 pub fn consolidate_mcp_blocks(text: &str) -> String {
     // 按表头行切块：(\[\[ 开头的数组表也算)。首个表头之前的根级键值归入无名首块
-    let mut blocks: Vec<(bool, Vec<&str>)> = Vec::new();
+    let mut blocks: Vec<(bool, Option<String>, Vec<&str>)> = Vec::new();
     for line in text.lines() {
         let is_header = line.starts_with('[')
             && line[1..].starts_with(|c: char| {
                 c.is_ascii_alphanumeric() || c == '_' || c == '"' || c == '\''
             });
         if is_header {
-            let is_mcp = line.starts_with("[mcp_servers.") || line == "[mcp_servers]";
-            blocks.push((is_mcp, Vec::new()));
+            blocks.push((
+                line.starts_with("[mcp_servers.") || line == "[mcp_servers]",
+                mcp_server_name_from_header(line),
+                Vec::new(),
+            ));
         }
         match blocks.last_mut() {
-            Some((_, lines)) => lines.push(line),
-            None => blocks.push((false, vec![line])),
+            Some((_, _, lines)) => lines.push(line),
+            None => blocks.push((false, None, vec![line])),
         }
     }
-    let mcp_count = blocks.iter().filter(|(is_mcp, _)| *is_mcp).count();
+    let mcp_count = blocks.iter().filter(|(is_mcp, _, _)| *is_mcp).count();
     // 没有 mcp，或只有一块（已连续）：无需整理
     if mcp_count <= 1 {
         return text.to_string();
@@ -454,16 +457,27 @@ pub fn consolidate_mcp_blocks(text: &str) -> String {
     // 之前的非 mcp 表（如全部 plugins）自然连成一组，与 cc-switch 的模块化布局一致
     let anchor = blocks
         .iter()
-        .rposition(|(is_mcp, _)| *is_mcp)
+        .rposition(|(is_mcp, _, _)| *is_mcp)
         .expect("mcp_count > 1 必有锚点");
     let mut mcp_lines: Vec<&str> = Vec::new();
-    for (is_mcp, lines) in &blocks {
+    let mut groups: Vec<(Option<&str>, Vec<&str>)> = Vec::new();
+    for (is_mcp, server_name, lines) in &blocks {
         if *is_mcp {
-            mcp_lines.extend(lines.iter().copied());
+            let server_name = server_name.as_deref();
+            if let Some((_, grouped_lines)) =
+                groups.iter_mut().find(|(name, _)| *name == server_name)
+            {
+                grouped_lines.extend(lines.iter().copied());
+            } else {
+                groups.push((server_name, lines.clone()));
+            }
         }
     }
+    for (_, lines) in groups {
+        mcp_lines.extend(lines);
+    }
     let mut out: Vec<&str> = Vec::new();
-    for (index, (is_mcp, lines)) in blocks.iter().enumerate() {
+    for (index, (is_mcp, _, lines)) in blocks.iter().enumerate() {
         if index == anchor {
             out.extend(mcp_lines.iter().copied());
         }
@@ -476,6 +490,19 @@ pub fn consolidate_mcp_blocks(text: &str) -> String {
         result.push('\n');
     }
     result
+}
+
+fn mcp_server_name_from_header(line: &str) -> Option<String> {
+    let name = line.strip_prefix("[mcp_servers.")?.strip_suffix(']')?;
+    if let Some(quote) = name
+        .chars()
+        .next()
+        .filter(|quote| *quote == '"' || *quote == '\'')
+    {
+        let end = name[1..].find(quote)? + 1;
+        return Some(name[..=end].to_string());
+    }
+    Some(name.split('.').next()?.to_string())
 }
 
 /// 提取 [mcp_servers.*] 每个服务器的独立片段（含 [mcp_servers.<名称>] 表头、注释、子表，
@@ -495,6 +522,7 @@ pub fn mcp_server_fragments_from_document(document: &DocumentMut) -> Vec<(String
             let table = item.as_table()?;
             let mut piece = DocumentMut::new();
             let mut section = Table::new();
+            section.set_implicit(true);
             section.insert(name, Item::Table(table.clone()));
             piece
                 .as_table_mut()
@@ -522,6 +550,7 @@ pub fn replace_mcp_section_from_fragments(
     fragments: &[(String, String)],
 ) {
     let mut section = Table::new();
+    section.set_implicit(true);
     if let Some(existing) = document
         .as_table()
         .get("mcp_servers")
@@ -1122,6 +1151,28 @@ A = "1"
         let merged = merge_mcp_section("model = \"gpt-5.6\"\n", &live);
         assert!(merged.contains("mcp_servers.tavily"), "{merged}");
         assert!(merged.contains("model = \"gpt-5.6\""), "{merged}");
+        assert!(
+            !merged.contains("[mcp_servers]\n"),
+            "合并隐式 MCP 父表时不能额外写出显式根表：\n{merged}"
+        );
+    }
+
+    #[test]
+    fn rebuilding_mcp_section_from_fragments_keeps_parent_implicit() {
+        let mut document = DocumentMut::new();
+        replace_mcp_section_from_fragments(
+            &mut document,
+            &[(
+                "context7".to_string(),
+                "[mcp_servers.context7]\nurl = \"https://mcp.context7.com/mcp\"\n".to_string(),
+            )],
+        );
+
+        let text = document.to_string();
+        assert!(
+            !text.contains("[mcp_servers]\n"),
+            "从片段重建时不能写出空的 MCP 根表：\n{text}"
+        );
     }
 
     #[test]
@@ -1145,6 +1196,11 @@ url = "https://mcp.tavily.com/mcp"
         let fragments = mcp_server_fragments_from_document(&document);
         assert_eq!(fragments.len(), 2);
         assert_eq!(fragments[0].0, "github");
+        assert!(
+            !fragments[0].1.contains("[mcp_servers]"),
+            "单服务片段不能写出显式 MCP 根表：\n{}",
+            fragments[0].1
+        );
         assert!(fragments[0].1.contains("# 手动维护的服务器"));
         assert!(fragments[0].1.contains("cwd = \"/srv\""));
 
@@ -1245,6 +1301,26 @@ url = "https://mcp.tavily.com/mcp"
         assert!(text.contains("# 手动维护"), "{text}");
         assert!(text.contains("TOKEN = \"t\""), "{text}");
         assert!(pos("model =") < pos("[plugins.a]"));
+    }
+
+    #[test]
+    fn consolidate_mcp_blocks_keeps_each_servers_child_tables_together() {
+        let text = consolidate_mcp_blocks(
+            "[mcp_servers.one]\nurl = \"https://one\"\n\n[mcp_servers.two]\nurl = \"https://two\"\n\n[mcp_servers.one.env]\nTOKEN = \"t\"\n",
+        );
+        let pos = |needle: &str| {
+            text.find(needle)
+                .unwrap_or_else(|| panic!("缺少 {needle}：\n{text}"))
+        };
+
+        assert!(
+            pos("[mcp_servers.one]") < pos("[mcp_servers.one.env]"),
+            "{text}"
+        );
+        assert!(
+            pos("[mcp_servers.one.env]") < pos("[mcp_servers.two]"),
+            "{text}"
+        );
     }
 
     #[test]

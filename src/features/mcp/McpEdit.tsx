@@ -57,7 +57,7 @@ export default function McpEdit({ server, create = false, onBack }: McpEditProps
 
   const argsList = () => argsText.split("\n").map((line) => line.trim()).filter(Boolean);
   const formSpec = (): McpServerSpec => ({
-    name: name.trim() || "server",
+    name: name.trim() || server?.name || "",
     enabled: server?.enabled ?? null,
     startup_timeout_sec: startupTimeout,
     tool_timeout_sec: toolTimeout,
@@ -75,7 +75,7 @@ export default function McpEdit({ server, create = false, onBack }: McpEditProps
     void (async () => {
       try {
         const initial = create
-          ? await api.patchMcpFragment("[mcp_servers.server]\n", formSpec())
+          ? ""
           : (await api.getMcpServerToml(server?.name ?? "")) ?? await api.patchMcpFragment(`[mcp_servers.${server?.name ?? "server"}]\n`, formSpec());
         if (!cancelled) { setTomlText(initial); setInitialToml(initial); setInitialized(true); }
       } catch (error) { if (!cancelled) feedback.error(String(error)); }
@@ -86,7 +86,7 @@ export default function McpEdit({ server, create = false, onBack }: McpEditProps
   }, []);
 
   useEffect(() => {
-    if (!initialized) return;
+    if (!initialized || (create && !name.trim())) return;
     const seq = ++patchSeq.current;
     void api.patchMcpFragment(tomlText, formSpec()).then((next) => {
       if (seq === patchSeq.current && next !== tomlText) setTomlText(next);
@@ -94,7 +94,7 @@ export default function McpEdit({ server, create = false, onBack }: McpEditProps
   }, [argsText, bearer, command, envHeaderPairs, envPairs, headerPairs, initialized, name, startupTimeout, toolTimeout, transport, url]);
 
   useEffect(() => {
-    if (!initialized) return;
+    if (!initialized || !tomlText.trim()) return;
     const seq = ++parseSeq.current;
     void api.parseMcpFragment(tomlText).then((spec) => {
       if (seq !== parseSeq.current) return;

@@ -34,7 +34,7 @@ export default function McpView() {
     try { setServers(await api.listMcpServers()); setLoadError(""); }
     catch (error) { setLoadError(String(error)); }
     finally { setLoaded(true); }
-    void loadPreview();
+    await loadPreview();
   };
   useEffect(() => { void refresh(); }, []);
 
@@ -53,7 +53,7 @@ export default function McpView() {
   };
 
   const removeServer = async (server: McpServerSpec) => {
-    const confirmed = await feedback.confirm({ title: "删除 MCP 服务器", description: <>确定删除“<strong className="text-black">{server.name}</strong>”吗？~/.codex/config.toml 中对应的配置段将被移除。</>, confirmText: "删除", destructive: true });
+    const confirmed = await feedback.confirm({ title: "删除 MCP 服务器", description: <>确定删除“<strong>{server.name}</strong>”吗？~/.codex/config.toml 中对应的配置段将被移除。</>, confirmText: "删除", destructive: true });
     if (!confirmed) return;
     try { await api.deleteMcpServer(server.name); feedback.success("MCP 服务器已删除"); await refresh(); }
     catch (error) { feedback.error(String(error)); }

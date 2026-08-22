@@ -44,11 +44,6 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   const confirmActionRef = useRef<HTMLButtonElement>(null);
   const nextToastId = useRef(0);
 
-  const showToast = useCallback((tone: ToastTone, message: string) => {
-    const id = ++nextToastId.current;
-    setToasts((current) => [...current, { id, tone, message, open: true }].slice(-MAX_TOASTS));
-  }, []);
-
   const removeToast = useCallback((id: number) => {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
@@ -57,6 +52,12 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     setToasts((current) => current.map((toast) => toast.id === id ? { ...toast, open: false } : toast));
     window.setTimeout(() => removeToast(id), 220);
   }, [removeToast]);
+
+  const showToast = useCallback((tone: ToastTone, message: string) => {
+    const id = ++nextToastId.current;
+    setToasts((current) => [...current, { id, tone, message, open: true }].slice(-MAX_TOASTS));
+    window.setTimeout(() => closeToast(id), 3000);
+  }, [closeToast]);
 
   const confirm = useCallback((options: ConfirmOptions) => {
     return new Promise<boolean>((resolve) => setConfirmation({ ...options, resolve }));
@@ -105,7 +106,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
               key={toast.id}
               forceMount
               open={toast.open}
-              duration={3000}
+              duration={Infinity}
               onOpenChange={(open) => {
                 if (!open) closeToast(toast.id);
               }}

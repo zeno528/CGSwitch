@@ -1413,6 +1413,24 @@ fn mcp_preview_ignores_blank_line_only_difference() {
 }
 
 #[test]
+fn mcp_preview_ignores_legacy_empty_mcp_root_header() {
+    let (context, _home) = mcp_test_context("[mcp_servers.a]\nurl = \"https://a/mcp\"\n");
+    context
+        .database
+        .replace_mcp_server_fragments(
+            &[(
+                "a".into(),
+                "[mcp_servers]\n\n[mcp_servers.a]\nurl = \"https://a/mcp\"\n".into(),
+            )],
+            "1",
+        )
+        .unwrap();
+
+    let preview = context.mcp_sync_preview().unwrap();
+    assert!(preview.entries.is_empty(), "{:?}", preview.entries);
+}
+
+#[test]
 fn mcp_preview_empty_when_mirror_matches_live() {
     let (context, _home) = mcp_test_context("[mcp_servers.a]\nurl = \"https://a/mcp\"\n");
     context.import_mcp_from_live().unwrap();
@@ -1473,6 +1491,10 @@ fn mcp_save_consolidates_scattered_live_section() {
     );
     // 未建模内容逐字保留
     assert!(config.contains("[plugins.b]"), "{config}");
+    assert!(
+        codex_config::parse_document(&config).is_ok(),
+        "保存并收拢分散 MCP 段后必须保持 config.toml 可解析：\n{config}"
+    );
 }
 
 #[test]

@@ -67,8 +67,15 @@ export default function AppShell() {
 
   useEffect(() => {
     const main = document.querySelector("main");
-    if (main) document.documentElement.style.setProperty("--scrollbar-size", `${main.offsetWidth - main.clientWidth}px`);
-  }, [state, view]);
+    if (!main) return;
+    const updateScrollbarSize = () => {
+      document.documentElement.style.setProperty("--scrollbar-size", `${main.offsetWidth - main.clientWidth}px`);
+    };
+    updateScrollbarSize();
+    const observer = new ResizeObserver(updateScrollbarSize);
+    observer.observe(main);
+    return () => observer.disconnect();
+  }, []);
 
   const goProfiles = () => {
     setProfilesReset((value) => value + 1);
