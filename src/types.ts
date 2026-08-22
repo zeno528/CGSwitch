@@ -161,6 +161,41 @@ export interface Settings {
   database_backup_keep_count: number;
 }
 
+export interface PluginSummary {
+  name: string;
+  version: string | null;
+  display_name: string | null;
+  description: string | null;
+  category: string | null;
+  capabilities: string[];
+  contains: string[];
+  enabled: boolean;
+  /** cgswitch=本应用安装；codex=用户自装第三方市场；official=官方市场；skill=Skill 注册表；personal/claude/cursor=家目录 local 条目（后三者只读或仅条目操作） */
+  origin: "cgswitch" | "personal" | "claude" | "cursor" | "official" | "skill" | "codex";
+  marketplace: string | null;
+  store_path: string;
+  source_url: string | null;
+  installed_at: number | null;
+}
+
+export interface PluginCandidate {
+  sub_path: string;
+  name: string;
+  version: string | null;
+  display_name: string | null;
+  description: string | null;
+  capabilities: string[];
+  contains: string[];
+  files: string[];
+}
+
+export interface PluginPreview {
+  repo: string;
+  reference: string;
+  default_branch: string;
+  candidates: PluginCandidate[];
+}
+
 export interface CodexAppStatus {
   running: boolean;
   display_path: string;

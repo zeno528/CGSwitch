@@ -23,6 +23,9 @@
   --selection-bg: rgba(0, 122, 255, 0.12);
   /* 状态徽标文字：比 --success 深一档，浅底上保证对比度；深色主题换亮绿 */
   --success-text: #248a3d;
+  --chip-success: #30d158;
+  --profile-chip-bg: rgb(0 0 0 / 0.04);
+  --profile-meta-text: rgba(60, 60, 67, 0.68);
   /* 功能强调紫（静默启动等）：iOS 系统紫，深色主题换亮紫 */
   --lavender: #af52de;
   /* 品牌图标底色：按文字色派生的浅灰砖，深浅主题共用同一公式自动适配 */
@@ -80,6 +83,9 @@
   --sidebar-bg: #15151a;
   --selection-bg: rgba(94, 156, 255, 0.18);
   --success-text: #6ee7a0;
+  --chip-success: #63e68a;
+  --profile-chip-bg: #1e1e1e;
+  --profile-meta-text: rgba(255, 255, 255, 0.62);
   --lavender: #bf5af2;
   --scrollbar-thumb: color-mix(in srgb, var(--text-secondary) 25%, transparent);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--text-secondary) 40%, transparent);
@@ -150,7 +156,7 @@ textarea::placeholder {
    字号与内边距只在这里改，禁止在组件里单独调某颗胶囊的尺寸 */
 .apple-chip {
   align-items: center;
-  background: rgb(0 0 0 / 0.04);
+  background: var(--profile-chip-bg);
   border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
   border-radius: 999px;
   display: inline-flex;
@@ -164,10 +170,22 @@ textarea::placeholder {
   background: rgb(255 255 255 / 0.08);
 }
 
+:root.dark .profile-card-meta .apple-chip {
+  background: var(--profile-chip-bg);
+}
+
+.profile-card-meta .apple-chip {
+  font-size: 12px;
+}
+
+.profile-card-meta {
+  color: var(--profile-meta-text);
+}
+
 /* 余额/用量胶囊数据变色（全局统一；cc-switch 同款阈值，后续供应商直接复用）。
    变色数据同时加粗，标签/倒计时保持默认字重 */
 .chip-success {
-  color: var(--success);
+  color: var(--chip-success);
   font-weight: 600;
 }
 

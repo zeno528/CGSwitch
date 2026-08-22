@@ -89,6 +89,11 @@ pub fn run() {
             commands::open_url,
             commands::get_settings,
             commands::save_settings,
+            commands::list_plugins,
+            commands::preview_plugin,
+            commands::install_plugin,
+            commands::uninstall_plugin,
+            commands::set_plugin_enabled,
             commands::open_path,
         ])
         .setup(|app| {

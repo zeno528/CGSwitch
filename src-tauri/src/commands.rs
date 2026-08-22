@@ -10,7 +10,10 @@ use crate::models::{
     AppState, CodexAppStatus, McpServerSpec, McpSyncPreview, ProfileBalanceInfo, ProfileDetail,
     ProfileSummary, Settings,
 };
-use crate::services::{AppContext, DatabaseBackupInfo, ProfileBalance, ProfileConnectionResult};
+use crate::services::{
+    AppContext, DatabaseBackupInfo, PluginPreview, PluginSummary, ProfileBalance,
+    ProfileConnectionResult,
+};
 
 async fn unmanaged_external_codex_auth(
     state: &AppContext,
@@ -82,6 +85,39 @@ pub fn get_state(state: State<'_, AppContext>) -> AppResult<AppState> {
 #[tauri::command]
 pub fn get_codex_status(state: State<'_, AppContext>) -> AppResult<CodexAppStatus> {
     state.codex_status()
+}
+
+#[tauri::command]
+pub async fn list_plugins(state: State<'_, AppContext>) -> AppResult<Vec<PluginSummary>> {
+    state.list_plugins().await
+}
+
+#[tauri::command]
+pub async fn preview_plugin(url: String, state: State<'_, AppContext>) -> AppResult<PluginPreview> {
+    state.preview_plugin(&url).await
+}
+
+#[tauri::command]
+pub async fn install_plugin(
+    url: String,
+    sub_path: Option<String>,
+    state: State<'_, AppContext>,
+) -> AppResult<PluginSummary> {
+    state.install_plugin(&url, sub_path.as_deref()).await
+}
+
+#[tauri::command]
+pub async fn uninstall_plugin(name: String, state: State<'_, AppContext>) -> AppResult<()> {
+    state.uninstall_plugin(&name).await
+}
+
+#[tauri::command]
+pub fn set_plugin_enabled(
+    name: String,
+    enabled: bool,
+    state: State<'_, AppContext>,
+) -> AppResult<()> {
+    state.set_plugin_enabled(&name, enabled)
 }
 
 #[tauri::command]

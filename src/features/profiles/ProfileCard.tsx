@@ -88,7 +88,6 @@ export default function ProfileCard({
   const connectionTitle = !profile.provider
     ? subscriptionAuthed ? "测试订阅认证连通性" : "尚未认证 ChatGPT 订阅"
     : !profile.has_key ? "缺少 API 密钥，点击查看提示" : "测试连通性";
-  const subscriptionLabel = !subscriptionAuthed ? "未认证" : boundAccount ?? subscriptionAccount ?? "";
   const subscriptionSourceKind = !subscriptionAuthed ? null : boundAccount ? "oauth" : subscriptionSource ?? "oauth";
   const subscriptionTitle = !subscriptionAuthed
     ? "ChatGPT 尚未完成认证，请到设置页登录"
@@ -130,28 +129,26 @@ export default function ProfileCard({
       ref={sortable.setNodeRef}
       data-draggable
       style={style}
-      className={`group flex cursor-pointer select-none flex-col gap-4 px-5 py-4.5 transition-colors sm:flex-row sm:items-center sm:justify-between ${sortable.isDragging ? "opacity-35" : active ? "bg-[linear-gradient(90deg,color-mix(in_srgb,var(--selection-bg)_70%,transparent),transparent_65%)]" : "hover:bg-black/3 dark:hover:bg-white/4"}`}
+      className={`group flex cursor-pointer select-none flex-col gap-4 px-5 py-4 transition-colors sm:flex-row sm:items-center sm:justify-between ${sortable.isDragging ? "opacity-35" : active ? "bg-[linear-gradient(90deg,color-mix(in_srgb,var(--selection-bg)_70%,transparent),transparent_65%)]" : "hover:bg-black/3 dark:hover:bg-white/4"}`}
       title="单击编辑"
       onClick={onEdit}
     >
       <span className="drag-handle -ml-5 -mr-4 grid shrink-0 cursor-grab place-items-center self-center rounded-md py-1 pl-3 pr-3 muted transition-colors hover:opacity-70 active:cursor-grabbing sm:self-stretch" title="拖动排序" aria-label="拖动排序" {...sortable.attributes} {...sortable.listeners} onClick={(event) => event.stopPropagation()}>
         <GripVertical className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
       </span>
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <ProfileIconTile name={profile.name} icon={profile.icon} />
-        <div className="min-w-0 flex-1 -translate-y-0.5">
-          <div className="flex items-center gap-2">
-            <h3 className="title-md cursor-pointer truncate transition-colors hover:text-accent" title="点击重命名" onClick={(event) => { event.stopPropagation(); onRename(); }}>{profile.name}</h3>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-h-7 items-center gap-2">
+            <h3 className="title-md cursor-pointer truncate leading-normal transition-colors hover:text-accent" title="点击重命名" onClick={(event) => { event.stopPropagation(); onRename(); }}>{profile.name}</h3>
             {active ? <span className="inline-flex items-center rounded-full bg-success px-2 py-0.5 text-xs font-semibold leading-none text-white">活动</span> : null}
-            {!profile.provider ? <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${subscriptionAuthed ? "bg-accent/10 text-accent" : "bg-black/5 muted dark:bg-white/6"}`} title={subscriptionTitle}>
+            {!profile.provider ? <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${subscriptionAuthed ? "bg-accent/10 text-accent" : "bg-black/5 muted dark:bg-white/6"}`} title={subscriptionTitle} aria-label={subscriptionTitle}>
               {subscriptionSourceKind === "desktop" ? <Monitor className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" /> : <KeyRound className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />}
-              <span className="min-w-0 truncate leading-4">{subscriptionLabel}</span>
             </span> : null}
           </div>
-          <div className="muted mt-0.5 flex flex-wrap items-center gap-1">
-            <span className="apple-chip">{profile.model ?? "未设置"}</span>
-            {profile.provider ? <span className="apple-chip">{profile.provider}</span> : null}
-            <span className="apple-chip">{profile.reasoning_effort ?? "默认"}</span>
+          <div className="profile-card-meta muted mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+            <span className="min-w-0 truncate">{profile.model ?? "未设置"}</span>
+            {profile.reasoning_effort ? <><span aria-hidden="true">·</span><span className="apple-chip">{profile.reasoning_effort}</span></> : null}
             {supportsBalance && profile.show_balance ? <button type="button" className="apple-chip" title={balanceError ? `余额刷新失败：${balanceError}（显示上次余额，点击重试）` : balanceInfo?.usage_percent != null ? "用量，点击刷新" : "余额，点击刷新"} aria-label="余额" onClick={(event) => { event.stopPropagation(); void fetchBalance(); }}>
               <Wallet className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
               {balanceInfo?.usage_percent != null ? <><span>5小时 </span><span className={balanceChipClass(balanceInfo.usage_percent, false)}>{balanceInfo.usage_percent}%</span>{balanceInfo.usage_reset ? <span> {balanceInfo.usage_reset}</span> : null}{balanceInfo.weekly_usage_percent != null ? <><span> · 7天 </span><span className={balanceChipClass(balanceInfo.weekly_usage_percent, false)}>{balanceInfo.weekly_usage_percent}%</span>{balanceInfo.weekly_reset ? <span> {balanceInfo.weekly_reset}</span> : null}</> : null}</> : balanceInfo ? <><span>余额 </span><span className={balanceChipClass(null, false, balanceInfo.total_balance)}>{balanceInfo.total_balance.startsWith("-") ? "-" : ""}{balanceInfo.currency === "USD" ? "$" : "¥"}{balanceInfo.total_balance.replace(/^-/, "")}</span><span> {balanceInfo.currency}</span></> : <span className={balanceError ? "chip-danger" : ""}>{balanceError ? "查询失败" : "余额 --"}</span>}

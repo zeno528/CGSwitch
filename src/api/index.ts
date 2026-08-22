@@ -9,6 +9,8 @@ import type {
   ManagedAccount,
   McpServerSpec,
   McpSyncPreview,
+  PluginPreview,
+  PluginSummary,
   ProfileBalance,
   ProfileBalanceInfo,
   ProfileDetail,
@@ -97,6 +99,13 @@ export const api = {
     call<string>("patch_system_proxy_config", { configText, enabled }),
   validateToml: (text: string) => call<TomlDiagnostic[]>("validate_toml", { text }),
   formatToml: (text: string) => call<string>("format_toml", { text }),
+  listPlugins: () => call<PluginSummary[]>("list_plugins"),
+  previewPlugin: (url: string) => call<PluginPreview>("preview_plugin", { url }),
+  installPlugin: (url: string, subPath: string | null) =>
+    call<PluginSummary>("install_plugin", { url, subPath }),
+  uninstallPlugin: (name: string) => call<void>("uninstall_plugin", { name }),
+  setPluginEnabled: (name: string, enabled: boolean) =>
+    call<void>("set_plugin_enabled", { name, enabled }),
   deleteProfile: (id: string) => call<void>("delete_profile", { id }),
   reorderProfiles: (ids: string[]) => call<void>("reorder_profiles", { ids }),
   applyProfile: (id: string) => call<void>("apply_profile", { id }),

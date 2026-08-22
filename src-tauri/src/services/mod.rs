@@ -21,12 +21,15 @@ mod accounts;
 mod apply;
 mod connections;
 mod mcp;
+mod plugin_net;
+mod plugins;
 mod profile_config;
 mod profiles;
 mod settings;
 mod storage;
 
 pub use connections::{test_provider_connection, ProfileBalance, ProfileConnectionResult};
+pub use plugins::{PluginCandidate, PluginPreview, PluginSummary};
 pub use storage::DatabaseBackupInfo;
 
 #[derive(Debug)]

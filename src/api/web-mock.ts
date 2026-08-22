@@ -3,6 +3,8 @@ import type {
   AppState,
   DatabaseBackupInfo,
   McpServerSpec,
+  PluginPreview,
+  PluginSummary,
   ProfileBalanceInfo,
   ProfileDetail,
   ProfileSummary,
@@ -92,6 +94,123 @@ function patchSystemProxyForWeb(text: string, enabled: boolean): string {
   lines.push("[features]", "respect_system_proxy = true");
   return lines.join(newline);
 }
+
+// 与后端一致：安装/卸载驱动 codex plugin CLI；列表读 codex plugin list（含启停）、
+// Skill 注册表与家目录 local 条目，origin 区分来源（official/skill 只读）
+let webPlugins: PluginSummary[] = [
+  {
+    name: "memory-bank",
+    version: "1.2.0",
+    display_name: "Memory Bank",
+    description: "跨会话的记忆管理插件（浏览器调试 fixture）",
+    category: "memory",
+    capabilities: ["read", "write"],
+    contains: ["skills", "mcp"],
+    enabled: true,
+    origin: "cgswitch",
+    marketplace: "example-plugins",
+    store_path: "C:\\Users\\<user>\\.codex\\plugins\\cache\\example-plugins\\memory-bank\\1.2.0",
+    source_url: "https://github.com/example/plugins",
+    installed_at: 1755800000000,
+  },
+  {
+    name: "code-reviewer",
+    version: "0.4.1",
+    display_name: null,
+    description: "代码审查工作流（已禁用示例）",
+    category: null,
+    capabilities: [],
+    contains: ["skills"],
+    enabled: false,
+    origin: "cgswitch",
+    marketplace: "example-plugins",
+    store_path: "C:\\Users\\<user>\\.codex\\plugins\\cache\\example-plugins\\code-reviewer\\0.4.1",
+    source_url: null,
+    installed_at: null,
+  },
+  {
+    name: "handmade",
+    version: "2.0.0",
+    display_name: "Handmade",
+    description: "手写 local 条目的外部插件示例",
+    category: null,
+    capabilities: [],
+    contains: ["skills"],
+    enabled: true,
+    origin: "personal",
+    marketplace: null,
+    store_path: "C:\\Users\\<user>\\my-plugins\\handmade",
+    source_url: null,
+    installed_at: null,
+  },
+  {
+    name: "documents",
+    version: "26.819.11345",
+    display_name: "Documents",
+    description: "官方市场里的已装插件（只读示例）",
+    category: null,
+    capabilities: [],
+    contains: ["skills"],
+    enabled: true,
+    origin: "official",
+    marketplace: "openai-primary-runtime",
+    store_path: "C:\\Users\\<user>\\.cache\\codex-runtimes\\plugins\\documents",
+    source_url: null,
+    installed_at: null,
+  },
+  {
+    name: "lark-base",
+    version: null,
+    display_name: null,
+    description: "Skill 注册表里的已装技能（只读示例）",
+    category: null,
+    capabilities: [],
+    contains: ["skills"],
+    enabled: true,
+    origin: "skill",
+    marketplace: null,
+    store_path: "C:\\Users\\<user>\\.agents\\skills\\lark-base",
+    source_url: "https://github.com/larksuite/cli.git",
+    installed_at: null,
+  },
+  {
+    name: "ponytail",
+    version: "4.9.0",
+    display_name: "Ponytail",
+    description: "用户自装的第三方市场插件（经 codex CLI 卸载）",
+    category: null,
+    capabilities: [],
+    contains: ["skills"],
+    enabled: true,
+    origin: "codex",
+    marketplace: "ponytail",
+    store_path: "C:\\Users\\<user>\\.codex\\plugins\\cache\\ponytail\\ponytail\\4.9.0",
+    source_url: null,
+    installed_at: null,
+  },
+];
+
+const webPluginPreview: PluginPreview = {
+  repo: "openai/plugins",
+  reference: "main",
+  default_branch: "main",
+  candidates: [
+    {
+      sub_path: "plugins/memory-bank",
+      name: "memory-bank",
+      version: "1.2.0",
+      display_name: "Memory Bank",
+      description: "浏览器调试用的候选插件 fixture",
+      capabilities: ["read", "write"],
+      contains: ["skills", "mcp"],
+      files: [
+        "plugins/memory-bank/.codex-plugin/plugin.json",
+        "plugins/memory-bank/skills/session-summary/SKILL.md",
+        "plugins/memory-bank/.mcp.json",
+      ],
+    },
+  ],
+};
 
 // 从 2xx 的 JSON 响应体里识别供应商级错误（OpenAI 风格 error 或智谱风格 code/success）。
 function connectionErrorFromBody(value: unknown): string | null {
@@ -592,6 +711,54 @@ export async function webInvoke<T>(command: string, args?: Record<string, unknow
         String(args?.configText ?? ""),
         Boolean(args?.enabled),
       ) as T;
+    case "list_plugins":
+      return webPlugins.map((plugin) => ({ ...plugin })) as T;
+    case "preview_plugin": {
+      // 与后端一致：预览需要真实 GitHub 网络；浏览器环境仅对示例地址返回 fixture，其余抛错
+      const url = String(args?.url ?? "");
+      if (url.includes("openai/plugins")) return webPluginPreview as T;
+      throw new Error("浏览器调试无法访问 GitHub，插件预览请在 Tauri 窗口测试");
+    }
+    case "install_plugin": {
+      const candidate = webPluginPreview.candidates[0];
+      const summary: PluginSummary = {
+        name: candidate.name,
+        version: candidate.version,
+        display_name: candidate.display_name,
+        description: candidate.description,
+        category: null,
+        capabilities: candidate.capabilities,
+        contains: candidate.contains,
+        enabled: true,
+        origin: "cgswitch",
+        marketplace: "openai-plugins",
+        store_path: `C:\\Users\\<user>\\.codex\\plugins\\cache\\openai-plugins\\${candidate.name}\\${candidate.version ?? "latest"}`,
+        source_url: "https://github.com/openai/plugins",
+        installed_at: Date.now(),
+      };
+      webPlugins = [...webPlugins.filter((plugin) => plugin.name !== summary.name), summary].sort((a, b) => a.name.localeCompare(b.name));
+      return summary as T;
+    }
+    case "uninstall_plugin": {
+      // 与后端一致：官方市场 / Skill 注册表拒绝卸载
+      const target = webPlugins.find((plugin) => plugin.name === args?.name);
+      if (target && ["official", "skill"].includes(target.origin)) {
+        throw new Error("该插件属于 Codex 官方市场 / Skill 注册表，请在 Codex 内管理它");
+      }
+      webPlugins = webPlugins.filter((plugin) => plugin.name !== args?.name);
+      return undefined as T;
+    }
+    case "set_plugin_enabled": {
+      // 与后端一致：启停只支持家目录条目类来源；市场插件 CLI 未提供启停命令
+      const target = webPlugins.find((plugin) => plugin.name === args?.name);
+      if (target && !["personal", "claude", "cursor"].includes(target.origin)) {
+        throw new Error("该插件的启停请在 Codex 内操作");
+      }
+      webPlugins = webPlugins.map((plugin) =>
+        plugin.name === args?.name ? { ...plugin, enabled: Boolean(args?.enabled) } : plugin,
+      );
+      return undefined as T;
+    }
     case "delete_profile": {
       const index = webProfiles.findIndex((item) => item.id === args?.id);
       if (index >= 0) webProfiles.splice(index, 1);

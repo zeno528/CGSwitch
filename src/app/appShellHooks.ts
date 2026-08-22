@@ -3,7 +3,7 @@ import type { MutableRefObject } from "react";
 import { api, isTauri } from "../api";
 import type { AppState, CodexAppStatus, Settings } from "../types";
 
-export type AppView = "profiles" | "mcp" | "settings";
+export type AppView = "profiles" | "mcp" | "plugins" | "settings";
 
 export function indicatorTop(targetRect: { top: number }, navRect: { top: number }) {
   return targetRect.top - navRect.top + 8;
@@ -148,12 +148,13 @@ export function useSidebarIndicator(view: AppView) {
   const [indicator, setIndicator] = useState({ top: 8, left: 0, instant: false });
   const profileNavRef = useRef<HTMLButtonElement>(null);
   const mcpNavRef = useRef<HTMLButtonElement>(null);
+  const pluginsNavRef = useRef<HTMLButtonElement>(null);
   const settingsNavRef = useRef<HTMLButtonElement>(null);
   const sidebarNavRef = useRef<HTMLElement>(null);
   const previousViewRef = useRef<AppView>(view);
 
   const updateIndicator = useCallback(() => {
-    const target = view === "profiles" ? profileNavRef.current : view === "mcp" ? mcpNavRef.current : settingsNavRef.current;
+    const target = view === "profiles" ? profileNavRef.current : view === "mcp" ? mcpNavRef.current : view === "plugins" ? pluginsNavRef.current : settingsNavRef.current;
     const nav = sidebarNavRef.current;
     if (!target || !nav) return;
     setIndicator((current) => ({
@@ -200,6 +201,7 @@ export function useSidebarIndicator(view: AppView) {
     indicator,
     profileNavRef,
     mcpNavRef,
+    pluginsNavRef,
     settingsNavRef,
     sidebarNavRef,
   };
