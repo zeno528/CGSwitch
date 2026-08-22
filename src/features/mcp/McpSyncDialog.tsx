@@ -21,7 +21,6 @@ export default function McpSyncDialog({ open, preview, previewError, busy, onClo
   const [direction, setDirection] = useState<SyncDirection | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   useEffect(() => { if (!open) { setStep("diff"); setDirection(null); setExpanded(new Set()); } }, [open]);
-  const title = step === "confirm" && direction ? direction === "db-to-live" ? "确认：数据库 → config.toml" : "确认：config.toml → 数据库" : "MCP 配置不一致";
   const entries = preview?.entries ?? [];
   const pendingLines = useMemo(() => {
     const names = (kind: McpSyncDiffEntry["kind"]) => entries.filter((entry) => entry.kind === kind).map((entry) => entry.name);
@@ -123,7 +122,7 @@ export default function McpSyncDialog({ open, preview, previewError, busy, onClo
                       </span>
                       <span className="muted shrink-0 text-xs">{isExpanded ? "收起" : "查看明细"}</span>
                     </button>
-                    {isExpanded ? <div className="mono space-y-1 border-t border-[var(--panel-divider)] bg-black/4 p-3 text-[11px] leading-relaxed break-all dark:bg-white/6">{entry.changed_fields.length ? entry.changed_fields.map((diff) => <div key={diff.field}>{fieldLabels[diff.field] ?? diff.field}：数据库 {valueText(diff.db)} → config.toml {valueText(diff.live)}</div>) : entry.unmodeled_only ? <p>建模字段全部相同，差异只在注释 / 格式 / 未建模键。</p> : <p className="whitespace-pre-wrap">{entry.live_toml ?? entry.db_toml}</p>}</div> : null}
+                    {isExpanded ? <div className="mono space-y-1 border-t border-[var(--panel-divider)] bg-black/4 p-3 meta-xs leading-relaxed break-all dark:bg-white/6">{entry.changed_fields.length ? entry.changed_fields.map((diff) => <div key={diff.field}>{fieldLabels[diff.field] ?? diff.field}：数据库 {valueText(diff.db)} → config.toml {valueText(diff.live)}</div>) : entry.unmodeled_only ? <p>建模字段全部相同，差异只在注释 / 格式 / 未建模键。</p> : <p className="whitespace-pre-wrap">{entry.live_toml ?? entry.db_toml}</p>}</div> : null}
                   </div>
                 );
               })}
