@@ -28,7 +28,7 @@ interface RestartProgressCardProps {
 }
 
 function ProfileDragPreview({ profile, width }: { profile: ProfileSummary; width: number | null }) {
-  return <div className="drag-dragging profile-drag-preview" style={{ width: width ? `${width}px` : undefined }}><div className="flex items-center gap-3 px-5 py-[var(--gap-card)]"><ProfileIconTile name={profile.name} icon={profile.icon} /><div className="min-w-0"><div className="title-md truncate">{profile.name}</div><div className="muted mt-1 flex items-center gap-1"><span className="apple-chip">{profile.model ?? "未设置"}</span>{profile.provider ? <span className="apple-chip">{profile.provider}</span> : null}<span className="apple-chip">{profile.reasoning_effort ?? "默认"}</span></div></div></div></div>;
+  return <div className="drag-dragging profile-drag-preview" style={{ width: width ? `${width}px` : undefined }}><div className="flex items-center gap-3 px-5 py-4.5"><ProfileIconTile name={profile.name} icon={profile.icon} /><div className="min-w-0"><div className="title-md truncate">{profile.name}</div><div className="muted mt-1 flex items-center gap-1"><span className="apple-chip">{profile.model ?? "未设置"}</span>{profile.provider ? <span className="apple-chip">{profile.provider}</span> : null}<span className="apple-chip">{profile.reasoning_effort ?? "默认"}</span></div></div></div></div>;
 }
 
 function RestartProgressCard({ stage, message, visible, onHidden }: RestartProgressCardProps) {
