@@ -889,6 +889,15 @@ body.drag-settling .profile-card-actions {
   line-height: 1.45;
 }
 
+.mcp-sync-choice {
+  background: color-mix(in srgb, var(--sidebar-bg) 34%, var(--panel-bg));
+}
+
+.mcp-sync-choice:hover,
+.mcp-sync-choice:focus-visible {
+  background: var(--selection-bg);
+}
+
 .apple-editor-shell {
   overflow: hidden;
   border-radius: var(--radius-control);
@@ -1116,7 +1125,7 @@ button:focus-visible {
   color: inherit;
   font-size: 14px;
   line-height: 1.6;
-  opacity: var(--toast-opacity);
+  opacity: 1;
   transform: translateY(var(--toast-offset)) scale(var(--toast-scale));
   transform-origin: top center;
   transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease-out;
@@ -1134,6 +1143,11 @@ button:focus-visible {
   transform: translateY(var(--toast-expanded-offset)) scale(1);
 }
 
+.app-toast-viewport[data-expanded="true"] .app-toast__icon,
+.app-toast-viewport[data-expanded="true"] .app-toast__content {
+  opacity: 1;
+}
+
 .app-toast[data-state="closed"] {
   opacity: 0;
   pointer-events: none;
@@ -1143,6 +1157,9 @@ button:focus-visible {
 .app-toast__icon {
   flex: 0 0 20px;
   margin: 0 10px 0 0;
+  opacity: var(--toast-opacity);
+  transition: opacity 220ms ease-out;
+  transition-delay: var(--toast-transition-delay);
 }
 
 .app-toast__icon--success { color: var(--success); }
@@ -1155,6 +1172,9 @@ button:focus-visible {
   min-width: 0;
   font-size: inherit;
   line-height: inherit;
+  opacity: var(--toast-opacity);
+  transition: opacity 220ms ease-out;
+  transition-delay: var(--toast-transition-delay);
 }
 
 .app-select {
