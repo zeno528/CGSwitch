@@ -636,7 +636,8 @@ body.drag-settling .profile-card-actions {
   background: var(--sidebar-bg);
 }
 
-/* 编辑页首卡初始保留页面间距，滚动后可贴到顶部栏；首页/设置页仍保留各自的页面间距。 */
+/* 首卡片与页头的间距统一由 .apple-edit-content 的 padding-top（--gap-page）承担，
+   各页面禁止再给首卡片包一层额外的 mt-[var(--gap-page)]（会叠算成两倍间距）。 */
 .apple-edit-toolbar--header {
   margin-bottom: 0;
   position: relative;
