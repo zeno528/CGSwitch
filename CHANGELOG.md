@@ -1,5 +1,39 @@
 # CHANGELOG
 
+## [0.5.2] - 2026-08-22
+
+### 新增
+
+- 供应商列表支持拖拽重排序，拖拽时显示卡片预览
+
+### 修复
+
+- AlertDialog 关闭后自动失去焦点，避免焦点残留
+- 删除/复制供应商的交互体验优化
+- 余额/用量查询按钮不再被强制禁用，可随时刷新
+- 移除预设中的示例 API 基础 URL，避免误用
+
+### 界面与样式
+
+- 图标库由 phosphor 切换为 lucide-react
+- 编辑页控件与对话框交互优化
+- 编辑页交互全面增强
+- toast 按 tone 区分图标与样式
+- AppSwitch 组件的交互、样式与可访问性优化
+- 认证信息处理逻辑统一，配置更可靠
+
+### 重构
+
+- 前端从 Vue 3 迁移至 React 19，并按 profiles / mcp / settings 等领域模块化
+
+### 如何选择安装包
+
+**Windows**：默认下载 `CGswitch-v0.5.2-Windows-setup.exe`，双击安装即可。需要批量部署、静默安装等场景可选用 `.msi` 版本。
+
+**macOS**：
+- Apple 芯片（M 系列）→ `CGswitch-v0.5.2-macOS-arm64.dmg`
+- Intel 芯片 → `CGswitch-v0.5.2-macOS-x64.dmg`
+
 ## [0.5.0] - 2026-08-21
 
 ### 新增
