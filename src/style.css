@@ -1488,7 +1488,6 @@ textarea.app-input::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 .cm-editor .cm-scroller { overflow: auto; }
 .cm-gutters .cm-lineNumbers { width: 1.5rem; min-width: 1.5rem; flex: 0 0 1.5rem; }
-.cm-gutters .cm-foldGutter,
 .cm-gutters .cm-gutter-lint { width: 1rem; min-width: 1rem; flex: 0 0 1rem; }
 .cm-gutters .cm-foldGutter { width: 0.875rem; min-width: 0.875rem; flex: 0 0 0.875rem; }
 .cm-gutters .cm-gutterElement { box-sizing: border-box; }
