@@ -43,12 +43,8 @@ export default function McpSyncDialog({ open, preview, previewError, busy, onClo
   }, [direction, entries, preview]);
 
   const requestDirection = (next: SyncDirection) => { setDirection(next); setStep("confirm"); };
-  const dialogDescription = step === "diff"
-    ? previewError
-      ? "config.toml 无法解析，只能用数据库中的 MCP 配置恢复。"
-      : preview
-        ? `检测到 ${preview.entries.length} 项差异，请选择要保留的配置来源。`
-        : undefined
+  const dialogDescription = step === "diff" && previewError
+    ? "config.toml 无法解析，只能用数据库中的 MCP 配置恢复。"
     : undefined;
   const directionChoice = (next: SyncDirection) => {
     const dbToLive = next === "db-to-live";
