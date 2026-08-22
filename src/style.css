@@ -52,7 +52,7 @@
   --main-top-inset: 1rem;
   --edit-page-offset: 2.75rem;
   --edit-footer-bleed: 1.75rem;
-  --edit-footer-padding-right: 2.625rem;
+  --edit-footer-padding-right: var(--gap-main);
   --motion-fast: 150ms;
   --motion-sidebar: 240ms;
   --motion-layout: 360ms;
@@ -1014,6 +1014,10 @@ button:focus-visible {
 
 .app-dialog-content--confirm {
   width: min(460px, calc(100vw - 2rem));
+}
+
+.app-dialog-content--confirm .app-dialog-description {
+  font-weight: 500;
 }
 
 .app-dialog-title {

@@ -108,7 +108,7 @@ export function AppSelect<T extends string | number>({
           onClick={() => selectOption(option)}
         >
           <span>{renderLabel?.(option) ?? option.label}</span>
-          {selected?.value === option.value ? <Check className="app-select-option__check" size={16} strokeWidth={2} aria-hidden="true" /> : null}
+          {selected?.value === option.value ? <Check className="app-select-option__check" size={16} strokeWidth={2.5} aria-hidden="true" /> : null}
         </button>)}
       </div>
     </div>

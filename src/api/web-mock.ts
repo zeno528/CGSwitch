@@ -77,6 +77,22 @@ function patchContextOverrideForWeb(text: string, enabled: boolean): string {
   return lines.join(newline);
 }
 
+// 与后端一致：开启时确保 [features] 表存在并写入键（无表则追加到文末），关闭时移除该键
+function patchSystemProxyForWeb(text: string, enabled: boolean): string {
+  const newline = text.includes("\r\n") ? "\r\n" : "\n";
+  const lines = text
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*respect_system_proxy\s*=/.test(line));
+  if (!enabled) return lines.join(newline);
+  const featuresIndex = lines.findIndex((line) => /^\s*\[features\]/.test(line));
+  if (featuresIndex >= 0) {
+    lines.splice(featuresIndex + 1, 0, "respect_system_proxy = true");
+    return lines.join(newline);
+  }
+  lines.push("[features]", "respect_system_proxy = true");
+  return lines.join(newline);
+}
+
 // 从 2xx 的 JSON 响应体里识别供应商级错误（OpenAI 风格 error 或智谱风格 code/success）。
 function connectionErrorFromBody(value: unknown): string | null {
   if (!value || typeof value !== "object") return null;
@@ -568,6 +584,11 @@ export async function webInvoke<T>(command: string, args?: Record<string, unknow
     }
     case "patch_chatgpt_context_config":
       return patchContextOverrideForWeb(
+        String(args?.configText ?? ""),
+        Boolean(args?.enabled),
+      ) as T;
+    case "patch_system_proxy_config":
+      return patchSystemProxyForWeb(
         String(args?.configText ?? ""),
         Boolean(args?.enabled),
       ) as T;

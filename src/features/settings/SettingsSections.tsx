@@ -1,4 +1,4 @@
-import { ArchiveRestore, Database, Download, FolderOpen, LoaderCircle, Moon, MoonStar, Monitor, Pencil, Power, RefreshCw, Save, Sun, Upload } from "lucide-react";
+import { ChevronRight, Database, DatabaseBackup, Download, FolderOpen, LoaderCircle, Moon, MoonStar, Monitor, PanelBottomClose, Pencil, Power, Save, Sun, Upload } from "lucide-react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { api, isTauri } from "../../api";
@@ -21,7 +21,7 @@ export const formatTimestamp = (seconds: number) => { const date = new Date(seco
 interface SettingsGeneralProps { form: Settings; onPatch: (patch: Partial<Settings>) => void; }
 
 export function SettingsGeneral({ form, onPatch }: SettingsGeneralProps) {
-  return <div className="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]"><div className="setting-title mb-2">主题</div><div className="apple-group inline-flex gap-1 p-1">{themeOptions.map((option) => <button key={option.value} type="button" className={`inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-xl text-sm transition-colors ${form.theme === option.value ? "bg-[var(--selection-bg)] font-semibold text-accent" : "font-medium hover:bg-black/5 dark:hover:bg-white/8"}`} aria-pressed={form.theme === option.value} onClick={() => onPatch({ theme: option.value })}>{option.value === "system" ? <Monitor className="h-4 w-4" strokeWidth={2} /> : option.value === "light" ? <Sun className="h-4 w-4" strokeWidth={2} /> : <Moon className="h-4 w-4" strokeWidth={2} />}{option.label}</button>)}</div><hr className="my-4 border-0 border-t border-[var(--panel-divider)]" /><div className="flex flex-col gap-5">{[["autostart_enabled", "开机自启", "登录系统后自动启动 CGswitch", Power, "text-accent"], ["silent_start", "静默启动", "启动时不显示主窗口，驻留系统托盘", MoonStar, "text-[var(--lavender)]"], ["minimize_to_tray", "关闭时最小化到托盘", "点击关闭按钮时隐藏到托盘而不是退出", ArchiveRestore, "text-[var(--warning)]"]].map(([key, label, description, Icon, color]) => <div key={String(key)} className="flex items-center justify-between gap-4"><div className="flex items-start gap-3"><span className={`settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-xl ${String(color)}`}><Icon className="h-[18px] w-[18px]" strokeWidth={2} /></span><div><div className="setting-title">{String(label)}</div><div className="setting-description mt-0.5">{String(description)}</div></div></div><AppSwitch checked={Boolean(form[key as keyof Settings])} onCheckedChange={(value) => onPatch({ [String(key)]: value })} /></div>)}</div></div>;
+  return <div className="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]"><div className="setting-title mb-2">主题</div><div className="apple-group inline-flex gap-1 p-1">{themeOptions.map((option) => <button key={option.value} type="button" className={`inline-flex h-9 w-28 items-center justify-center gap-1.5 rounded-xl text-sm transition-colors ${form.theme === option.value ? "bg-[var(--selection-bg)] font-semibold text-accent" : "font-medium hover:bg-black/5 dark:hover:bg-white/8"}`} aria-pressed={form.theme === option.value} onClick={() => onPatch({ theme: option.value })}>{option.value === "system" ? <Monitor className="h-4 w-4" strokeWidth={2} /> : option.value === "light" ? <Sun className="h-4 w-4" strokeWidth={2} /> : <Moon className="h-4 w-4" strokeWidth={2} />}{option.label}</button>)}</div><hr className="my-4 border-0 border-t border-[var(--panel-divider)]" /><div className="flex flex-col gap-5">{[["autostart_enabled", "开机自启", "登录系统后自动启动 CGswitch", Power, "text-accent"], ["silent_start", "静默启动", "启动时不显示主窗口，驻留系统托盘", MoonStar, "text-[var(--lavender)]"], ["minimize_to_tray", "关闭时最小化到托盘", "点击关闭按钮时隐藏到托盘而不是退出", PanelBottomClose, "text-[var(--warning)]"]].map(([key, label, description, Icon, color]) => <div key={String(key)} className="flex items-center justify-between gap-4"><div className="flex items-start gap-3"><span className={`settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-xl ${String(color)}`}><Icon className="h-[18px] w-[18px]" strokeWidth={2} /></span><div><div className="setting-title">{String(label)}</div><div className="setting-description mt-0.5">{String(description)}</div></div></div><AppSwitch checked={Boolean(form[key as keyof Settings])} onCheckedChange={(value) => onPatch({ [String(key)]: value })} /></div>)}</div></div>;
 }
 
 interface SettingsAdvancedProps { form: Settings; onPatch: (patch: Partial<Settings>) => void; paths: PathInfo[]; backupsEpoch: number; onOpenPath: (item: PathInfo) => void; onRefresh: () => Promise<void>; }
@@ -34,6 +34,7 @@ export function SettingsAdvanced({ form, onPatch, paths, backupsEpoch, onOpenPat
   const [renameTarget, setRenameTarget] = useState<DatabaseBackupInfo | null>(null);
   const [renameText, setRenameText] = useState("");
   const [renaming, setRenaming] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(true);
 
   const loadBackups = async () => { try { setBackups(await api.listDatabaseBackups()); } catch { setBackups([]); } };
   useEffect(() => { void loadBackups(); }, [backupsEpoch]);
@@ -55,9 +56,98 @@ export function SettingsAdvanced({ form, onPatch, paths, backupsEpoch, onOpenPat
   const openRename = (backup: DatabaseBackupInfo) => { setRenameTarget(backup); setRenameText(backupTitle(backup.name)); };
   const submitRename = async () => { const target = renameTarget; const text = renameText.trim(); if (!target || renaming || !text || text === backupTitle(target.name)) { setRenameTarget(null); return; } setRenaming(true); try { await api.renameDatabaseBackup(target.name, text); feedback.success("备份已重命名"); await loadBackups(); setRenameTarget(null); } catch (error) { feedback.error(String(error)); } finally { setRenaming(false); } };
   const restoreBackup = async (backup: DatabaseBackupInfo) => { if (!await feedback.confirm({ title: "恢复数据库备份", description: `确定用「${backup.name}」覆盖当前所有供应商数据吗？恢复后无法撤销。备份中的 MCP 配置会一并写回 ~/.codex/config.toml（覆盖当前 MCP 段）。`, confirmText: "恢复", destructive: true })) return; try { await api.restoreDatabase(backup.name); feedback.success("数据库已恢复"); await onRefresh(); await loadBackups(); } catch (error) { feedback.error(String(error)); } };
-  const deleteBackup = async (backup: DatabaseBackupInfo) => { if (!await feedback.confirm({ title: "删除数据库备份", description: <>确定删除「<strong>{backup.name}</strong>」吗？删除后不可恢复。</>, confirmText: "删除", destructive: true })) return; try { await api.deleteDatabaseBackup(backup.name); feedback.success("备份已删除"); await loadBackups(); } catch (error) { feedback.error(String(error)); } };
+  const deleteBackup = async (backup: DatabaseBackupInfo) => { if (!await feedback.confirm({ title: "删除数据库备份", description: <>确定删除「<strong className="text-black">{backup.name}</strong>」吗？删除后不可恢复。</>, confirmText: "删除", destructive: true })) return; try { await api.deleteDatabaseBackup(backup.name); feedback.success("备份已删除"); await loadBackups(); } catch (error) { feedback.error(String(error)); } };
 
-  return <div className="apple-group mt-[var(--gap-section)] p-[var(--gap-card)]"><div className="flex items-center gap-4"><span className="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-xl text-accent"><Database className="h-[18px] w-[18px]" strokeWidth={2} /></span><div><div className="setting-title">数据备份</div><div className="setting-description mt-0.5">管理本地数据库备份，支持导入、导出和自动备份</div></div></div><div className="mt-4 grid grid-cols-2 gap-2"><button type="button" className="apple-action-button" disabled={importing} onClick={() => void importBackupFromFile()}><Download className="h-4 w-4 text-accent" strokeWidth={2} />导入数据库</button><button type="button" className="apple-action-button" disabled={exporting} onClick={() => void exportBackupToFile()}><Upload className="h-4 w-4 text-success" strokeWidth={2} />导出数据库</button></div><div className="mt-[var(--gap-section)] rounded-[var(--radius-card)] bg-[color-mix(in_srgb,var(--sidebar-bg)_30%,var(--panel-bg))] p-3.5 shadow-[0_0_0_1px_var(--panel-ring)]"><div className="title-sm">自动备份</div><div className="mt-3 grid gap-3 sm:grid-cols-2"><div><div className="field-label muted mb-1.5">备份间隔</div><AppSelect value={form.auto_backup_interval_hours} options={autoBackupOptions} onChange={(value) => onPatch({ auto_backup_interval_hours: value })} /></div><div><div className="field-label muted mb-1.5">最多保留</div><AppSelect value={form.database_backup_keep_count} options={keepOptions} onChange={(value) => onPatch({ database_backup_keep_count: value })} /></div></div><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" className="apple-action-button" disabled={exporting} onClick={() => void createImmediateBackup()}><Save className="h-4 w-4 text-accent" strokeWidth={2} />立即备份</button><button type="button" className="apple-action-button" onClick={() => { const item = paths.find((path) => path.label === "备份目录"); if (item) onOpenPath(item); else feedback.warning("找不到备份目录"); }}><FolderOpen className="h-4 w-4 text-[var(--warning)]" strokeWidth={2} />备份文件夹</button></div></div><hr className="my-4 border-0 border-t border-[var(--panel-divider)]" /><div className="setting-title mb-2">备份记录</div>{backups.length ? <div className="space-y-2">{backups.map((backup) => <div key={backup.name} className="apple-list-row"><div className="flex min-w-0 items-center gap-2.5"><span className="settings-icon-tile grid h-8 w-8 shrink-0 place-items-center rounded-lg text-accent"><Database className="h-4 w-4" strokeWidth={2} /></span><div className="min-w-0"><div className="mono truncate text-xs font-medium">{backup.name}</div><div className="muted meta-xs">{formatTimestamp(backup.created_at)} · {formatSize(backup.size_bytes)}</div></div></div><div className="flex shrink-0 gap-1.5"><button type="button" className="apple-icon-button text-[var(--text-secondary)] hover:text-accent" title="编辑备份名称" onClick={() => openRename(backup)}><Pencil className="h-4 w-4" strokeWidth={2} /></button><button type="button" className="apple-icon-button text-accent" title="恢复数据库" onClick={() => void restoreBackup(backup)}><RefreshCw className="h-4 w-4" strokeWidth={2} /></button><button type="button" className="apple-icon-button text-[var(--danger)]/70" title="删除备份" onClick={() => void deleteBackup(backup)}><TrashIcon /></button></div></div>)}</div> : <div className="setting-description flex items-center gap-2"><Database className="h-4 w-4" />还没有导出过备份。</div>}<AppDialog open={renameTarget !== null} onOpenChange={(open) => { if (!open) setRenameTarget(null); }} title="重命名备份" footer={<><button type="button" className="apple-action-button" onClick={() => setRenameTarget(null)}>取消</button><button type="button" className="apple-action-button app-button--primary" disabled={renaming || !renameText.trim()} onClick={() => void submitRename()}>保存</button></>}><input className="app-input" maxLength={80} placeholder="输入新的备份标题" value={renameText} onChange={(event) => setRenameText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) void submitRename(); }} /></AppDialog></div>;
+  return (
+    <div className="apple-group mt-[var(--gap-section)]">
+      <div className={`apple-disclosure ${backupOpen ? "apple-disclosure--open" : ""}`}>
+        <section className="apple-panel-section">
+          <button type="button" className="apple-disclosure__summary" aria-expanded={backupOpen} onClick={() => setBackupOpen((open) => !open)}>
+            <span className="settings-icon-tile grid h-9 w-9 shrink-0 place-items-center rounded-xl text-accent">
+              <Database className="h-[18px] w-[18px]" strokeWidth={2} />
+            </span>
+            <span className="min-w-0">
+              <span className="setting-title block">数据备份</span>
+              <span className="setting-description mt-0.5 block">管理本地数据库备份，支持导入、导出和自动备份</span>
+            </span>
+            <ChevronRight className="apple-disclosure__icon ml-auto" size={18} strokeWidth={2} aria-hidden="true" />
+          </button>
+          <div className="apple-disclosure__content" aria-hidden={!backupOpen} inert={!backupOpen}>
+            <div className="apple-disclosure__body">
+              <div className="border-t border-[var(--panel-divider)] pt-4">
+                <div className="title-sm">备份操作</div>
+                <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                  <button type="button" className="apple-action-button" disabled={exporting} onClick={() => void createImmediateBackup()}>
+                    <Save className="h-4 w-4 text-accent" strokeWidth={2} />
+                    立即备份
+                  </button>
+                  <button type="button" className="apple-action-button" onClick={() => { const item = paths.find((path) => path.label === "备份目录"); if (item) onOpenPath(item); else feedback.warning("找不到备份目录"); }}>
+                    <FolderOpen className="h-4 w-4 text-[var(--warning)]" strokeWidth={2} />
+                    备份文件夹
+                  </button>
+                  <button type="button" className="apple-action-button" disabled={importing} onClick={() => void importBackupFromFile()}>
+                    <Download className="h-4 w-4 text-accent" strokeWidth={2} />
+                    导入数据库
+                  </button>
+                  <button type="button" className="apple-action-button" disabled={exporting} onClick={() => void exportBackupToFile()}>
+                    <Upload className="h-4 w-4 text-success" strokeWidth={2} />
+                    导出数据库
+                  </button>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="field-label muted mb-1.5">自动备份</div>
+                    <AppSelect value={form.auto_backup_interval_hours} options={autoBackupOptions} onChange={(value) => onPatch({ auto_backup_interval_hours: value })} />
+                  </div>
+                  <div>
+                    <div className="field-label muted mb-1.5">最多保留</div>
+                    <AppSelect value={form.database_backup_keep_count} options={keepOptions} onChange={(value) => onPatch({ database_backup_keep_count: value })} />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 border-t border-[var(--panel-divider)] pt-4">
+                <div className="setting-title">备份记录</div>
+                {backups.length ? (
+                  <div className="mt-2 space-y-2">
+                    {backups.map((backup) => (
+                      <div key={backup.name} className="apple-list-row">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span className="settings-icon-tile grid h-8 w-8 shrink-0 place-items-center rounded-lg text-accent">
+                            <Database className="h-4 w-4" strokeWidth={2} />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="mono truncate text-xs font-medium">{backup.name}</div>
+                            <div className="muted meta-xs">{formatTimestamp(backup.created_at)} · {formatSize(backup.size_bytes)}</div>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 gap-1.5">
+                          <button type="button" className="apple-icon-button text-[var(--text-secondary)] hover:text-accent" title="编辑备份名称" onClick={() => openRename(backup)}>
+                            <Pencil className="h-4 w-4" strokeWidth={2} />
+                          </button>
+                          <button type="button" className="apple-icon-button text-accent" title="恢复数据库" onClick={() => void restoreBackup(backup)}>
+                            <DatabaseBackup className="h-4 w-4" strokeWidth={2} />
+                          </button>
+                          <button type="button" className="apple-icon-button text-[var(--danger)]/70" title="删除备份" onClick={() => void deleteBackup(backup)}>
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="setting-description mt-2 flex items-center gap-2">
+                    <Database className="h-4 w-4" />
+                    还没有导出过备份。
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <AppDialog open={renameTarget !== null} onOpenChange={(open) => { if (!open) setRenameTarget(null); }} title="重命名备份" footer={<><button type="button" className="apple-action-button" onClick={() => setRenameTarget(null)}>取消</button><button type="button" className="apple-action-button app-button--primary" disabled={renaming || !renameText.trim()} onClick={() => void submitRename()}>保存</button></>}><input className="app-input" maxLength={80} placeholder="输入新的备份标题" value={renameText} onChange={(event) => setRenameText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) void submitRename(); }} /></AppDialog>
+    </div>
+  );
 }
 
 interface SettingsAboutProps { paths: PathInfo[]; onOpenPath: (item: PathInfo) => void; openingPath: string | null; }

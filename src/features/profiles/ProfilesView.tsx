@@ -235,7 +235,7 @@ export default function ProfilesView({ state, activationEpoch, onRefresh }: Prof
   };
 
   const removeProfile = async (profile: ProfileSummary) => {
-    const confirmed = await feedback.confirm({ title: "删除供应商", description: <>确定删除“<strong>{profile.name}</strong>”吗？删除后不可恢复。</>, confirmText: "删除", destructive: true });
+    const confirmed = await feedback.confirm({ title: "删除供应商", description: <>确定删除“<strong className="text-black">{profile.name}</strong>”吗？删除后不可恢复。</>, confirmText: "删除", destructive: true });
     if (!confirmed) return;
     const previousIndex = items.findIndex((item) => item.id === profile.id);
     setItems((current) => current.filter((item) => item.id !== profile.id));

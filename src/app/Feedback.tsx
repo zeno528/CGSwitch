@@ -1,6 +1,6 @@
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Toast from "@radix-ui/react-toast";
-import { CircleCheck, CircleX, Info, TriangleAlert } from "lucide-react";
+import { CircleCheck, CircleX, Info, Trash2, TriangleAlert } from "lucide-react";
 import { createContext, useCallback, useContext, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 type ToastTone = "success" | "error" | "warning" | "info";
@@ -150,7 +150,10 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
               (document.activeElement as HTMLElement | null)?.blur();
             }}
           >
-            <AlertDialog.Title className="app-dialog-title">{confirmation?.title}</AlertDialog.Title>
+            <AlertDialog.Title className="app-dialog-title">
+              {confirmation?.destructive ? <Trash2 className="mr-1.5 inline-block text-[var(--danger)]" size={18} strokeWidth={2} aria-hidden="true" /> : null}
+              {confirmation?.title}
+            </AlertDialog.Title>
             <AlertDialog.Description className="app-dialog-description">
               {confirmation?.description}
             </AlertDialog.Description>

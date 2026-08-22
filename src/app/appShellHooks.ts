@@ -97,7 +97,6 @@ export function useThemeMode(theme: Settings["theme"] | undefined) {
 }
 
 export function useCodexPolling(
-  stateLoaded: boolean,
   stateRef: MutableRefObject<AppState | null>,
   updateCodex: (codex: CodexAppStatus) => void,
 ) {
@@ -132,11 +131,6 @@ export function useCodexPolling(
       codexPollTimer.current = window.setInterval(() => void pollCodexStatus(), 3000);
     }
   }, [pollCodexStatus, stateRef, stop]);
-
-  useEffect(() => {
-    if (!stateLoaded) stop();
-    return stop;
-  }, [stateLoaded, stop]);
 
   return { start, stop };
 }

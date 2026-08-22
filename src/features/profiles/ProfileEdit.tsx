@@ -31,6 +31,10 @@ function hasLongContextOverride(text: string) {
   return /^\s*model_context_window\s*=/m.test(text) && /^\s*model_auto_compact_token_limit\s*=/m.test(text);
 }
 
+function hasSystemProxyOverride(text: string) {
+  return /^\s*respect_system_proxy\s*=/m.test(text);
+}
+
 function normalizeNewlines(text: string) {
   return text.replace(/\r\n/g, "\n");
 }
@@ -64,6 +68,8 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
   const [catalogTouched, setCatalogTouched] = useState(false);
   const [longContextEnabled, setLongContextEnabled] = useState(false);
   const [patchingLongContext, setPatchingLongContext] = useState(false);
+  const [systemProxyEnabled, setSystemProxyEnabled] = useState(false);
+  const [patchingSystemProxy, setPatchingSystemProxy] = useState(false);
   const [showBalance, setShowBalance] = useState(false);
   const [savingBalance, setSavingBalance] = useState(false);
   const [editorDiagnostics, setEditorDiagnostics] = useState<EditorDiagnosticSummary>({ count: 0, firstLine: null });
@@ -161,6 +167,7 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
           setBoundAccountId(loaded.account_id ?? "");
           setShowBalance(loaded.show_balance);
           setLongContextEnabled(loaded.provider === null && hasLongContextOverride(loaded.raw_config ?? loaded.config_fragment));
+          setSystemProxyEnabled(hasSystemProxyOverride(loaded.raw_config ?? loaded.config_fragment));
         } catch (error) {
           setLoadError(String(error));
         }
@@ -214,6 +221,11 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
     if (!patchingLongContext && showLongContextOverride) setLongContextEnabled(hasLongContextOverride(configText));
   }, [configText, create, liveConfigFragment, patchingLongContext, showLongContextOverride]);
 
+  useEffect(() => {
+    if (!initialized.current) return;
+    if (!patchingSystemProxy) setSystemProxyEnabled(hasSystemProxyOverride(configText));
+  }, [configText, patchingSystemProxy]);
+
   const selectPreset = (kind: string) => {
     const preset = builtinPresets.find((item) => item.kind === kind);
     if (!preset) return;
@@ -229,6 +241,7 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
     setConfigText(nextConfig);
     setConfigInitial(nextConfig);
     setLongContextEnabled(kind === "chatgpt" && hasLongContextOverride(nextConfig));
+    setSystemProxyEnabled(hasSystemProxyOverride(nextConfig));
     setActiveTab("config");
     if (kind === "chatgpt") void loadAuthStatus();
   };
@@ -244,6 +257,20 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
       feedback.error(`更新长上下文配置失败：${String(error)}`);
     } finally {
       setPatchingLongContext(false);
+    }
+  };
+
+  const toggleSystemProxy = async (enabled: boolean) => {
+    if (patchingSystemProxy) return;
+    setPatchingSystemProxy(true);
+    try {
+      const next = await api.patchSystemProxyConfig(configText, enabled);
+      setConfigText(next);
+      setSystemProxyEnabled(enabled);
+    } catch (error) {
+      feedback.error(`更新系统代理设置失败：${String(error)}`);
+    } finally {
+      setPatchingSystemProxy(false);
     }
   };
 
@@ -345,7 +372,28 @@ export default function ProfileEdit({ profile, create = false, onBack, onChanged
             {(!create || selectedPreset?.base_url) ? <div className="mt-4"><div className="mb-1.5 flex items-center gap-1"><span className="field-label">官网地址</span><button type="button" className="grid h-4 w-4 place-items-center rounded-full text-accent transition-colors hover:bg-accent/10 disabled:opacity-40" disabled={!adminUrl.trim()} onClick={() => void api.openUrl(adminUrl.trim()).catch((error) => feedback.error(String(error)))}><ExternalLink className="h-3.5 w-3.5" strokeWidth={2} /></button></div><input className="app-input" placeholder="https://console.example.com（可选）" value={adminUrl} onChange={(event) => setAdminUrl(event.target.value)} /></div> : null}
             {!create && supportsBalance ? <div className="mt-4 flex items-center justify-between gap-3"><div><div className="text-sm font-semibold">余额/用量查询</div><div className="muted mt-0.5 text-xs">窗口激活时自动刷新，点击数字手动刷新</div></div><AppSwitch checked={showBalance} onCheckedChange={(value) => void toggleBalance(value)} /></div> : null}
           </div>
-            <div className="apple-panel-section flex flex-col"><div className="flex items-center justify-between gap-3"><div className="flex gap-1">{tabs.map((tab) => <button key={tab.id} type="button" className={`relative flex h-8 items-center gap-1.5 rounded-[10px] px-3 text-[13px] font-semibold transition-colors ${activeTab === tab.id ? "bg-[var(--selection-bg)] text-accent" : "muted hover:bg-black/5 dark:hover:bg-white/8"}`} aria-pressed={activeTab === tab.id} title={tab.title} onClick={() => { setActiveTab(tab.id); setEditorDiagnostics({ count: 0, firstLine: null }); }}>{tab.id === "config" ? <Settings className="h-3.5 w-3.5" strokeWidth={2} /> : <FileBraces className="h-3.5 w-3.5" strokeWidth={2} />}<span>{tab.label}</span>{((tab.id === "config" && configDirty) || (tab.id === "models" && catalogDirty) || (tab.id === "auth" && authDirty)) ? <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" /> : null}</button>)}</div>{showLongContextOverride && activeTab === "config" ? <label className={`flex items-center gap-2 rounded-[10px] border px-2.5 py-1 text-xs transition-colors ${longContextEnabled ? "border-accent/30 bg-accent/10 text-accent" : "border-[var(--panel-ring)]"}`} title="可能降低模型性能并增加 Token 消耗，仅在需要时开启。"><input type="checkbox" checked={longContextEnabled} disabled={patchingLongContext || saving} onChange={(event) => void toggleLongContext(event.target.checked)} /><span className="whitespace-nowrap font-medium">1M 上下文窗口</span></label> : null}</div><div className="mt-4 flex flex-col pr-1">{activeTab === "config" ? <ConfigTextEditor ref={editorRef} value={configText} language="toml" placeholder={create ? "选择供应商后显示配置预览" : "编辑 config.toml 内容，保存后仅写入该供应商；应用时才生效。"} onChange={(value) => setConfigText(value)} onDiagnostics={setEditorDiagnostics} /> : activeTab === "auth" ? <><ConfigTextEditor ref={editorRef} value={authText} language="json" placeholder="认证文件（~/.codex/auth.json）。" onChange={setAuthText} onDiagnostics={setEditorDiagnostics} /><p className="muted mt-2 text-xs">{detail?.raw_auth ? "已保存自定义认证：清空并保存即可移除，应用时写入 ~/.codex/auth.json。" : "认证文件保存后仅存入本配置，应用时才写入生效。"}</p></> : <ConfigTextEditor ref={editorRef} value={catalogText} language="json" placeholder="模型目录文件不存在或无法读取。" onChange={setCatalogText} onDiagnostics={setEditorDiagnostics} />}</div></div>
+            <div className="apple-panel-section flex flex-col">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex gap-1">
+                  {tabs.map((tab) => <button key={tab.id} type="button" className={`relative flex h-8 items-center gap-1.5 rounded-[10px] px-3 text-[13px] font-semibold transition-colors ${activeTab === tab.id ? "bg-[var(--selection-bg)] text-accent" : "muted hover:bg-black/5 dark:hover:bg-white/8"}`} aria-pressed={activeTab === tab.id} title={tab.title} onClick={() => { setActiveTab(tab.id); setEditorDiagnostics({ count: 0, firstLine: null }); }}>{tab.id === "config" ? <Settings className="h-3.5 w-3.5" strokeWidth={2} /> : <FileBraces className="h-3.5 w-3.5" strokeWidth={2} />}<span>{tab.label}</span>{((tab.id === "config" && configDirty) || (tab.id === "models" && catalogDirty) || (tab.id === "auth" && authDirty)) ? <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" /> : null}</button>)}
+                </div>
+                {activeTab === "config" ? (
+                  <div className="flex items-center gap-2">
+                    {showLongContextOverride ? (
+                      <label className={`flex items-center gap-2 rounded-[10px] border px-2.5 py-1 text-xs transition-colors ${longContextEnabled ? "border-accent/30 bg-accent/10 text-accent" : "border-[var(--panel-ring)]"}`} title="可能降低模型性能并增加 Token 消耗，仅在需要时开启。">
+                        <input type="checkbox" checked={longContextEnabled} disabled={patchingLongContext || saving} onChange={(event) => void toggleLongContext(event.target.checked)} />
+                        <span className="whitespace-nowrap font-medium">1M 上下文窗口</span>
+                      </label>
+                    ) : null}
+                    <label className={`flex items-center gap-2 rounded-[10px] border px-2.5 py-1 text-xs transition-colors ${systemProxyEnabled ? "border-accent/30 bg-accent/10 text-accent" : "border-[var(--panel-ring)]"}`} title="让 Codex 的网络请求遵循操作系统代理设置，重启 Codex 后生效。">
+                      <input type="checkbox" checked={systemProxyEnabled} disabled={patchingSystemProxy || saving} onChange={(event) => void toggleSystemProxy(event.target.checked)} />
+                      <span className="whitespace-nowrap font-medium">遵循系统代理</span>
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+              <div className="mt-4 flex flex-col pr-1">{activeTab === "config" ? <ConfigTextEditor ref={editorRef} value={configText} language="toml" placeholder={create ? "选择供应商后显示配置预览" : "编辑 config.toml 内容，保存后仅写入该供应商；应用时才生效。"} onChange={(value) => setConfigText(value)} onDiagnostics={setEditorDiagnostics} /> : activeTab === "auth" ? <><ConfigTextEditor ref={editorRef} value={authText} language="json" placeholder="认证文件（~/.codex/auth.json）。" onChange={setAuthText} onDiagnostics={setEditorDiagnostics} /><p className="muted mt-2 text-xs">{detail?.raw_auth ? "已保存自定义认证：清空并保存即可移除，应用时写入 ~/.codex/auth.json。" : "认证文件保存后仅存入本配置，应用时才写入生效。"}</p></> : <ConfigTextEditor ref={editorRef} value={catalogText} language="json" placeholder="模型目录文件不存在或无法读取。" onChange={setCatalogText} onDiagnostics={setEditorDiagnostics} />}</div>
+            </div>
         </div>
       </div>
       <div className="apple-edit-toolbar apple-edit-toolbar--footer">{editorDiagnostics.count > 0 ? <button type="button" className="mr-auto flex min-w-0 items-center gap-1.5 rounded-lg border border-[var(--danger)]/20 bg-[var(--danger)]/10 px-2.5 py-1 text-xs chip-danger" aria-live="polite" onClick={() => editorRef.current?.focusFirstDiagnostic()}><span className="h-1.5 w-1.5 rounded-full bg-[var(--danger)]" />{editorDiagnostics.count} 个错误{editorDiagnostics.firstLine !== null ? ` · 第 ${editorDiagnostics.firstLine} 行` : ""}</button> : null}<button type="button" className="apple-action-button" disabled={saving} title={formatTarget.title} onClick={() => void formatCurrentDocument()}><FormatIcon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />格式化</button><button type="button" className="apple-action-button" onClick={onBack}>取消</button><button type="button" className="apple-action-button app-button--primary" disabled={saving || !canSave} onClick={() => void save()}><Save className="h-4 w-4" strokeWidth={2} />{saving ? "保存中…" : "保存"}</button></div>

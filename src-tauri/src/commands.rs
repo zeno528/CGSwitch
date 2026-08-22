@@ -333,6 +333,11 @@ pub fn patch_chatgpt_context_config(config_text: String, enabled: bool) -> AppRe
     crate::codex::config::patch_context_override(&config_text, enabled)
 }
 
+#[tauri::command]
+pub fn patch_system_proxy_config(config_text: String, enabled: bool) -> AppResult<String> {
+    crate::codex::config::patch_system_proxy(&config_text, enabled)
+}
+
 // async 让解析跑在 tokio 线程池而非主线程，避免大文档校验阻塞 UI
 #[tauri::command]
 pub async fn validate_toml(text: String) -> Vec<crate::codex::config::TomlDiagnostic> {

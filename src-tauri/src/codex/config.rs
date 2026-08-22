@@ -90,6 +90,26 @@ pub fn patch_context_override(text: &str, enabled: bool) -> AppResult<String> {
     Ok(document.to_string())
 }
 
+pub fn patch_system_proxy(text: &str, enabled: bool) -> AppResult<String> {
+    let mut document = parse_document(text)?;
+    if enabled {
+        let features = document
+            .as_table_mut()
+            .entry("features")
+            .or_insert_with(|| Item::Table(Table::new()))
+            .as_table_mut()
+            .ok_or_else(|| app_err!("features 不是 TOML table"))?;
+        features.insert("respect_system_proxy", Item::Value(Value::from(true)));
+    } else if let Some(features) = document
+        .as_table_mut()
+        .get_mut("features")
+        .and_then(Item::as_table_mut)
+    {
+        features.remove("respect_system_proxy");
+    }
+    Ok(document.to_string())
+}
+
 pub fn read_profile(path: &Path) -> AppResult<ProfilePayload> {
     let text = std::fs::read_to_string(path)
         .map_err(|error| app_err!("无法读取 {}: {error}", path.display()))?;
@@ -693,6 +713,18 @@ goals = true
         assert!(!disabled.contains("model_context_window"));
         assert!(!disabled.contains("model_auto_compact_token_limit"));
         assert!(disabled.contains("# keep this comment"));
+    }
+
+    #[test]
+    fn system_proxy_can_be_toggled_without_losing_features() {
+        let source = "[features]\ngoals = true\n";
+        let enabled = patch_system_proxy(source, true).unwrap();
+        assert!(enabled.contains("goals = true"));
+        assert!(enabled.contains("respect_system_proxy = true"));
+
+        let disabled = patch_system_proxy(&enabled, false).unwrap();
+        assert!(disabled.contains("goals = true"));
+        assert!(!disabled.contains("respect_system_proxy"));
     }
 
     const SOURCE: &str = r#"

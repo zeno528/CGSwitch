@@ -17,7 +17,7 @@ export default function AppShell() {
   const [mcpReset, setMcpReset] = useState(0);
   const { state, stateRef, loadError, refresh, refreshAuthStatus, updateCodex, updateSettings, previewTheme } = useAppState();
   useThemeMode(state?.settings.theme);
-  const { start: startPolling, stop: stopPolling } = useCodexPolling(state !== null, stateRef, updateCodex);
+  const { start: startPolling, stop: stopPolling } = useCodexPolling(stateRef, updateCodex);
   const { activationEpoch, activate } = useActivationRefresh();
   const sidebar = useSidebarIndicator(view);
 

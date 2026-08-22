@@ -93,6 +93,8 @@ export const api = {
   ) => call<ProfileDetail>("update_profile_config", { id, configText, catalogText, authText }),
   patchChatgptContextConfig: (configText: string, enabled: boolean) =>
     call<string>("patch_chatgpt_context_config", { configText, enabled }),
+  patchSystemProxyConfig: (configText: string, enabled: boolean) =>
+    call<string>("patch_system_proxy_config", { configText, enabled }),
   validateToml: (text: string) => call<TomlDiagnostic[]>("validate_toml", { text }),
   formatToml: (text: string) => call<string>("format_toml", { text }),
   deleteProfile: (id: string) => call<void>("delete_profile", { id }),
