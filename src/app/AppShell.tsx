@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { GearSix, Minus, Square, Stack, X } from "@phosphor-icons/react";
+import { Layers2, Minus, Settings as SettingsIcon, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, isTauri } from "../api";
 import type { AppState, Settings } from "../types";
@@ -266,9 +266,9 @@ export default function AppShell() {
           </div>
           <div data-tauri-drag-region className="min-w-0 flex-1 self-stretch" />
           <div className="flex h-full items-center">
-            <button type="button" className="window-control-button" aria-label="最小化" onClick={() => void appWindow?.minimize()}><Minus weight="bold" aria-hidden="true" /></button>
-            <button type="button" className="window-control-button" aria-label="最大化" onClick={() => void appWindow?.toggleMaximize()}><Square weight="bold" aria-hidden="true" /></button>
-            <button type="button" className="window-control-button window-control-button--close" aria-label="关闭" onClick={() => void appWindow?.close()}><X weight="bold" aria-hidden="true" /></button>
+            <button type="button" className="window-control-button" aria-label="最小化" onClick={() => void appWindow?.minimize()}><Minus strokeWidth={2} aria-hidden="true" /></button>
+            <button type="button" className="window-control-button" aria-label="最大化" onClick={() => void appWindow?.toggleMaximize()}><Square strokeWidth={2} aria-hidden="true" /></button>
+            <button type="button" className="window-control-button window-control-button--close" aria-label="关闭" onClick={() => void appWindow?.close()}><X strokeWidth={2} aria-hidden="true" /></button>
           </div>
         </div>
 
@@ -277,7 +277,7 @@ export default function AppShell() {
             <nav ref={sidebarNavRef} className="relative mx-1.5 mt-3 space-y-1">
               <span className={`apple-sidebar-indicator ${indicator.instant ? "apple-sidebar-indicator--instant" : ""}`} style={{ top: `${indicator.top}px`, left: `${indicator.left}px` }} aria-hidden="true" />
               <button ref={profileNavRef} type="button" className={navClass(view === "profiles")} aria-label="供应商配置" onClick={goProfiles} onMouseEnter={() => setSidebarFlyoutArmed(true)}>
-                <Stack weight="bold" aria-hidden="true" />
+                <Layers2 strokeWidth={2} aria-hidden="true" />
                 <span className="apple-sidebar-label" aria-hidden={sidebarCollapsed}>供应商配置</span>
                 {sidebarCollapsed && sidebarFlyoutArmed ? <span className="apple-sidebar-flyout" aria-hidden="true">供应商配置</span> : null}
               </button>
@@ -289,7 +289,7 @@ export default function AppShell() {
             </nav>
             <div className="absolute inset-x-1.5 bottom-4">
               <button ref={settingsNavRef} type="button" className={navClass(view === "settings")} aria-label="设置" onClick={() => setView("settings")} onMouseEnter={() => setSidebarFlyoutArmed(true)}>
-                <GearSix weight="bold" aria-hidden="true" />
+                <SettingsIcon strokeWidth={2} aria-hidden="true" />
                 <span className="apple-sidebar-label" aria-hidden={sidebarCollapsed}>设置</span>
                 {sidebarCollapsed && sidebarFlyoutArmed ? <span className="apple-sidebar-flyout" aria-hidden="true">设置</span> : null}
               </button>

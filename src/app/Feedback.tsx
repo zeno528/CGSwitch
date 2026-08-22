@@ -1,6 +1,6 @@
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Toast from "@radix-ui/react-toast";
-import { CheckCircle, Info, Warning, XCircle } from "@phosphor-icons/react";
+import { CircleCheck, CircleX, Info, TriangleAlert } from "lucide-react";
 import { createContext, useCallback, useContext, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 type ToastTone = "success" | "error" | "warning" | "info";
@@ -35,7 +35,7 @@ interface ConfirmationState extends ConfirmOptions {
   resolve: (confirmed: boolean) => void;
 }
 
-const toastIcons = { success: CheckCircle, error: XCircle, warning: Warning, info: Info } as const;
+const toastIcons = { success: CircleCheck, error: CircleX, warning: TriangleAlert, info: Info } as const;
 const MAX_TOASTS = 3;
 
 export function FeedbackProvider({ children }: { children: ReactNode }) {
@@ -112,7 +112,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
               style={toastStyle}
               className={`app-toast app-toast--${toast.tone}`}
             >
-              <ToastIcon className={`app-toast__icon app-toast__icon--${toast.tone}`} size={20} weight="fill" aria-hidden="true" />
+              <ToastIcon className={`app-toast__icon app-toast__icon--${toast.tone}`} size={20} strokeWidth={2} aria-hidden="true" />
               <Toast.Description className="app-toast__content">{toast.message}</Toast.Description>
             </Toast.Root>
           );

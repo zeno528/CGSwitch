@@ -1,4 +1,5 @@
 import packageJson from "../../package.json";
+import profileEditSource from "../features/profiles/ProfileEdit.tsx?raw";
 import { describe, expect, it } from "vitest";
 
 describe("ConfigTextEditor runtime", () => {
@@ -8,5 +9,9 @@ describe("ConfigTextEditor runtime", () => {
     expect(dependencies.codemirror).toBeUndefined();
     expect(dependencies["@codemirror/state"]).toBeDefined();
     expect(dependencies["@codemirror/view"]).toBeDefined();
+  });
+
+  it("binds diagnostic focus to every profile editor variant", () => {
+    expect(profileEditSource.match(/<ConfigTextEditor[^>]*ref=\{editorRef\}/g)).toHaveLength(3);
   });
 });

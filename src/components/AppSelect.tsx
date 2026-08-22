@@ -1,4 +1,4 @@
-import { CaretDown, Check } from "@phosphor-icons/react";
+import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
@@ -94,7 +94,7 @@ export function AppSelect<T extends string | number>({
         }}
       >
         <span className="app-select__label">{selected ? renderLabel?.(selected) ?? selected.label : placeholder ?? "请选择"}</span>
-        <CaretDown className="app-select__icon" size={16} weight="bold" aria-hidden="true" />
+        <ChevronDown className="app-select__icon" size={16} strokeWidth={2} aria-hidden="true" />
       </button>
       <div ref={menuRef} className="app-select-menu" data-open={open} data-placement={placement} style={menuStyle} role="listbox" aria-label={placeholder ?? "选项"} aria-hidden={!open}>
         {options.map((option) => <button
@@ -108,7 +108,7 @@ export function AppSelect<T extends string | number>({
           onClick={() => selectOption(option)}
         >
           <span>{renderLabel?.(option) ?? option.label}</span>
-          {selected?.value === option.value ? <Check className="app-select-option__check" size={16} weight="bold" aria-hidden="true" /> : null}
+          {selected?.value === option.value ? <Check className="app-select-option__check" size={16} strokeWidth={2} aria-hidden="true" /> : null}
         </button>)}
       </div>
     </div>

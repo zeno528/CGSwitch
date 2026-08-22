@@ -1,4 +1,4 @@
-import { ArrowLeft, CaretRight, FloppyDisk, Minus, Plus } from "@phosphor-icons/react";
+import { ArrowLeft, ChevronRight, Minus, Plus, Save } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { useFeedback } from "../../app/Feedback";
@@ -17,12 +17,12 @@ function pairsToRecord(pairs: KVPair[]): Record<string, string> {
 }
 
 function PairEditor({ pairs, onChange, keyPlaceholder, valuePlaceholder }: { pairs: KVPair[]; onChange: (pairs: KVPair[]) => void; keyPlaceholder: string; valuePlaceholder: string }) {
-  if (!pairs.length) return <button type="button" className="app-dynamic-input__create" onClick={() => onChange([{ key: "", value: "" }])}><Plus size={16} weight="bold" aria-hidden="true" />添加</button>;
-  return <div className="app-dynamic-input">{pairs.map((pair, index) => <div key={index} className="app-dynamic-input__item"><div className="app-dynamic-input__pair"><div className="app-input-focus-frame"><input className="app-input app-dynamic-input__input mono" placeholder={keyPlaceholder} value={pair.key} onChange={(event) => onChange(pairs.map((current, currentIndex) => currentIndex === index ? { ...current, key: event.target.value } : current))} /></div><div className="app-input-stepper app-input-focus-frame"><input className="app-input app-dynamic-input__input app-input-stepper__input mono" placeholder={valuePlaceholder} value={pair.value} onChange={(event) => onChange(pairs.map((current, currentIndex) => currentIndex === index ? { ...current, value: event.target.value } : current))} /><div className="app-input-stepper__actions"><button type="button" className="app-input-stepper__action" aria-label="删除此行" onClick={() => onChange(pairs.filter((_current, currentIndex) => currentIndex !== index))}><Minus size={16} weight="bold" aria-hidden="true" /></button><button type="button" className="app-input-stepper__action" aria-label="在此行后添加" onClick={() => onChange([...pairs.slice(0, index + 1), { key: "", value: "" }, ...pairs.slice(index + 1)])}><Plus size={16} weight="bold" aria-hidden="true" /></button></div></div></div></div>)}</div>;
+  if (!pairs.length) return <button type="button" className="app-dynamic-input__create" onClick={() => onChange([{ key: "", value: "" }])}><Plus size={16} strokeWidth={2} aria-hidden="true" />添加</button>;
+  return <div className="app-dynamic-input">{pairs.map((pair, index) => <div key={index} className="app-dynamic-input__item"><div className="app-dynamic-input__pair"><div className="app-input-focus-frame"><input className="app-input app-dynamic-input__input mono" placeholder={keyPlaceholder} value={pair.key} onChange={(event) => onChange(pairs.map((current, currentIndex) => currentIndex === index ? { ...current, key: event.target.value } : current))} /></div><div className="app-input-stepper app-input-focus-frame"><input className="app-input app-dynamic-input__input app-input-stepper__input mono" placeholder={valuePlaceholder} value={pair.value} onChange={(event) => onChange(pairs.map((current, currentIndex) => currentIndex === index ? { ...current, value: event.target.value } : current))} /><div className="app-input-stepper__actions"><button type="button" className="app-input-stepper__action" aria-label="删除此行" onClick={() => onChange(pairs.filter((_current, currentIndex) => currentIndex !== index))}><Minus size={16} strokeWidth={2} aria-hidden="true" /></button><button type="button" className="app-input-stepper__action" aria-label="在此行后添加" onClick={() => onChange([...pairs.slice(0, index + 1), { key: "", value: "" }, ...pairs.slice(index + 1)])}><Plus size={16} strokeWidth={2} aria-hidden="true" /></button></div></div></div></div>)}</div>;
 }
 
 function TimeoutInput({ value, onChange, placeholder }: { value: number | null; onChange: (value: number | null) => void; placeholder: string }) {
-  return <div className="app-input-stepper app-input-focus-frame"><input className="app-input app-input-stepper__input" type="number" min={1} placeholder={placeholder} value={value ?? ""} onChange={(event) => onChange(event.target.value ? Number(event.target.value) : null)} /><div className="app-input-stepper__actions"><button type="button" className="app-input-stepper__action" aria-label="减少 1 秒" onClick={() => onChange(Math.max(1, (value ?? 1) - 1))}><Minus size={16} weight="bold" aria-hidden="true" /></button><button type="button" className="app-input-stepper__action" aria-label="增加 1 秒" onClick={() => onChange((value ?? 0) + 1)}><Plus size={16} weight="bold" aria-hidden="true" /></button></div></div>;
+  return <div className="app-input-stepper app-input-focus-frame"><input className="app-input app-input-stepper__input" type="number" min={1} placeholder={placeholder} value={value ?? ""} onChange={(event) => onChange(event.target.value ? Number(event.target.value) : null)} /><div className="app-input-stepper__actions"><button type="button" className="app-input-stepper__action" aria-label="减少 1 秒" onClick={() => onChange(Math.max(1, (value ?? 1) - 1))}><Minus size={16} strokeWidth={2} aria-hidden="true" /></button><button type="button" className="app-input-stepper__action" aria-label="增加 1 秒" onClick={() => onChange((value ?? 0) + 1)}><Plus size={16} strokeWidth={2} aria-hidden="true" /></button></div></div>;
 }
 
 interface McpEditProps {
@@ -142,7 +142,7 @@ export default function McpEdit({ server, create = false, onBack }: McpEditProps
     <section className="apple-edit-page mx-auto flex w-full max-w-none flex-col" onKeyDown={(event) => { if (event.ctrlKey && event.key === "Enter") void save(); }}>
       <div className="apple-page-bar apple-page-bar--roomy apple-edit-toolbar apple-edit-toolbar--header">
         <button type="button" className="apple-page-header apple-back-button" aria-label="返回" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4 shrink-0 text-accent" weight="bold" />
+          <ArrowLeft className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
           <span className="apple-title">{create ? "新建 MCP 服务器" : "编辑 MCP 服务器"}</span>
         </button>
       </div>
@@ -188,7 +188,7 @@ export default function McpEdit({ server, create = false, onBack }: McpEditProps
           <div className="apple-panel-section">
             <div className={`apple-disclosure ${advancedOpen ? "apple-disclosure--open" : ""}`}>
               <button type="button" className="apple-disclosure__summary" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>
-                <CaretRight className="apple-disclosure__icon" size={18} weight="bold" aria-hidden="true" />
+                <ChevronRight className="apple-disclosure__icon" size={18} strokeWidth={2} aria-hidden="true" />
                 <span className="field-subtitle">高级选项（环境变量 / 请求头 / 超时）</span>
               </button>
               <div className="apple-disclosure__content" aria-hidden={!advancedOpen} inert={!advancedOpen}>
@@ -232,7 +232,7 @@ export default function McpEdit({ server, create = false, onBack }: McpEditProps
         {diagnostics.count > 0 ? <button type="button" className="mr-auto flex min-w-0 items-center gap-1.5 rounded-lg border border-[var(--danger)]/20 bg-[var(--danger)]/10 px-2.5 py-1 text-xs chip-danger" title="跳转到第一个错误" aria-live="polite" onClick={() => editorRef.current?.focusFirstDiagnostic()}><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--danger)]" aria-hidden="true" /><span className="truncate">{diagnostics.count} 个错误{diagnostics.firstLine !== null ? ` · 第 ${diagnostics.firstLine} 行` : ""}</span></button> : null}
         <button type="button" className="apple-action-button" disabled={formatting || saving} onClick={() => void formatToml()}>格式化</button>
         <button type="button" className="apple-action-button" onClick={onBack}>取消</button>
-        <button type="button" className="apple-action-button app-button--primary" disabled={saving} onClick={() => void save()}><FloppyDisk className="h-4 w-4" weight="bold" />{saving ? "保存中…" : "保存"}</button>
+        <button type="button" className="apple-action-button app-button--primary" disabled={saving} onClick={() => void save()}><Save className="h-4 w-4" strokeWidth={2} />{saving ? "保存中…" : "保存"}</button>
       </div>
     </section>
   );

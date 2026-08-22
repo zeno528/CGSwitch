@@ -1,4 +1,4 @@
-import { ArrowLeft, FloppyDisk } from "@phosphor-icons/react";
+import { ArrowLeft, Save } from "lucide-react";
 import { useState } from "react";
 import { providerIcons } from "../../icons";
 
@@ -14,7 +14,7 @@ export default function ProfileIconEdit({ icon, onBack, onSave }: ProfileIconEdi
     <section className="apple-edit-page mx-auto flex w-full max-w-none flex-col">
       <div className="apple-page-bar apple-page-bar--roomy apple-edit-toolbar apple-edit-toolbar--header">
         <button type="button" className="apple-page-header apple-back-button" aria-label="返回" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4 shrink-0 text-accent" weight="bold" aria-hidden="true" />
+          <ArrowLeft className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} aria-hidden="true" />
           <span className="apple-title">选择供应商图标</span>
         </button>
       </div>
@@ -42,7 +42,7 @@ export default function ProfileIconEdit({ icon, onBack, onSave }: ProfileIconEdi
       <div className="apple-edit-toolbar apple-edit-toolbar--footer">
         <button type="button" className="apple-action-button" onClick={onBack}>取消</button>
         <button type="button" className="apple-action-button app-button--primary" onClick={() => onSave(selected)}>
-          <FloppyDisk className="h-4 w-4" weight="bold" aria-hidden="true" /> 保存
+          <Save className="h-4 w-4" strokeWidth={2} aria-hidden="true" /> 保存
         </button>
       </div>
     </section>
