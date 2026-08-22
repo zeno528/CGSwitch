@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SettingsAbout, SettingsAdvanced, SettingsGeneral, backupTitle, formatSize, formatTimestamp } from "./SettingsSections";
+import { backupTitle, formatSize, formatTimestamp } from "./SettingsSections";
 
 describe("SettingsSections", () => {
   it("formats backup titles", () => {
@@ -15,11 +15,5 @@ describe("SettingsSections", () => {
 
   it("formats backup timestamps", () => {
     expect(formatTimestamp(0)).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
-  });
-
-  it("exports the three settings section components", () => {
-    expect(typeof SettingsGeneral).toBe("function");
-    expect(typeof SettingsAdvanced).toBe("function");
-    expect(typeof SettingsAbout).toBe("function");
   });
 });

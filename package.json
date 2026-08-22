@@ -15,7 +15,8 @@
     "build:debug": "pnpm sync-version && tauri build --debug",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run",
-    "check": "pnpm typecheck && pnpm test:unit && pnpm check:rust",
+    "check:style": "node scripts/check-style-leaks.mjs",
+    "check": "pnpm typecheck && pnpm test:unit && pnpm check:style && pnpm check:rust",
     "check:rust": "cargo fmt --all --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
     "preview": "vite preview",
     "tauri": "pnpm sync-version && tauri"
