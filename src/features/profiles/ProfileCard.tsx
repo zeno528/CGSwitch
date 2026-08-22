@@ -1,4 +1,4 @@
-import { Copy, ExternalLink, GripVertical, Key, Monitor, Wallet, Wifi } from "lucide-react";
+import { Copy, ExternalLink, GripVertical, KeyRound, Monitor, Wallet, Wifi } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -144,7 +144,7 @@ export default function ProfileCard({
             <h3 className="cursor-pointer truncate text-[16px] font-semibold tracking-tight transition-colors hover:text-accent" title="点击重命名" onClick={(event) => { event.stopPropagation(); onRename(); }}>{profile.name}</h3>
             {active ? <span className="inline-flex items-center rounded-full bg-success px-2 py-0.5 text-xs font-semibold leading-none text-white">活动</span> : null}
             {!profile.provider ? <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${subscriptionAuthed ? "bg-accent/10 text-accent" : "bg-black/5 text-zinc-500 dark:bg-white/6"}`} title={subscriptionTitle}>
-              {subscriptionSourceKind === "desktop" ? <Monitor className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" /> : <Key className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />}
+              {subscriptionSourceKind === "desktop" ? <Monitor className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" /> : <KeyRound className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />}
               <span className="min-w-0 truncate leading-4">{subscriptionLabel}</span>
             </span> : null}
           </div>
