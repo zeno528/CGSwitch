@@ -14,7 +14,7 @@ import {
   customCatalogTemplate,
   customConfigTemplate,
 } from "../../presets";
-import { patchProviderFields, readProviderFields, withMcpSection } from "../../components/profile-edit/profileEditText";
+import { patchProviderFields, readProviderFields, withMcpSection } from "./profileEditText";
 import type { EditorDiagnosticSummary, ManagedAccount, ProfileDetail, ProfileSummary } from "../../types";
 import ProfileIconEdit from "./ProfileIconEdit";
 
