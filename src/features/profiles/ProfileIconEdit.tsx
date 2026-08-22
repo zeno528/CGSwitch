@@ -29,7 +29,7 @@ export default function ProfileIconEdit({ icon, onBack, onSave }: ProfileIconEdi
                 aria-pressed={selected === current.id}
                 onClick={() => setSelected(current.id)}
               >
-                <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#f0f0f3]" aria-hidden="true"><img src={current.url} alt={current.label} className="h-4 w-4" /></span>
+                <span className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--tile-bg)]" aria-hidden="true"><img src={current.url} alt={current.label} className="h-4 w-4" /></span>
                 <span className="w-full truncate text-center text-xs">{current.label}</span>
               </button>
             ))}

@@ -134,16 +134,16 @@ export default function ProfileCard({
       title="单击编辑"
       onClick={onEdit}
     >
-      <span className="drag-handle -ml-5 -mr-4 grid shrink-0 cursor-grab place-items-center self-center rounded-md py-1 pl-3 pr-3 text-zinc-400 transition-colors hover:text-zinc-600 active:cursor-grabbing dark:text-zinc-500 dark:hover:text-zinc-300" title="拖动排序" aria-label="拖动排序" {...sortable.attributes} {...sortable.listeners} onClick={(event) => event.stopPropagation()}>
+      <span className="drag-handle -ml-5 -mr-4 grid shrink-0 cursor-grab place-items-center self-center rounded-md py-1 pl-3 pr-3 muted transition-colors hover:opacity-70 active:cursor-grabbing" title="拖动排序" aria-label="拖动排序" {...sortable.attributes} {...sortable.listeners} onClick={(event) => event.stopPropagation()}>
         <GripVertical className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
       </span>
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <ProfileIconTile name={profile.name} icon={profile.icon} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="cursor-pointer truncate text-[16px] font-semibold tracking-tight transition-colors hover:text-accent" title="点击重命名" onClick={(event) => { event.stopPropagation(); onRename(); }}>{profile.name}</h3>
+            <h3 className="title-md cursor-pointer truncate transition-colors hover:text-accent" title="点击重命名" onClick={(event) => { event.stopPropagation(); onRename(); }}>{profile.name}</h3>
             {active ? <span className="inline-flex items-center rounded-full bg-success px-2 py-0.5 text-xs font-semibold leading-none text-white">活动</span> : null}
-            {!profile.provider ? <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${subscriptionAuthed ? "bg-accent/10 text-accent" : "bg-black/5 text-zinc-500 dark:bg-white/6"}`} title={subscriptionTitle}>
+            {!profile.provider ? <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${subscriptionAuthed ? "bg-accent/10 text-accent" : "bg-black/5 muted dark:bg-white/6"}`} title={subscriptionTitle}>
               {subscriptionSourceKind === "desktop" ? <Monitor className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" /> : <KeyRound className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />}
               <span className="min-w-0 truncate leading-4">{subscriptionLabel}</span>
             </span> : null}
@@ -162,8 +162,8 @@ export default function ProfileCard({
       </div>
       <div className="profile-card-actions pointer-events-none flex shrink-0 items-center gap-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.preventDefault()}>
         <button type="button" className="apple-action-button app-button--primary" disabled={busy || active} onClick={onApply}>{active ? "已应用" : "应用"}</button>
-        <button type="button" className="apple-icon-button text-zinc-400 hover:bg-accent/10 hover:text-accent dark:text-zinc-500" title="复制供应商" aria-label="复制供应商" onClick={onDuplicate}><Copy className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" /></button>
-        <button type="button" className={`apple-icon-button enabled:hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40 ${connectionDimmed ? "text-zinc-400" : "text-accent"}`} disabled={(!profile.provider && !subscriptionAuthed) || busy || testing} title={connectionTitle} aria-label="测试连通性" onClick={() => void testConnection()}>{testing ? <LoadingSpinner size="md" /> : <Wifi className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />}</button>
+        <button type="button" className="apple-icon-button text-[var(--text-secondary)] hover:bg-accent/10 hover:text-accent" title="复制供应商" aria-label="复制供应商" onClick={onDuplicate}><Copy className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" /></button>
+        <button type="button" className={`apple-icon-button enabled:hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40 ${connectionDimmed ? "text-[var(--text-secondary)]" : "text-accent"}`} disabled={(!profile.provider && !subscriptionAuthed) || busy || testing} title={connectionTitle} aria-label="测试连通性" onClick={() => void testConnection()}>{testing ? <LoadingSpinner size="md" /> : <Wifi className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />}</button>
         <button type="button" className="apple-icon-button text-[var(--danger)]/60 enabled:hover:bg-[var(--danger)]/10 enabled:hover:text-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-40" disabled={busy || active} title="删除" aria-label="删除" onClick={onRemove}><TrashIcon /></button>
       </div>
     </article>

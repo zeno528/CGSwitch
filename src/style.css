@@ -21,6 +21,12 @@
   --text-secondary: rgba(60, 60, 67, 0.68);
   --sidebar-bg: #e8e8e9;
   --selection-bg: rgba(0, 122, 255, 0.12);
+  /* 状态徽标文字：比 --success 深一档，浅底上保证对比度；深色主题换亮绿 */
+  --success-text: #248a3d;
+  /* 功能强调紫（静默启动等）：iOS 系统紫，深色主题换亮紫 */
+  --lavender: #af52de;
+  /* 品牌图标底色：按文字色派生的浅灰砖，深浅主题共用同一公式自动适配 */
+  --tile-bg: color-mix(in srgb, var(--text-secondary) 12%, transparent);
   --scrollbar-thumb: color-mix(in srgb, var(--text-secondary) 25%, transparent);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--text-secondary) 40%, transparent);
   /* 全局间距参数：页头/标题到首个内容区块，以及相邻卡片/分区之间 */
@@ -73,6 +79,8 @@
   --text-secondary: #ffffff;
   --sidebar-bg: #15151a;
   --selection-bg: rgba(94, 156, 255, 0.18);
+  --success-text: #6ee7a0;
+  --lavender: #bf5af2;
   --scrollbar-thumb: color-mix(in srgb, var(--text-secondary) 25%, transparent);
   --scrollbar-thumb-hover: color-mix(in srgb, var(--text-secondary) 40%, transparent);
 }
@@ -190,40 +198,6 @@ textarea::placeholder {
   background: rgb(255 255 255 / 0.1);
 }
 
-/* 设置页分区切换：cc-switch 同款"缓升"——10px 上移 + 淡入，0.3s + framer 默认曲线
-   cubic-bezier(0.25, 0.1, 0.25, 1)（起步端也柔，无突然发力）；出场快速淡出让节奏给进场。
-   纯 CSS 零 JS 运行时；只动 transform + opacity（GPU 合成）。
-   用法：<Transition name="tab-rise" mode="out-in"> */
-.tab-rise-enter-active {
-  transition:
-    opacity 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
-    transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
-
-.tab-rise-leave-active {
-  transition: opacity 0.15s cubic-bezier(0.4, 0, 1, 1);
-}
-
-.tab-rise-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
-}
-
-.tab-rise-leave-to {
-  opacity: 0;
-}
-
-/* 减弱动态效果：去掉位移只留快速淡入 */
-@media (prefers-reduced-motion: reduce) {
-  .tab-rise-enter-active {
-    transition: opacity 0.15s ease;
-  }
-
-  .tab-rise-enter-from {
-    transform: none;
-  }
-}
-
 /* 表单字段标签：比输入内容更明确，但不抢过区块标题 */
 .field-label {
   font-size: 13px;
@@ -253,6 +227,26 @@ textarea::placeholder {
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.35;
+}
+
+/* 最小元信息（卡片时间戳、备份记录摘要）：第五级字号，不属于正文层级。
+   只设字号不设行高，需要宽松行距的场合自行叠 leading-* */
+.meta-xs {
+  font-size: 11px;
+}
+
+/* 卡片主标题（供应商名、拖拽预览名）：介于页标题与小节标题之间 */
+.title-md {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* 分组内小节标题（自动备份、账号区）：比 setting-title 大一档、统领 setting-title */
+.title-sm {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 /* 设置项说明：与标题形成稳定的字号、字重和对比度层级 */
@@ -426,44 +420,9 @@ main:has(.apple-scroll-page) {
   color: #ffffff;
 }
 
-/* 首页供应商卡片动画：出现复刻侧边栏展开（高度 0→auto + 淡入），
-   消失保持淡出缩小 + 兄弟卡片 FLIP 位移（opacity/transform） */
-.profile-list-move {
-  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.profile-list-enter-active {
-  transition:
-    height 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 140ms ease-out;
-  overflow: hidden;
-  interpolate-size: allow-keywords;
-}
-
-.profile-list-leave-active {
-  position: absolute;
-  left: 0;
-  right: 0;
-  transition:
-    opacity 160ms ease-out,
-    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: opacity, transform;
-}
-
-.profile-list-enter-from {
-  height: 0;
-  opacity: 0;
-}
-
-.profile-list-leave-to {
-  opacity: 0;
-  transform: scale(0.97);
-}
-
-/* 拖拽跟手卡片（SortableJS fallback 模式：dragClass/fallbackClass 作用于
-   跟手克隆）：实底抬升、不透明，避免重影；scale 用独立属性不干扰 transform */
-.drag-dragging,
-.sortable-fallback {
+/* 拖拽跟手卡片（DragOverlay 克隆）：实底抬升、不透明，避免重影；
+   scale 用独立属性不干扰 transform */
+.drag-dragging {
   background: var(--panel-bg);
   border-radius: 12px;
   cursor: grabbing;
@@ -475,11 +434,6 @@ main:has(.apple-scroll-page) {
 
 .profile-drag-preview {
   overflow: hidden;
-}
-
-/* 列表内的落点占位（ghostClass）：淡显，落点位置一目了然 */
-.drag-ghost {
-  opacity: 0.35;
 }
 
 /* 拖拽期间全局禁止文本选中，防止路过卡片时标题/内容被框选 */
@@ -504,12 +458,6 @@ body.drag-settling .profile-card-actions {
     var(--panel-divider) calc(100% - 56px),
     transparent 100%
   ) 1;
-}
-
-/* 拖拽跟手克隆里的分割线隐藏，保持浮起卡片干净 */
-.sortable-fallback {
-  border-top: 0;
-  border-image: none;
 }
 
 .apple-sidebar-label {
@@ -543,22 +491,9 @@ body.drag-settling .profile-card-actions {
 }
 
 .apple-sidebar--collapsed .apple-sidebar-nav-button:hover .apple-sidebar-flyout,
-.apple-sidebar--collapsed .apple-sidebar-nav-button:focus-visible .apple-sidebar-flyout,
-.apple-page-action:hover .apple-sidebar-flyout,
-.apple-page-action:focus-within .apple-sidebar-flyout {
+.apple-sidebar--collapsed .apple-sidebar-nav-button:focus-visible .apple-sidebar-flyout {
   opacity: 1;
   transform: translate(0, -50%);
-}
-
-.apple-page-action .apple-sidebar-flyout {
-  left: 50%;
-  top: calc(100% + 0.6rem);
-  transform: translate(-50%, -4px);
-}
-
-.apple-page-action:hover .apple-sidebar-flyout,
-.apple-page-action:focus-within .apple-sidebar-flyout {
-  transform: translate(-50%, 0);
 }
 
 /* 标题栏品牌按钮浮标：锚定标题栏左侧色块（随侧边栏宽度自适应），
@@ -833,12 +768,6 @@ body.drag-settling .profile-card-actions {
   border-radius: var(--radius-control);
   padding: 0.625rem 0.75rem;
   box-shadow: 0 0 0 1px var(--panel-ring);
-}
-
-/* 抬升表面（弹窗卡片等近白底）上的列表行：--panel-ring 发丝线在那里几乎不可见，
-   换用更实的 --panel-border 勾出边界；主列表页（灰底）不需要 */
-.apple-list-row--outlined {
-  box-shadow: 0 0 0 1px var(--panel-border);
 }
 
 .apple-icon-button {
