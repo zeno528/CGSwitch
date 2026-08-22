@@ -37,6 +37,7 @@ docs/superpowers
 # 浏览器自动化 / 反向图像查重临时文件
 .playwright-mcp/
 .playwright-cli/
+.firecrawl/
 logo_for_search.png
 github_hit.png
 google_lens_*.png
