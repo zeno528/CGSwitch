@@ -1,6 +1,6 @@
 use super::{
-    app_err, atomic_write, backup_file, now_ms, parse_external_auth_json, read_optional_text,
-    AppContext, AppResult, ManagedAccount, ProfileKind,
+    app_err, atomic_write, backup_file, normalize_auth_override, now_ms, parse_external_auth_json,
+    read_optional_text, AppContext, AppResult, ManagedAccount, ProfileKind,
 };
 
 impl AppContext {
@@ -74,7 +74,10 @@ impl AppContext {
 
     /// 官方供应商是否保存了自己的 auth.json 覆盖（有则应用时不再用账号现生成）。
     pub fn has_auth_override(&self, id: &str) -> AppResult<bool> {
-        Ok(self.database.profile(id)?.payload.raw_auth.is_some())
+        Ok(
+            normalize_auth_override(self.database.profile(id)?.payload.raw_auth.as_deref())
+                .is_some(),
+        )
     }
 
     /// 官方供应商绑定订阅账号；第三方供应商直接拒绝。None 表示跟随默认账号。

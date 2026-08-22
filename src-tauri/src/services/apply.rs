@@ -1,7 +1,7 @@
 use super::profile_config::{is_builtin_placeholder, provider_api_key};
 use super::{
-    app_err, atomic_write, backup_file, builtin, codex_config, now_ms, read_optional_text,
-    AppContext, AppResult, Path, PathBuf, ProfilePayload,
+    app_err, atomic_write, backup_file, builtin, codex_config, normalize_auth_override, now_ms,
+    read_optional_text, AppContext, AppResult, Path, PathBuf, ProfilePayload,
 };
 
 impl AppContext {
@@ -147,7 +147,7 @@ impl AppContext {
 
     /// 把供应商自己编辑保存的 auth.json 原文写入 ~/.codex/auth.json。
     pub(super) fn write_raw_auth(&self, payload: &ProfilePayload) -> AppResult<()> {
-        let Some(raw) = payload.raw_auth.as_deref() else {
+        let Some(raw) = normalize_auth_override(payload.raw_auth.as_deref()) else {
             return Ok(());
         };
         let destination = self.paths.codex_home.join("auth.json");
@@ -211,7 +211,7 @@ impl AppContext {
             .and_then(|raw| self.resolve_codex_path(raw))
             .and_then(|file| read_optional_text(&file))
             .or_else(|| profile.payload.raw_catalog.clone());
-        live.raw_auth = profile.payload.raw_auth.clone();
+        live.raw_auth = normalize_auth_override(profile.payload.raw_auth.as_deref());
         // 快照跟随当前 live 完整文本，保证供应商是完整状态（所见即所得，不掩码密钥）
         live.raw_config = Some(document.to_string());
         if live == profile.payload {

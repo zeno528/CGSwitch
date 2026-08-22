@@ -300,8 +300,39 @@ experimental_bearer_token = "secret-token"
         detail.catalog_content.as_deref(),
         Some(r#"{"models":[{"id":"glm-5.3","api_key":"sk-secret"}]}"#)
     );
-    // 档案没保存自己的认证时，不把 live 的 Codex 官方认证预填进编辑页
+    // 第三方档案不把 live 的 Codex 官方认证预填进编辑页
     assert_eq!(detail.auth_content, None);
+}
+
+#[test]
+fn active_chatgpt_profile_reads_live_auth_without_empty_override() {
+    let home = tempfile::tempdir().unwrap();
+    let paths = crate::paths::from_home(home.path()).unwrap();
+    paths.ensure().unwrap();
+    std::fs::create_dir_all(&paths.codex_home).unwrap();
+    std::fs::write(paths.codex_config(), "model = \"gpt-5.6\"\n").unwrap();
+    let live_auth = r#"{"auth_mode":"chatgpt","tokens":{"access_token":"live"}}"#;
+    std::fs::write(paths.codex_home.join("auth.json"), live_auth).unwrap();
+
+    let context = AppContext::new(paths).unwrap();
+    let profile = context
+        .add_builtin_profile("chatgpt", None, None, None, None)
+        .unwrap();
+    let mut stored = context.database.profile(&profile.id).unwrap();
+    stored.payload.raw_auth = Some("{\n}".into());
+    context
+        .database
+        .update_profile(&profile.id, &stored.name, &stored.payload, "2")
+        .unwrap();
+    context.apply_profile(&profile.id).unwrap();
+
+    let detail = context.get_profile(&profile.id).unwrap();
+    assert_eq!(detail.raw_auth, None);
+    assert_eq!(detail.auth_content.as_deref(), Some(live_auth));
+    assert_eq!(
+        std::fs::read_to_string(context.paths.codex_home.join("auth.json")).unwrap(),
+        live_auth
+    );
 }
 
 #[test]

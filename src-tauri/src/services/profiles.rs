@@ -3,9 +3,9 @@ use super::profile_config::{
     write_live_provider_update,
 };
 use super::{
-    app_err, atomic_write, backup_file, builtin, codex_config, codex_process, now_ms,
-    parse_external_auth_json, profile_summary, read_optional_text, AppContext, AppResult, AppState,
-    CodexAppStatus, ProfileDetail, ProfileKind, ProfileSummary,
+    app_err, atomic_write, backup_file, builtin, codex_config, codex_process,
+    normalize_auth_override, now_ms, parse_external_auth_json, profile_summary, read_optional_text,
+    AppContext, AppResult, AppState, CodexAppStatus, ProfileDetail, ProfileKind, ProfileSummary,
 };
 
 pub(super) fn validated_name(name: &str) -> AppResult<String> {
@@ -233,8 +233,8 @@ impl AppContext {
             if !text.is_empty() {
                 serde_json::from_str::<serde_json::Value>(text)
                     .map_err(|error| app_err!("auth.json 不是有效 JSON: {error}"))?;
-                payload.raw_auth = Some(text.to_string());
             }
+            payload.raw_auth = normalize_auth_override(Some(text));
         }
         let timestamp = now_ms().to_string();
         let summary = self.database.insert_profile(&name, &payload, &timestamp)?;
@@ -302,6 +302,7 @@ impl AppContext {
             }
         }
         let mut stored = self.database.profile(id)?;
+        stored.payload.raw_auth = normalize_auth_override(stored.payload.raw_auth.as_deref());
         // 使用中的第三方供应商：快照没单独保存 auth 时连当前 live auth.json 一起复制，
         // 保证副本应用后凭据与源一致；官方订阅的 auth 由账号动态生成，不复制。
         // 外部 Codex 官方认证属于全局订阅凭据，不吞进第三方档案（避免副本应用时覆盖官方认证）。
@@ -419,6 +420,7 @@ impl AppContext {
                 .and_then(|template| template.catalog)
                 .map(|(_, bytes)| String::from_utf8_lossy(bytes).into_owned())
         });
+        let raw_auth = normalize_auth_override(payload.raw_auth.as_deref());
 
         Ok(ProfileDetail {
             id: stored.id.clone(),
@@ -433,14 +435,14 @@ impl AppContext {
             raw_config,
             // 官方订阅：展示当前生效的全局认证（未保存时不写进档案）；
             // 第三方：只展示档案级认证，避免把 live 的 Codex 官方认证预填进编辑页、保存时意外收进档案
-            auth_content: if payload.provider_id.is_none() {
-                payload.raw_auth.clone().or(live_auth)
+            auth_content: if stored.kind == ProfileKind::Official {
+                raw_auth.clone().or(live_auth)
             } else {
-                payload.raw_auth.clone()
+                raw_auth.clone()
             },
             catalog_content,
             raw_catalog: payload.raw_catalog.clone(),
-            raw_auth: payload.raw_auth.clone(),
+            raw_auth,
             admin_url: payload.admin_url.clone(),
             show_balance: payload.show_balance,
             updated_at: stored.updated_at.clone(),
@@ -462,8 +464,7 @@ impl AppContext {
         // 清空 auth 内容 = 移除档案级覆盖，恢复为账号自动凭据
         let auth_override = auth_text
             .map(str::trim)
-            .filter(|text| !text.is_empty())
-            .map(str::to_string);
+            .and_then(|text| normalize_auth_override(Some(text)));
         let document = codex_config::parse_document(config_text)?;
         if let Some(text) = catalog_text {
             serde_json::from_str::<serde_json::Value>(text)

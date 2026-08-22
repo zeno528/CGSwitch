@@ -57,6 +57,18 @@ fn read_optional_text(path: &Path) -> Option<String> {
         .filter(|text| text.len() <= 512 * 1024)
 }
 
+pub(super) fn normalize_auth_override(text: Option<&str>) -> Option<String> {
+    let text = text?.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let is_empty_object = serde_json::from_str::<serde_json::Value>(text)
+        .ok()
+        .and_then(|value| value.as_object().map(|object| object.is_empty()))
+        .unwrap_or(false);
+    (!is_empty_object).then(|| text.to_string())
+}
+
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
